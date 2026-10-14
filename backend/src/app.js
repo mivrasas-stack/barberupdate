@@ -6,6 +6,9 @@ import { createDb } from './db.js';
 import { createSecurity } from './security.js';
 import { registerRoutes } from './routes.js';
 import { registerBusinessRoutes } from './business.js';
+import { registerSchedulingRoutes } from './scheduling.js';
+import { registerNotificationRoutes } from './notifications.js';
+import { registerReportRoutes } from './reports.js';
 
 export async function buildApp(env = process.env) {
   const config = configFromEnv(env);
@@ -23,7 +26,7 @@ export async function buildApp(env = process.env) {
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
   });
   app.setErrorHandler((err, req, reply) => {
-    const status = err.statusCode && err.statusCode >= 400 && err.statusCode < 600 ? err.statusCode : (err.code === '23P01' || err.code === '23505' ? 409 : err.code === '23503' ? 400 : 500);
+    const status = err.statusCode && err.statusCode >= 400 && err.statusCode < 600 ? err.statusCode : (err.code === '23P01' || err.code === '23505' || err.code === '23514' ? 409 : err.code === '23503' ? 400 : 500);
     if (status >= 500) req.log.error({ err }, 'request failed');
     const message = status >= 500 ? 'Error interno o dependencia no disponible' : status === 409 ? 'Conflicto: horario o recurso no disponible' : err.message;
     reply.code(status).send({ error: message, requestId: req.id });
@@ -38,6 +41,9 @@ export async function buildApp(env = process.env) {
   });
   await registerRoutes(app, { config, db, security });
   await registerBusinessRoutes(app, { config, db, security });
+  await registerSchedulingRoutes(app, { config, db, security });
+  await registerNotificationRoutes(app, { config, db, security });
+  await registerReportRoutes(app, { config, db, security });
   app.addHook('onClose', async () => {
     await db?.close();
     security.redis?.disconnect();

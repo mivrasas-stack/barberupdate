@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, createHash } from 'node:crypto';
 import { z } from 'zod';
 import { failure, parseOrThrow } from './security.js';
 
@@ -46,9 +46,14 @@ export async function registerBusinessRoutes(app,{db,security}) {
       for(const item of x.items) qty.set(item.productId,(qty.get(item.productId)||0)+item.quantity);
       const ids=[...qty.keys()].sort();
       for(const p of ids) if(qty.get(p)>1000) failure(400,'Cantidad excesiva');
+      const requestHash=createHash('sha256').update(JSON.stringify([x.customerName,ids.map(p=>[p,qty.get(p)])])).digest('hex');
       const created=await db.transaction(async tx=>{
+        await tx.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[tenant+':'+req.actor.id+':order:'+key]);
         const existing=await tx.query('SELECT * FROM public.orders WHERE tenant_id=$1 AND customer_user_id=$2 AND idempotency_key=$3',[tenant,req.actor.id,key]);
-        if(existing.rowCount) return {order:existing.rows[0],repeated:true};
+        if(existing.rowCount) {
+          if(existing.rows[0].request_hash && existing.rows[0].request_hash!==requestHash) failure(409,'Idempotency-Key reutilizada con datos diferentes');
+          return {order:existing.rows[0],repeated:true};
+        }
         const shop=await tx.query("SELECT id FROM public.tenants WHERE id=$1 AND status='active'",[tenant]);
         if(!shop.rowCount) failure(404,'Negocio no disponible');
         const locked=await tx.query('SELECT id,name,price_minor,stock FROM public.products WHERE tenant_id=$1 AND id=ANY($2::uuid[]) AND is_active=true ORDER BY id FOR UPDATE',[tenant,ids]);
@@ -59,7 +64,7 @@ export async function registerBusinessRoutes(app,{db,security}) {
           total+=Number(item.price_minor)*qty.get(item.id);
           if(!Number.isSafeInteger(total)||total>1000000000000) failure(400,'Total fuera de rango');
         }
-        const ordered=await tx.query("INSERT INTO public.orders(tenant_id,customer_user_id,customer_name,pickup_code,total_minor,idempotency_key) VALUES($1,$2,$3,$4,$5,$6) RETURNING *",[tenant,req.actor.id,x.customerName,pickupCode(),total,key]);
+        const ordered=await tx.query("INSERT INTO public.orders(tenant_id,customer_user_id,customer_name,pickup_code,total_minor,idempotency_key,request_hash) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *",[tenant,req.actor.id,x.customerName,pickupCode(),total,key,requestHash]);
         const order=ordered.rows[0];
         for(const item of locked.rows){
           const n=qty.get(item.id);
@@ -117,6 +122,8 @@ export async function registerBusinessRoutes(app,{db,security}) {
       const close=await db.transaction(async tx=>{
         const business=await tx.query('SELECT time_zone FROM public.tenants WHERE id=$1 AND status=$2',[tenant,'active']);
         if(!business.rowCount) failure(404,'Negocio no disponible');
+        // Prevent new financial movements racing with the close of the same local day.
+        await tx.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[tenant+':cash:'+x.closingDate]);
         const totals=await tx.query(
           "SELECT coalesce(sum(amount_minor) FILTER(WHERE type='income' AND payment_method='cash'),0)::bigint AS cash_income,coalesce(sum(amount_minor) FILTER(WHERE type='income' AND payment_method<>'cash'),0)::bigint AS electronic_income,coalesce(sum(amount_minor) FILTER(WHERE type='expense' AND payment_method='cash'),0)::bigint AS cash_expenses FROM public.transactions WHERE tenant_id=$1 AND (created_at AT TIME ZONE $2)::date=$3::date",
           [tenant,business.rows[0].time_zone,x.closingDate]);

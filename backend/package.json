@@ -3,18 +3,20 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "engines": {"node": ">=22"},
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "start": "node src/server.js",
     "worker": "node src/worker.js",
     "test": "node --test test/*.test.js",
-    "check": "node --check src/app.js && node --check src/routes.js && node --check src/business.js && node --check src/db.js && node --check src/security.js && node --check src/worker.js"
+    "check": "node --check src/app.js && node --check src/routes.js && node --check src/business.js && node --check src/scheduling.js && node --check src/notifications.js && node --check src/reports.js && node --check src/db.js && node --check src/security.js && node --check src/worker.js"
   },
   "dependencies": {
     "@fastify/cors": "11.1.0",
     "@fastify/helmet": "13.0.2",
     "@supabase/supabase-js": "2.76.1",
-    "fastify": "5.6.1",
+    "fastify": "5.12.7",
     "ioredis": "5.8.2",
     "pg": "8.16.3",
     "zod": "4.1.12"

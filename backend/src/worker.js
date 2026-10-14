@@ -7,6 +7,7 @@ const db=createDb(config);
 const redis=new Redis(config.redisUrl,{maxRetriesPerRequest:1,connectTimeout:3000});
 redis.on('error',()=>{});
 let running=true;
+let ticks=0;
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 async function deliverBatch() {
   await db.transaction(async tx=>{
@@ -25,7 +26,13 @@ async function deliverBatch() {
 for(const signal of ['SIGTERM','SIGINT']) process.on(signal,()=>{running=false;});
 try {
   while(running) {
-    try { await deliverBatch(); } catch(error) { console.error('Outbox worker error:',error.message); }
+    try {
+      await deliverBatch();
+      if(++ticks%600===0){
+        // 30-day retention; bounded deletion avoids excessive database work.
+        await db.query("WITH expired AS (SELECT id FROM public.outbox_events WHERE processed_at<now()-interval '30 days' ORDER BY processed_at LIMIT 500) DELETE FROM public.outbox_events e USING expired x WHERE e.id=x.id");
+      }
+    } catch(error) { console.error('Outbox worker error:',error.message); }
     if(running) await sleep(1500);
   }
 } finally { redis.disconnect(); await db.close(); }

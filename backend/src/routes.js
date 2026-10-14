@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { createHash } from 'node:crypto';
 import { failure, parseOrThrow, uuid } from './security.js';
 
 const id = z.uuid();
@@ -45,7 +46,11 @@ export async function registerRoutes(app,{config,db,security}) {
       const tenant=parseOrThrow(id,req.params.tenantId);
       await requireTenant(db,tenant,req.actor.id,['owner']);
       const x=parseOrThrow(z.object({userId:id,role:z.enum(['manager','barber'])}).strict(),req.body);
-      const row=await db.query('INSERT INTO public.tenant_members(tenant_id,user_id,role) VALUES($1,$2,$3) ON CONFLICT(tenant_id,user_id) DO UPDATE SET role=EXCLUDED.role RETURNING tenant_id,user_id,role',[tenant,x.userId,x.role]);
+      if(!service) failure(503,'Administracion de usuarios no configurada');
+      const target=await service.auth.admin.getUserById(x.userId);
+      if(target.error||!target.data?.user) failure(404,'Usuario no registrado en Supabase Auth');
+      const row=await db.query("INSERT INTO public.tenant_members(tenant_id,user_id,role) VALUES($1,$2,$3) ON CONFLICT(tenant_id,user_id) DO UPDATE SET role=EXCLUDED.role WHERE tenant_members.role <> 'owner' RETURNING tenant_id,user_id,role",[tenant,x.userId,x.role]);
+      if(!row.rowCount) failure(409,'El propietario no puede perder su rol');
       return reply.code(201).send(row.rows[0]);
     });
     routes.get('/api/v1/tenants/:tenantId/barbers',async req=>{
@@ -57,6 +62,10 @@ export async function registerRoutes(app,{config,db,security}) {
       const tenant=parseOrThrow(id,req.params.tenantId);
       await requireTenant(db,tenant,req.actor.id,owners);
       const x=parseOrThrow(z.object({name:word(120),slug,userId:id.nullish(),bio:z.string().max(2000).default(''),commissionRate:z.number().min(0).max(1).default(0)}).strict(),req.body);
+      if(x.userId){
+        const member=await db.query("SELECT 1 FROM public.tenant_members WHERE tenant_id=$1 AND user_id=$2 AND role='barber'",[tenant,x.userId]);
+        if(!member.rowCount) failure(400,'El barbero debe ser miembro de la empresa con rol barber');
+      }
       const row=await db.query('INSERT INTO public.barbers(tenant_id,name,slug,user_id,bio,commission_rate) VALUES($1,$2,$3,$4,$5,$6) RETURNING *',[tenant,x.name,x.slug,x.userId||null,x.bio,x.commissionRate]);
       return reply.code(201).send(row.rows[0]);
     });
@@ -79,15 +88,22 @@ export async function registerRoutes(app,{config,db,security}) {
       if(typeof key!=='string'||!/^[a-zA-Z0-9_-]{12,100}$/.test(key)) failure(400,'Idempotency-Key requerido (12-100 caracteres)');
       const startsAt=new Date(x.startsAt).toISOString();
       endOfBooking(startsAt,30);
+      const requestHash=createHash('sha256').update(JSON.stringify([x.barberId,x.serviceId,startsAt,x.customerName,x.customerPhone,x.notes])).digest('hex');
       const booking=await db.transaction(async tx=>{
+        await tx.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[tenant+':'+req.actor.id+':booking:'+key]);
         const existing=await tx.query('SELECT * FROM public.appointments WHERE tenant_id=$1 AND created_by=$2 AND idempotency_key=$3',[tenant,req.actor.id,key]);
-        if(existing.rowCount) return {row:existing.rows[0],repeated:true};
+        if(existing.rowCount) {
+          if(existing.rows[0].request_hash && existing.rows[0].request_hash!==requestHash) failure(409,'Idempotency-Key reutilizada con datos diferentes');
+          return {row:existing.rows[0],repeated:true};
+        }
+        // Serialize slot reservation with work-hour and time-off changes.
+        await tx.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[tenant+':schedule:'+x.barberId]);
         const sr=await tx.query("SELECT s.id,s.price_minor,s.duration_minutes FROM public.services s JOIN public.tenants t ON t.id=s.tenant_id WHERE s.tenant_id=$1 AND s.id=$2 AND s.is_active=true AND t.status='active'",[tenant,x.serviceId]);
         if(!sr.rowCount) failure(404,'Servicio no disponible');
         const br=await tx.query("SELECT id FROM public.barbers WHERE tenant_id=$1 AND id=$2 AND status='active'",[tenant,x.barberId]);
         if(!br.rowCount) failure(404,'Barbero no disponible');
         const endsAt=endOfBooking(startsAt,Number(sr.rows[0].duration_minutes));
-        const inserted=await tx.query('INSERT INTO public.appointments(tenant_id,barber_id,service_id,customer_user_id,customer_name,customer_phone,created_by,starts_at,ends_at,price_minor,notes,idempotency_key) VALUES($1,$2,$3,$4,$5,$6,$4,$7,$8,$9,$10,$11) RETURNING *',[tenant,x.barberId,x.serviceId,req.actor.id,x.customerName,x.customerPhone,startsAt,endsAt,sr.rows[0].price_minor,x.notes,key]);
+        const inserted=await tx.query('INSERT INTO public.appointments(tenant_id,barber_id,service_id,customer_user_id,customer_name,customer_phone,created_by,starts_at,ends_at,price_minor,notes,idempotency_key,request_hash) VALUES($1,$2,$3,$4,$5,$6,$4,$7,$8,$9,$10,$11,$12) RETURNING *',[tenant,x.barberId,x.serviceId,req.actor.id,x.customerName,x.customerPhone,startsAt,endsAt,sr.rows[0].price_minor,x.notes,key,requestHash]);
         return {row:inserted.rows[0],repeated:false};
       });
       return reply.code(booking.repeated?200:201).send(booking.row);
@@ -146,8 +162,14 @@ export async function registerRoutes(app,{config,db,security}) {
     routes.post('/api/v1/tenants/:tenantId/transactions',async (req,reply)=>{
       const tenant=parseOrThrow(id,req.params.tenantId);await requireTenant(db,tenant,req.actor.id,owners);
       const x=parseOrThrow(z.object({type:z.enum(['income','expense']),category:word(70),concept:word(250),amountMinor:z.number().int().positive(),paymentMethod:z.enum(['cash','debit','credit','transfer','nequi','daviplata','split'])}).strict(),req.body);
-      const row=await db.query('INSERT INTO public.transactions(tenant_id,type,category,concept,amount_minor,payment_method,created_by) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *',[tenant,x.type,x.category,x.concept,x.amountMinor,x.paymentMethod,req.actor.id]);
-      return reply.code(201).send(row.rows[0]);
+      const row=await db.transaction(async tx=>{
+        const today=await tx.query("SELECT (now() AT TIME ZONE time_zone)::date::text AS local_day FROM public.tenants WHERE id=$1 AND status='active'",[tenant]);
+        if(!today.rowCount) failure(404,'Negocio no disponible');
+        await tx.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[tenant+':cash:'+today.rows[0].local_day]);
+        return (await tx.query('INSERT INTO public.transactions(tenant_id,type,category,concept,amount_minor,payment_method,created_by) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *',
+          [tenant,x.type,x.category,x.concept,x.amountMinor,x.paymentMethod,req.actor.id])).rows[0];
+      });
+      return reply.code(201).send(row);
     });
     routes.post('/api/v1/tenants/:tenantId/media/signed-upload',async (req,reply)=>{
       const tenant=parseOrThrow(id,req.params.tenantId);await requireTenant(db,tenant,req.actor.id,owners);
