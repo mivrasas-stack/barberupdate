@@ -75,3 +75,24 @@ No conectar el frontend todavía. No declarar 100% de backend productivo.
 - Se subió el PNG mínimo a Storage con el token firmado, se recuperó desde la URL pública y se verificó HTTP 200.
 - La prueba eliminó posteriormente el objeto Storage, las dos barberías y los dos usuarios temporales; ninguna imagen de usuarios reales fue alterada.
 - La prueba está incorporada en backend/test/live-api.test.js y solamente se ejecuta con RUN_LIVE_API_INTEGRATION=1.
+
+## Validación multirol y concurrencia (ronda posterior)
+
+- Se añadieron pruebas opt-in en backend/test/concurrency.test.js para tres usuarios independientes: propietario, gerente y barbero.
+- Se confirmó que el gerente puede administrar servicios y horarios, pero no asignar roles de miembros.
+- Se confirmó que el barbero no puede crear productos, leer reportes financieros ni leer agendas ajenas; sí puede ver sus reservas asignadas.
+- Con dos solicitudes HTTP simultáneas al mismo horario, PostgreSQL produjo exactamente un HTTP 201 y un HTTP 409; persistió una sola reserva.
+- Con dos pedidos simultáneos por la única unidad restante, hubo exactamente un HTTP 201 y un HTTP 409; inventario final cero y sin pedidos duplicados.
+- Con la misma Idempotency-Key simultánea se obtuvo HTTP 201/200, un único pedido y un solo descuento de inventario.
+- Prueba real aprobada, con empresa y tres usuarios temporales eliminados al terminar.
+- Ejecutar en backend con RUN_LIVE_CONCURRENCY=1: node --env-file=.env --env-file=.env.admin.local --test test/concurrency.test.js
+
+## Validación WebSocket Supabase Realtime
+
+- Se añadió backend/test/realtime.test.js, prueba opt-in de notificaciones por Postgres Changes para propietario y usuario externo.
+- Primera ejecución: SUBSCRIBED, pero no recibió la notificación en 16 segundos; se marcó FALLIDA y se limpiaron los datos.
+- Segunda ejecución: permiso RLS comprobado por REST (propietario ve evento, tercero ve cero), y evento Realtime entregado por canales filtrado/no filtrado; usuario ajeno recibió cero eventos.
+- Resultado segunda ejecución: APROBADA. La intermitencia de la primera prueba no queda resuelta como garantía de estabilidad. Repetir y probar reconexión antes de producción.
+- La prueba limpió empresa y dos usuarios. Ejecutar con RUN_LIVE_REALTIME=1: node --env-file=.env --env-file=.env.admin.local --test test/realtime.test.js
+
+- Wompi permanece elegido SOLO para vender BarberOS desde la futura landing page; ningún cobro de barberías utiliza Wompi.

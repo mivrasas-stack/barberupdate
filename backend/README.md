@@ -114,3 +114,26 @@ activar cobros antes de tener un entorno TLS y autorización explícita.
 - Cuerpo: {"startsAt":"2026-11-05T15:00:00-05:00","barberId":"UUID-opcional"}. Si barberId se omite, se mantiene el barbero original.
 - PostgreSQL comprueba disponibilidad, jornada, ausencia y superposición; se registra reschedule_count y notificación al cliente. No se permite mover citas canceladas/completadas.
 - La integración Wompi sigue FUERA DE ALCANCE: será únicamente el checkout de planes de BarberOS en la futura landing page, nunca pagos de pedidos/citas de las barberías.
+
+## Pruebas adversariales opcionales (solo Supabase de BarberOS)
+
+Los siguientes tests NO se ejecutan en CI por defecto: crean datos efimeros,
+autentican usuarios reales temporales y acceden a la API local, por lo que
+requieren Supabase y Docker activos. Todos validan el project ref dedicado y
+borran sus fixtures en un finally. Nunca ejecutarlos contra empresas reales.
+
+En backend/ con los archivos .env y .env.admin.local ignorados por Git:
+
+PowerShell:
+  $env:RUN_LIVE_CONCURRENCY='1'
+  node --env-file=.env --env-file=.env.admin.local --test test/concurrency.test.js
+  Remove-Item Env:RUN_LIVE_CONCURRENCY
+
+PowerShell:
+  $env:RUN_LIVE_REALTIME='1'
+  node --env-file=.env --env-file=.env.admin.local --test test/realtime.test.js
+  Remove-Item Env:RUN_LIVE_REALTIME
+
+- Concurrencia: prueba roles, reserva unica con dos solicitudes al mismo horario, stock limitado y replay idempotente.
+- Realtime: prueba entrega WebSocket a su destinatario, RLS con REST y bloqueo a usuarios ajenos.
+- El resultado Realtime puede verse afectado por latencia de replicacion: monitorear reconexiones y repetir antes de produccion.
