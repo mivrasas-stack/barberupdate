@@ -70,6 +70,10 @@ jobs:
         run: npm ci
         working-directory: backend
       - if: steps.qa.outputs.ready == 'true'
+        name: Validate PostgreSQL URLs without exposing their contents
+        run: |
+          node -e 'for (const name of ["DATABASE_URL","ADMIN_DATABASE_URL"]) { try { const u = new URL(process.env[name]); if (!["postgres:","postgresql:"].includes(u.protocol) || !u.hostname || !u.username || !u.password || !u.pathname || u.password.includes("YOUR-PASSWORD")) throw Error("incomplete"); console.log(name+" format OK"); } catch { console.error("::error::"+name+" has invalid or incomplete PostgreSQL URI syntax"); process.exitCode=1; } }'
+      - if: steps.qa.outputs.ready == 'true'
         name: Start isolated test API and Redis
         run: docker compose -f infra/compose.yaml up -d --build --wait
       - if: steps.qa.outputs.ready == 'true'
