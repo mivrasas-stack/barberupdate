@@ -43,6 +43,22 @@ export async function registerMediaProfileRoutes(app,{db,security,config}){
    if(!result.rowCount)failure(404,'Barbería no encontrada');
    return result.rows[0];
   });
+  routes.patch('/api/v1/tenants/:tenantId/products/:productId/photo',async req=>{
+   const tenant=parseOrThrow(id,req.params.tenantId),product=parseOrThrow(id,req.params.productId);
+   await requireTenant(db,tenant,req.actor.id,['owner','manager']);
+   const x=parseOrThrow(z.object({url}).strict(),req.body);
+   const result=await db.query('UPDATE public.products SET photo_url=$3,updated_at=now() WHERE tenant_id=$1 AND id=$2 RETURNING id,photo_url',[tenant,product,x.url]);
+   if(!result.rowCount)failure(404,'Producto no encontrado');
+   return result.rows[0];
+  });
+  routes.patch('/api/v1/tenants/:tenantId/barbers/:barberId/photo',async req=>{
+   const tenant=parseOrThrow(id,req.params.tenantId),barber=parseOrThrow(id,req.params.barberId);
+   await requireTenant(db,tenant,req.actor.id,['owner','manager']);
+   const x=parseOrThrow(z.object({url}).strict(),req.body);
+   const result=await db.query('UPDATE public.barbers SET photo_url=$3 WHERE tenant_id=$1 AND id=$2 RETURNING id,photo_url',[tenant,barber,x.url]);
+   if(!result.rowCount)failure(404,'Barbero no encontrado');
+   return result.rows[0];
+  });
   routes.patch('/api/v1/tenants/:tenantId/branding',async req=>{
    const tenant=parseOrThrow(id,req.params.tenantId);
    await requireTenant(db,tenant,req.actor.id,['owner','manager']);
