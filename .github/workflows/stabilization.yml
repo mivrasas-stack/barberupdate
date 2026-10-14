@@ -27,5 +27,5 @@ jobs:
         working-directory: backend
       - run: node --check src/media-profile.js
         working-directory: backend
-      - run: node --test test/media-profile.test.js
+      - run: node --test test/media-profile.test.js test/media-profile-routes.test.js
         working-directory: backend
