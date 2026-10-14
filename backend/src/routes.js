@@ -80,6 +80,17 @@ export async function registerRoutes(app,{config,db,security}) {
       const row=await db.query('INSERT INTO public.barbers(tenant_id,name,slug,user_id,bio,commission_rate) VALUES($1,$2,$3,$4,$5,$6) RETURNING *',[tenant,x.name,x.slug,x.userId||null,x.bio,x.commissionRate]);
       return reply.code(201).send(row.rows[0]);
     });
+    routes.patch('/api/v1/tenants/:tenantId/barbers/:barberId/whatsapp',async req=>{
+      const tenant=parseOrThrow(id,req.params.tenantId),barber=parseOrThrow(id,req.params.barberId);
+      await requireTenant(db,tenant,req.actor.id,owners);
+      const x=parseOrThrow(z.object({phone:z.string().trim().max(32).nullable(),optIn:z.boolean()}).strict(),req.body);
+      if(x.optIn && (!x.phone||x.phone.replace(/[^0-9]/g,'').length<10))
+        failure(400,'Telefono valido y consentimiento requerido');
+      const result=await db.query('UPDATE public.barbers SET whatsapp_phone=$3,whatsapp_opt_in=$4 WHERE tenant_id=$1 AND id=$2 RETURNING id,whatsapp_phone,whatsapp_opt_in',
+        [tenant,barber,x.phone||null,x.optIn]);
+      if(!result.rowCount)failure(404,'Barbero no encontrado');
+      return result.rows[0];
+    });
     routes.get('/api/v1/tenants/:tenantId/services',async req=>{
       const tenant=parseOrThrow(id,req.params.tenantId);
       await requireTenant(db,tenant,req.actor.id);
