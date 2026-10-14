@@ -6,8 +6,13 @@ export const TEMPLATES = Object.freeze({
  reminder: 'recordatorio_cita_cliente',
 });
 export function normalizePhone(value) {
- const digits=String(value||'').replace(/[^0-9]/g,'');
- return digits.length>=10 && digits.length<=15 ? digits : null;
+ const raw=String(value||'').trim();
+ const digits=raw.replace(/[^0-9]/g,'');
+ // BarberOS uses Colombian mobile numbers: normalize local 3XXXXXXXXX to +57.
+ if(/^3\d{9}$/.test(digits)) return '57'+digits;
+ // Already country-code-qualified E.164 input (without the '+' in API payload).
+ if(/^\+?[1-9]\d{10,14}$/.test(raw.replace(/[\s()-]/g,''))) return digits;
+ return null;
 }
 export function localDateTime(instant,timeZone) {
  const date=new Date(instant);
