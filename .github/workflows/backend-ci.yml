@@ -1,0 +1,46 @@
+name: BarberOS Backend CI
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - 'infra/**'
+      - 'supabase/migrations/**'
+      - '.github/workflows/backend-ci.yml'
+  pull_request:
+    paths:
+      - 'backend/**'
+      - 'infra/**'
+      - 'supabase/migrations/**'
+      - '.github/workflows/backend-ci.yml'
+jobs:
+  api-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install
+        run: npm ci --ignore-scripts --no-audit
+      - name: Syntax and security fail-safe tests
+        run: npm run check
+      - name: Test
+        run: npm test
+  docker-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Docker Compose
+        env:
+          DATABASE_URL: postgresql://notreal:notreal@localhost:5432/postgres
+          SUPABASE_URL: https://example.supabase.co
+          SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_fake
+          REDIS_PASSWORD: ci_fake_password_not_used
+          CORS_ORIGINS: https://example.com
+        run: docker compose -f infra/compose.yaml config --quiet
