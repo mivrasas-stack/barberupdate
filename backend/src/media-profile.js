@@ -43,6 +43,15 @@ export async function registerMediaProfileRoutes(app,{db,security,config}){
    if(!result.rowCount)failure(404,'Barbería no encontrada');
    return result.rows[0];
   });
+  routes.patch('/api/v1/tenants/:tenantId/branding',async req=>{
+   const tenant=parseOrThrow(id,req.params.tenantId);
+   await requireTenant(db,tenant,req.actor.id,['owner','manager']);
+   const x=parseOrThrow(z.object({kind:z.enum(['logo','cover']),url}).strict(),req.body);
+   const column=x.kind==='logo'?'logo_url':'cover_url';
+   const result=await db.query('UPDATE public.tenants SET '+column+'=$2 WHERE id=$1 RETURNING logo_url,cover_url',[tenant,x.url]);
+   if(!result.rowCount)failure(404,'Barbería no encontrada');
+   return result.rows[0];
+  });
   routes.patch('/api/v1/tenants/:tenantId/gallery',async req=>{
    const tenant=parseOrThrow(id,req.params.tenantId);
    await requireTenant(db,tenant,req.actor.id,['owner','manager']);
