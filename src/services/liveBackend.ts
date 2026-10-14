@@ -138,7 +138,7 @@ export function mapBarber(r:Db,tenant:string):Barber{
   const portfolioRaw=val(r,'portfolio');
   const portfolio=Array.isArray(portfolioRaw)?portfolioRaw.map(x=>String(x)):[];
   return {
-    id:txt(r,'id'),businessId:tenant,slug:txt(r,'slug'),
+    id:txt(r,'id'),userId:txt(r,'user_id'),businessId:tenant,slug:txt(r,'slug'),
     name:txt(r,'name'),photo:txt(r,'photo_url',''),phone:'',email:'',specialties:[],
     bio:txt(r,'bio'),commissionRate:num(r,'commission_rate'),
     status:txt(r,'status','active')==='active'?'active':'inactive',
