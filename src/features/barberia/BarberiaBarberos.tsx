@@ -76,7 +76,7 @@ export const BarberiaBarberos: React.FC = () => {
               <div>
                 <div className="flex items-start gap-4 mb-4">
                   <img
-                    src={barber.photo}
+                    src={barber.photo} onError={e=>{if(!e.currentTarget.src.endsWith('/images/placeholder.svg'))e.currentTarget.src='/images/placeholder.svg';}}
                     alt={barber.name}
                     className="w-16 h-16 rounded-xl object-cover border-2 border-[var(--gold-primary)] shrink-0"
                   />
@@ -119,7 +119,7 @@ export const BarberiaBarberos: React.FC = () => {
                   {barber.portfolio.map((img, idx) => (
                     <img
                       key={idx}
-                      src={img}
+                      src={img} onError={e=>{if(!e.currentTarget.src.endsWith('/images/placeholder.svg'))e.currentTarget.src='/images/placeholder.svg';}}
                       alt="Trabajo"
                       className="w-12 h-12 rounded-lg object-cover border border-neutral-700 shrink-0"
                     />
@@ -196,7 +196,7 @@ export const BarberiaBarberos: React.FC = () => {
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 max-h-80 overflow-y-auto pr-1">
                 {selectedBarber.portfolio.map((img, i) => (
                   <div key={i} className="relative group rounded-xl overflow-hidden border border-neutral-700 aspect-square bg-neutral-900">
-                    <img src={img} alt={`Portafolio ${i + 1}`} className="w-full h-full object-cover" />
+                    <img src={img} onError={e=>{if(!e.currentTarget.src.endsWith('/images/placeholder.svg'))e.currentTarget.src='/images/placeholder.svg';}} alt={`Portafolio ${i + 1}`} className="w-full h-full object-cover" />
                     <button
                       onClick={() => void handleRemovePhoto(i)}
                       className="absolute top-1.5 right-1.5 p-1 rounded-md bg-black/70 text-red-400 hover:bg-red-500 hover:text-white transition-colors"
