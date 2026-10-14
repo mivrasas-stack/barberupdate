@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Barber } from '../../types';
 import { barberStore } from '../../services/store';
+import { ImageUploader } from './ImageUploader';
+import {backendRequest,isLiveBackend,refreshLiveData} from '../../services/liveBackend';
 import { Scissors, Plus, Star, Phone, Mail, Clock, Calendar, Image, X, Check, Trash2 } from 'lucide-react';
 
 export const BarberiaBarberos: React.FC = () => {
@@ -12,7 +14,13 @@ export const BarberiaBarberos: React.FC = () => {
   const shopId = currentShop?.id || 'shop-1';
   const barbers = state.barbers.filter(b => b.businessId === shopId);
 
-  const handleAddPhoto = () => {
+  const handleAddPhoto = async (photoUrl=newPhotoUrl) => {
+    if(isLiveBackend){
+      if(!selectedBarber||!photoUrl)return;
+      try{await backendRequest('/tenants/'+shopId+'/barbers/'+selectedBarber.id+'/gallery',{method:'PATCH',body:JSON.stringify({photos:[...selectedBarber.portfolio,photoUrl]})});await refreshLiveData();setSelectedBarber({...selectedBarber,portfolio:[...selectedBarber.portfolio,photoUrl]});setNewPhotoUrl('');addToast('Portafolio actualizado','success');}
+      catch(e){addToast(e instanceof Error?e.message:'No se guardó la foto','error');}
+      return;
+    }
     if (!selectedBarber || !newPhotoUrl) return;
     const res = barberStore.addPortfolioPhoto('barber', selectedBarber.id, newPhotoUrl);
     if (!res.success) {
@@ -26,7 +34,14 @@ export const BarberiaBarberos: React.FC = () => {
     if (updated) setSelectedBarber({ ...updated });
   };
 
-  const handleRemovePhoto = (index: number) => {
+  const handleRemovePhoto = async (index: number) => {
+    if(isLiveBackend){
+      if(!selectedBarber)return;
+      const photos=selectedBarber.portfolio.filter((_,i)=>i!==index);
+      try{await backendRequest('/tenants/'+shopId+'/barbers/'+selectedBarber.id+'/gallery',{method:'PATCH',body:JSON.stringify({photos})});await refreshLiveData();setSelectedBarber({...selectedBarber,portfolio:photos});addToast('Fotografía eliminada','success');}
+      catch(e){addToast(e instanceof Error?e.message:'No se eliminó la foto','error');}
+      return;
+    }
     if (!selectedBarber) return;
     barberStore.removePortfolioPhoto('barber', selectedBarber.id, index);
     addToast('Fotografía eliminada del portafolio', 'info');
@@ -154,7 +169,8 @@ export const BarberiaBarberos: React.FC = () => {
               {selectedBarber.portfolio.length < 10 ? (
                 <div className="p-3 bg-[#181818] rounded-xl border border-neutral-800 space-y-2">
                   <span className="text-neutral-300 font-semibold block">Subir enlace de fotografía de trabajo realizado:</span>
-                  <div className="flex gap-2">
+                  {isLiveBackend && <ImageUploader tenant={shopId} category="barber" onUploaded={u=>void handleAddPhoto(u)}/>}
+                  {!isLiveBackend && <div className="flex gap-2">
                     <input
                       type="url"
                       value={newPhotoUrl}
@@ -163,12 +179,12 @@ export const BarberiaBarberos: React.FC = () => {
                       className="flex-1 bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-1.5 text-white"
                     />
                     <button
-                      onClick={handleAddPhoto}
+                      onClick={()=>void handleAddPhoto()}
                       className="px-4 py-1.5 rounded-lg bg-[var(--gold-primary)] text-black font-bold hover:bg-[var(--gold-hover)]"
                     >
                       Añadir
                     </button>
-                  </div>
+                  </div>}
                 </div>
               ) : (
                 <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300">
@@ -182,7 +198,7 @@ export const BarberiaBarberos: React.FC = () => {
                   <div key={i} className="relative group rounded-xl overflow-hidden border border-neutral-700 aspect-square bg-neutral-900">
                     <img src={img} alt={`Portafolio ${i + 1}`} className="w-full h-full object-cover" />
                     <button
-                      onClick={() => handleRemovePhoto(i)}
+                      onClick={() => void handleRemovePhoto(i)}
                       className="absolute top-1.5 right-1.5 p-1 rounded-md bg-black/70 text-red-400 hover:bg-red-500 hover:text-white transition-colors"
                       title="Eliminar imagen"
                     >
