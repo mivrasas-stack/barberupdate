@@ -357,7 +357,7 @@ test('Propietario: sube fotografía del producto y guarda el perfil comercial de
  const buffer=pngjs.PNG.sync.write(bitmap);
  const file=page.getByLabel('Reemplazar imagen').first();
  await file.setInputFiles({name:'producto-qa.png',mimeType:'image/png',buffer});
- const uploadedUrl=await expect.poll(async()=>{
+ await expect.poll(async()=>{
   const items=await api(state.owner.jwt,'GET','/tenants/'+state.tenantId+'/products');
   const photo=items.find(x=>x.id===state.productId)?.photo_url;
   return String(photo||'');
@@ -372,9 +372,9 @@ test('Propietario: sube fotografía del producto y guarda el perfil comercial de
  await expect.poll(()=>image.evaluate(img=>img.complete&&img.naturalWidth>0),{timeout:15000}).toBe(true);
  await page.goto('/login#/barberia/'+state.slug+'/perfil');
  await page.getByRole('button',{name:/Editar Informaci.n/i}).click();
- const field=page.getByRole('textbox',{name:/Lema o Tagline/i});
- await field.fill('Perfil persistido desde Playwright');
- await page.getByRole('button',{name:/Guardar Cambios/i}).click();
+ const form=page.locator('form').filter({hasText:'Editar Datos Comerciales'});
+ await form.locator('input[type=text]').nth(1).fill('Perfil persistido desde Playwright');
+ await form.getByRole('button',{name:/Guardar Perfil/i}).click();
  await expect.poll(async()=>{
   const shops=await api(state.owner.jwt,'GET','/tenants');
   return shops.find(x=>x.id===state.tenantId)?.tagline;
