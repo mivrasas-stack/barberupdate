@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { Barber } from '../../types';
 import { barberStore } from '../../services/store';
 import { ImageUploader } from './ImageUploader';
+import { BarberInvites } from './BarberInvites';
 import {backendRequest,isLiveBackend,refreshLiveData} from '../../services/liveBackend';
 import { Scissors, Plus, Star, Phone, Mail, Clock, Calendar, Image, X, Check, Trash2 } from 'lucide-react';
 
@@ -10,6 +11,7 @@ export const BarberiaBarberos: React.FC = () => {
   const { currentShop, state, addToast } = useApp();
   const [selectedBarber, setSelectedBarber] = useState<Barber | null>(null);
   const [newPhotoUrl, setNewPhotoUrl] = useState('');
+  const [showInvites, setShowInvites] = useState(false);
 
   const shopId = currentShop?.id || 'shop-1';
   const barbers = state.barbers.filter(b => b.businessId === shopId);
@@ -69,7 +71,9 @@ export const BarberiaBarberos: React.FC = () => {
             Gestiona comisiones, horarios de trabajo, especialidades y portafolios fotográficos
           </p>
         </div>
+        {isLiveBackend && <button type="button" onClick={()=>setShowInvites(value=>!value)} className="rounded-xl bg-[var(--gold-primary)] text-black font-bold px-4 py-2 text-sm">{showInvites?'Ocultar invitaciones':'Añadir barbero'}</button>}
       </div>
+      {showInvites && isLiveBackend && <BarberInvites/>}
 
       {/* Barbers Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
