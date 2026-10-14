@@ -1,0 +1,16 @@
+{
+  auto_https off
+}
+:80 {
+  encode zstd gzip
+  handle /api/* {
+    reverse_proxy api1:8080 api2:8080 {
+      lb_policy least_conn
+      health_uri /api/v1/health/live
+      health_interval 15s
+    }
+  }
+  handle {
+    respond "BarberOS API only; frontend deliberately not integrated" 404
+  }
+}
