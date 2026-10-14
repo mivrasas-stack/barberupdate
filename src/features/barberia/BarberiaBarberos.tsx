@@ -261,17 +261,19 @@ export const BarberiaBarberos: React.FC = () => {
             <div className="py-4 space-y-4 text-xs">
               {/* Add New Photo Input */}
               {selectedBarber.portfolio.length < 10 ? (
-                <div className="p-4 bg-[#181818] rounded-2xl border border-neutral-800 space-y-2">
-                  <span className="text-neutral-300 font-semibold block mb-1">Agregar fotografía al portafolio:</span>
-                  <ImageUpload
-                    value={newPhotoUrl}
-                    onChange={(url) => {
-                      if (url) handleAddPhoto(url);
-                    }}
-                    kind="portfolio"
-                    tenantId={currentShop?.id}
-                    aspectRatio="square"
-                  />
+                <div className="p-4 bg-[#181818] rounded-2xl border border-neutral-800/80 space-y-2">
+                  <span className="text-neutral-300 font-semibold block mb-2 text-xs">Agregar fotografía al portafolio:</span>
+                  <div className="max-w-xl">
+                    <ImageUpload
+                      value={newPhotoUrl}
+                      onChange={(url) => {
+                        if (url) handleAddPhoto(url);
+                      }}
+                      kind="portfolio"
+                      tenantId={currentShop?.id}
+                      aspectRatio="auto"
+                    />
+                  </div>
                 </div>
               ) : (
                 <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300">

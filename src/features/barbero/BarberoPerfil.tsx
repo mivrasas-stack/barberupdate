@@ -146,17 +146,19 @@ export const BarberoPerfil: React.FC = () => {
         </div>
 
         {barber.portfolio.length < 10 ? (
-          <div className="p-4 bg-[#181818] rounded-2xl border border-neutral-800 space-y-2">
-            <span className="text-neutral-300 font-semibold block mb-1 text-xs">Agregar fotografía a mi portafolio:</span>
-            <ImageUpload
-              value={newPhoto}
-              onChange={(url) => {
-                if (url) handleAddPhoto(url);
-              }}
-              kind="portfolio"
-              tenantId={barber.businessId}
-              aspectRatio="square"
-            />
+          <div className="p-4 bg-[#181818] rounded-2xl border border-neutral-800/80 space-y-2">
+            <span className="text-neutral-300 font-semibold block mb-2 text-xs">Agregar fotografía a mi portafolio:</span>
+            <div className="max-w-xl">
+              <ImageUpload
+                value={newPhoto}
+                onChange={(url) => {
+                  if (url) handleAddPhoto(url);
+                }}
+                kind="portfolio"
+                tenantId={barber.businessId}
+                aspectRatio="auto"
+              />
+            </div>
           </div>
         ) : (
           <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-300">
