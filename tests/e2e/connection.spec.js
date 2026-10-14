@@ -172,6 +172,9 @@ test('Barbero asociado: solicitud, aprobación, rechazo y aislamiento de tenant'
  const ownerContext=await browser.newContext();
  const ownerPage=await ownerContext.newPage();
  await login(ownerPage,state.owner);
+ await ownerPage.goto('/login#/barberia/'+state.slug+'/barberos');
+ await ownerPage.getByRole('button',{name:/Añadir barbero/i}).click();
+ await expect(ownerPage.getByRole('heading',{name:/Vinculaci.n de barberos por QR/i})).toBeVisible();
  await ownerPage.goto('/login#/barberia/'+state.slug+'/perfil');
  await expect(ownerPage.getByRole('heading',{name:/Vinculaci.n de barberos por QR/i})).toBeVisible();
  await ownerPage.getByRole('button',{name:/Generar invitaci.n para barberos/i}).click();
