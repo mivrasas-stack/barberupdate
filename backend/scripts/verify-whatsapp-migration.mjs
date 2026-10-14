@@ -15,7 +15,7 @@ try{
  CREATE TABLE public.appointments(
   id uuid PRIMARY KEY, tenant_id uuid REFERENCES public.tenants(id),
   customer_user_id uuid,customer_phone text,customer_name text,
-  starts_at timestamptz,status text,reschedule_count integer NOT NULL DEFAULT 0
+  starts_at timestamptz,ends_at timestamptz,barber_id uuid,status text,reschedule_count integer NOT NULL DEFAULT 0
  );
  `);
  const sql=readFileSync(new URL('../../supabase/migrations/20261014000400_whatsapp_templates.sql',import.meta.url),'utf8');
