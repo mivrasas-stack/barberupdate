@@ -96,3 +96,14 @@ No conectar el frontend todavía. No declarar 100% de backend productivo.
 - La prueba limpió empresa y dos usuarios. Ejecutar con RUN_LIVE_REALTIME=1: node --env-file=.env --env-file=.env.admin.local --test test/realtime.test.js
 
 - Wompi permanece elegido SOLO para vender BarberOS desde la futura landing page; ningún cobro de barberías utiliza Wompi.
+
+## Resiliencia operativa: failover y monitor
+
+- Caddy cambio de /api/v1/health/live a /api/v1/health/ready para evaluar PostgreSQL y Redis de ambas replicas. Health check cada 10 s con deteccion pasiva y reintentos.
+- Se detuvo SOLO barberos-updatebackend-api1-1 y se ejecutaron 14 comprobaciones por el balanceador: 14 HTTP 200, cero errores.
+- api1 restaurada en finally, replicas API1/API2, Caddy, Redis y worker operativos; readiness final HTTP 200.
+- Se agrego backend/scripts/health-monitor.mjs: verifica readiness, planes y que Wompi permanezca desactivado; salida JSON con latencias y exit 1 ante fallo.
+- Se agregaron tres pruebas del monitor (HTTPS remoto obligatorio, salud nominal y fallo cerrado); los tres casos pasaron.
+- Monitor real: 3/3 endpoints HTTP 200, estado healthy. Carga local anterior no equivale a alta disponibilidad ante caida del host.
+- Supabase Advisor: 0 hallazgos de seguridad; 9 indices sin uso identificados como informativos, no eliminados sin analisis.
+- Recuperacion y backups pendientes de ensayo real; procedimiento detallado en docs/operations-recovery.md.
