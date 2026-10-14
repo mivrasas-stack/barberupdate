@@ -767,25 +767,25 @@ export const BarberiaPerfil: React.FC = () => {
               4. Recursos Visuales (Logotipo y Portada)
             </h4>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
               <ImageUpload
                 label="Logotipo Oficial"
-                recommendedDimensions="400 x 400 px"
+                recommendedDimensions="400 x 400 px (Cuadrado)"
                 value={formLogo}
                 onChange={setFormLogo}
                 kind="logo"
                 tenantId={shop.id}
-                aspectRatio="square"
+                aspectRatio="auto"
               />
 
               <ImageUpload
                 label="Foto de Portada"
-                recommendedDimensions="1200 x 400 px"
+                recommendedDimensions="1200 x 400 px (Panorámica)"
                 value={formCover}
                 onChange={setFormCover}
                 kind="cover"
                 tenantId={shop.id}
-                aspectRatio="banner"
+                aspectRatio="auto"
               />
             </div>
           </div>

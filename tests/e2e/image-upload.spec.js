@@ -25,7 +25,7 @@ const anon = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_PUBLISH
   auth: { persistSession: false, autoRefreshToken: false }
 });
 const pool = new pg.Pool({
-  connectionString: process.env.ADMIN_DATABASE_URL,
+  connectionString: process.env.ADMIN_DATABASE_URL || process.env.DATABASE_URL,
   max: 1,
   connectionTimeoutMillis: 8000
 });
@@ -83,11 +83,17 @@ test.describe('Barber Paradise - Professional Image Upload Component', () => {
 
   test.afterAll(async () => {
     try {
-      if (state.tenantId) await cleanupTestTenant(pool, state.tenantId);
+      if (state.tenantId) {
+        try {
+          await cleanupTestTenant(pool, state.tenantId);
+        } catch (e) {
+          console.warn('Cleanup test tenant warning:', e?.message || e);
+        }
+      }
     } finally {
-      if (state.ownerId) await admin.auth.admin.deleteUser(state.ownerId);
-      if (state.customerId) await admin.auth.admin.deleteUser(state.customerId);
-      await pool.end();
+      if (state.ownerId) await admin.auth.admin.deleteUser(state.ownerId).catch(() => {});
+      if (state.customerId) await admin.auth.admin.deleteUser(state.customerId).catch(() => {});
+      await pool.end().catch(() => {});
     }
   });
 

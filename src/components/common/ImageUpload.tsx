@@ -144,7 +144,7 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
             </div>
           </div>
         ) : (
-          <div className="py-4 px-4 flex flex-col items-center justify-center text-center space-y-2">
+          <div className="w-full h-full min-h-[140px] py-4 px-4 flex flex-col items-center justify-center text-center space-y-2">
             {imgLoadFailed ? (
               <div className="p-2 rounded-full bg-amber-500/10 text-amber-400">
                 <AlertCircle className="w-5 h-5" />

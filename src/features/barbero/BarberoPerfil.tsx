@@ -6,16 +6,23 @@ import { isLiveBackend, updateBarberProfile, refreshLiveData } from '../../servi
 import { Scissors, Star, QrCode, Image, Trash2, Plus, Copy, Printer, Edit2 } from 'lucide-react';
 
 export const BarberoPerfil: React.FC = () => {
-  const { currentBarber, state, addToast } = useApp();
-  const barber = currentBarber || state.barbers.find(b => b.isIndependent) || state.barbers[0];
+  const { currentBarber, currentUser, state, addToast } = useApp();
+  const barber =
+    (currentUser?.barberId ? state.barbers.find(b => b.id === currentUser.barberId) : null) ||
+    currentBarber ||
+    (currentUser?.id ? state.barbers.find(b => b.id === currentUser.id || b.userId === currentUser.id) : null) ||
+    state.barbers.find(b => b.isIndependent) ||
+    state.barbers[0];
+
+  const effectiveTenantId = barber?.businessId || currentUser?.businessId;
   const [newPhoto, setNewPhoto] = useState('');
   const [editingAvatar, setEditingAvatar] = useState(false);
 
   const handleUpdateAvatar = (url: string) => {
-    if (!url) return;
+    if (!url || !barber) return;
     barberStore.updateBarber(barber.id, { photo: url });
-    if (isLiveBackend && barber.businessId) {
-      updateBarberProfile(barber.businessId, barber.id, { photoUrl: url })
+    if (isLiveBackend && effectiveTenantId) {
+      updateBarberProfile(effectiveTenantId, barber.id, { photoUrl: url })
         .then(() => refreshLiveData())
         .catch(e => console.error('Error actualizando foto de perfil del barbero:', e));
     }
@@ -25,16 +32,20 @@ export const BarberoPerfil: React.FC = () => {
 
   const handleAddPhoto = (urlToAdd?: string) => {
     const photoUrl = (urlToAdd || newPhoto).trim();
-    if (!photoUrl) return;
+    if (!photoUrl || !barber) return;
+    if (barber.portfolio.length >= 10) {
+      addToast('Límite máximo de 10 fotografías alcanzado.', 'error');
+      return;
+    }
     const res = barberStore.addPortfolioPhoto('barber', barber.id, photoUrl);
     if (!res.success) {
       addToast(res.error || 'Error al agregar foto', 'error');
       return;
     }
 
-    if (isLiveBackend && barber.businessId) {
+    if (isLiveBackend && effectiveTenantId) {
       const updatedPortfolio = [...barber.portfolio, photoUrl];
-      updateBarberProfile(barber.businessId, barber.id, { portfolio: updatedPortfolio })
+      updateBarberProfile(effectiveTenantId, barber.id, { portfolio: updatedPortfolio })
         .then(() => refreshLiveData())
         .catch(e => console.error('Error sincronizando portafolio barbero:', e));
     }
@@ -44,11 +55,12 @@ export const BarberoPerfil: React.FC = () => {
   };
 
   const handleRemovePhoto = (idx: number) => {
+    if (!barber) return;
     barberStore.removePortfolioPhoto('barber', barber.id, idx);
 
-    if (isLiveBackend && barber.businessId) {
+    if (isLiveBackend && effectiveTenantId) {
       const updatedPortfolio = barber.portfolio.filter((_, i) => i !== idx);
-      updateBarberProfile(barber.businessId, barber.id, { portfolio: updatedPortfolio })
+      updateBarberProfile(effectiveTenantId, barber.id, { portfolio: updatedPortfolio })
         .then(() => refreshLiveData())
         .catch(e => console.error('Error sincronizando portafolio barbero:', e));
     }
@@ -125,7 +137,7 @@ export const BarberoPerfil: React.FC = () => {
                 value={barber.photo}
                 onChange={handleUpdateAvatar}
                 kind="avatar"
-                tenantId={barber.businessId}
+                tenantId={effectiveTenantId}
                 aspectRatio="square"
               />
             </div>
@@ -155,7 +167,7 @@ export const BarberoPerfil: React.FC = () => {
                   if (url) handleAddPhoto(url);
                 }}
                 kind="portfolio"
-                tenantId={barber.businessId}
+                tenantId={effectiveTenantId}
                 aspectRatio="auto"
               />
             </div>
