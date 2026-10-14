@@ -100,6 +100,14 @@ class Store {
     if(import.meta.env.VITE_BACKEND_MODE==='live'){
       // This key was used only for synthetic demo records; never carry it into live.
       localStorage.removeItem(STORAGE_KEY);
+      try {
+        const liveSaved = sessionStorage.getItem('barberos_live_state_v1');
+        if (liveSaved) {
+          return JSON.parse(liveSaved);
+        }
+      } catch (e) {
+        console.warn('Could not parse stored live BarberOS state', e);
+      }
       return getLiveEmptyState();
     }
     try {
@@ -151,10 +159,18 @@ class Store {
       appointments: [], transactions: [], cashClosings: [], orders: [], reviews: [],
       loyalty: {}, ...data,
     };
+    if(import.meta.env.VITE_BACKEND_MODE==='live'){
+      try{
+        sessionStorage.setItem('barberos_live_state_v1', JSON.stringify(this.state));
+      }catch{}
+    }
     this.notify(); // Do not persist authenticated tenant data to demo localStorage.
   }
 
   public clearRemoteSession(): void {
+    if(import.meta.env.VITE_BACKEND_MODE==='live'){
+      try{sessionStorage.removeItem('barberos_live_state_v1');}catch{}
+    }
     this.hydrateFromBackend({});
   }
 

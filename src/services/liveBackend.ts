@@ -23,7 +23,21 @@ function storeSession(value:Session|null){
   if(value)sessionStorage.setItem(storageKey,JSON.stringify(value));
   else sessionStorage.removeItem(storageKey);
 }
-export function clearSession(){storeSession(null);}
+const userCacheKey='barberos_cached_user_v1';
+export function getCachedUser():User|null{
+  try{
+    const raw=sessionStorage.getItem(userCacheKey);
+    return raw?JSON.parse(raw) as User:null;
+  }catch{return null;}
+}
+export function setCachedUser(user:User|null){
+  if(user)sessionStorage.setItem(userCacheKey,JSON.stringify(user));
+  else sessionStorage.removeItem(userCacheKey);
+}
+export function clearSession(){
+  storeSession(null);
+  setCachedUser(null);
+}
 export function hasSession(){return !!session||!!sessionStorage.getItem(storageKey);}
 async function authCall(path:string,payload:object){
   if(!supabaseUrl||!supabasePublicKey)throw Error('Faltan variables públicas de Supabase para conectar BarberOS.');

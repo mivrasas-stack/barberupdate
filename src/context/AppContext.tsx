@@ -16,7 +16,7 @@ import {
   CommercialPageConfig,
 } from '../types';
 import { barberStore, BarberOSState } from '../services/store';
-import {isLiveBackend, signIn, signOut, clearSession, hasSession, loadAccount, backendRequest, registerOwnedShop} from '../services/liveBackend';
+import {isLiveBackend, signIn, signOut, clearSession, hasSession, loadAccount, backendRequest, registerOwnedShop, getCachedUser, setCachedUser} from '../services/liveBackend';
 
 export interface ToastItem {
   id: string;
@@ -72,9 +72,13 @@ const AppContext = createContext<AppContextType | null>(null);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [storeState, setStoreState] = useState<BarberOSState>(barberStore.getState());
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [restoringSession, setRestoringSession] = useState(isLiveBackend && hasSession());
-  const [activeRoute, setActiveRoute] = useState<string>('/login');
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    return isLiveBackend && hasSession() ? getCachedUser() : null;
+  });
+  const [restoringSession, setRestoringSession] = useState(false);
+  const [activeRoute, setActiveRoute] = useState<string>(() => {
+    return window.location.hash ? window.location.hash.slice(1) : '/login';
+  });
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [isPaletteModalOpen, setIsPaletteModalOpen] = useState<boolean>(false);
 
@@ -178,13 +182,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         services:data.services,products:data.products,appointments:data.appointments,
         transactions:data.transactions,orders:data.orders,plans:data.plans,cashClosings:data.cashClosings});
       setCurrentUser(data.user);
+      setCachedUser(data.user);
       if(data.user.role==='owner')navigate(data.shops[0]?'/barberia/'+data.shops[0].slug+'/inicio':'/clientes/inicio');
       else if(data.user.role==='superadmin')navigate('/admin/inicio');
       else if(data.user.role==='barber_employee'||data.user.role==='barber_independent')
         navigate('/barbero/'+(data.barbers.find(b=>b.id===data.user.barberId)?.slug||data.barbers[0]?.slug||'barbero')+'/inicio');
       else navigate('/clientes/inicio');
       addToast('Sesión real iniciada correctamente', 'success');
-    }catch(error){clearSession();throw error;}
+    }catch(error){clearSession();setCachedUser(null);throw error;}
   };
 
   useEffect(()=>{
@@ -196,17 +201,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         services:data.services,products:data.products,appointments:data.appointments,
         transactions:data.transactions,orders:data.orders,plans:data.plans,cashClosings:data.cashClosings});
       setCurrentUser(data.user);
-      if(data.user.role==='owner'&&data.shops[0])navigate('/barberia/'+data.shops[0].slug+'/inicio');
-      else if(data.user.role==='superadmin')navigate('/admin/inicio');
-      else if(data.user.role==='barber_employee'||data.user.role==='barber_independent')
-        navigate('/barbero/'+(data.barbers.find(b=>b.id===data.user.barberId)?.slug||data.barbers[0]?.slug||'barbero')+'/inicio');
-      else navigate('/clientes/inicio');
-    }).catch(()=>{if(alive){clearSession();setCurrentUser(null);}}).finally(()=>{if(alive)setRestoringSession(false)});
+      setCachedUser(data.user);
+      const currentHash = window.location.hash.slice(1);
+      if(!currentHash || currentHash === '/login'){
+        if(data.user.role==='owner'&&data.shops[0])navigate('/barberia/'+data.shops[0].slug+'/inicio');
+        else if(data.user.role==='superadmin')navigate('/admin/inicio');
+        else if(data.user.role==='barber_employee'||data.user.role==='barber_independent')
+          navigate('/barbero/'+(data.barbers.find(b=>b.id===data.user.barberId)?.slug||data.barbers[0]?.slug||'barbero')+'/inicio');
+        else navigate('/clientes/inicio');
+      }
+    }).catch(()=>{if(alive){clearSession();setCachedUser(null);setCurrentUser(null);}}).finally(()=>{if(alive)setRestoringSession(false);});
     return ()=>{alive=false;};
   },[]);
 
   const logout = () => {
     if(isLiveBackend){void signOut().catch(()=>clearSession());barberStore.clearRemoteSession();}
+    setCachedUser(null);
     setCurrentUser(null);
     navigate('/login');
     addToast('Sesión cerrada correctamente', 'info');

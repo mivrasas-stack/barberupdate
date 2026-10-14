@@ -10,3 +10,4 @@ coverage/
 # Browser E2E artifacts can contain temporary account/session details.
 test-results/
 playwright-report/
+.aistudio/

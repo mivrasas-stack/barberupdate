@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import {isLiveBackend} from '../../services/liveBackend';
 import {
   Home,
   LayoutDashboard,
@@ -21,7 +22,7 @@ export const ClienteLayout: React.FC<{ children: React.ReactNode }> = ({ childre
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const customerId = currentUser?.id || 'usr-client-1';
-  const loyalty = state.loyalty[customerId] || state.loyalty['usr-client-1'] || { points: 420 };
+  const loyalty = state.loyalty[customerId] || (!isLiveBackend?state.loyalty['usr-client-1']:undefined) || {points:isLiveBackend?0:420};
 
   const isInicio = activeRoute === '/clientes/inicio' || activeRoute === '/clientes' || activeRoute === '/clientes/';
 

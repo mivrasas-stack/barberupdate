@@ -56,11 +56,10 @@ import { BarberJoinPublic } from './features/barberia/BarberJoinPublic';
 import { ClientePerfil } from './features/clientes/ClientePerfil';
 
 const AppContent: React.FC = () => {
-  const { activeRoute, currentUser, restoringSession } = useApp();
+  const { activeRoute, currentUser } = useApp();
 
   if (window.location.pathname.startsWith('/unirse-barbero/'))return <BarberJoinPublic/>;
   if (window.location.pathname.startsWith('/vincular/'))return <PublicJoinView/>;
-  if (restoringSession) return <main role='status' className='min-h-screen bg-black text-white flex items-center justify-center'>Restaurando sesion...</main>;
 
   // If on login route or not logged in
   if (activeRoute === '/login' || (!currentUser && !activeRoute.startsWith('/vincular'))) {
