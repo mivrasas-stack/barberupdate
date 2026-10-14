@@ -168,3 +168,13 @@ Validado con backend/test/proxy-security.test.js.
 - Un pedido pendiente de cancelacion sigue bloqueado hasta registrar devoluciones por todo su dinero confirmado; al cancelar, el stock regresa. Un pedido ya entregado conserva su estado historico.
 - Wompi nunca interviene en estos reembolsos. Wompi sigue reservado exclusivamente para vender licencias/suscripciones BarberOS desde la futura landing page.
 - La migracion SQL 013 se aplico a Supabase BarberOS. La suite local contiene tests unitarios y simulacion de fallo contable; la ejecucion integral real con las nuevas devoluciones sigue pendiente de validacion.
+
+## Calendario de cierres excepcionales y sincronización fiable
+
+- GET /api/v1/tenants/:tenantId/closed-days?from=YYYY-MM-DD&to=YYYY-MM-DD: lista fechas cerradas. Visible para miembros autenticados de la barbería.
+- POST /api/v1/tenants/:tenantId/closed-days con JSON {"date":"YYYY-MM-DD","reason":"Festivo"}: solo propietario o gerente.
+- DELETE /api/v1/tenants/:tenantId/closed-days/:date: reabre fecha, solo propietario o gerente.
+- Las reglas de PostgreSQL prohíben reservar en fechas cerradas y cerrar una fecha que todavía tenga citas activas. El catálogo público de disponibilidad no ofrece esos días. Pruebas SQL realizadas con ROLLBACK.
+- GET /api/v1/me/notifications/sync?cursor=...&limit=50: consulta incremental de notificaciones para recuperar los mensajes no entregados por Realtime. JWT obligatorio, aislamiento por user_id, cursor opaco y límite de 100 filas.
+- Cada página tiene items, nextCursor y hasMore. El cliente debe guardar el cursor confirmado después de procesar la página. El timestamp usa precisión de microsegundos de PostgreSQL, evitando mensajes duplicados o perdidos por redondeo a milisegundos.
+- Realtime continúa como canal oportunista: en caso de desconexión el cliente debe consultar /sync periódicamente y al reconectar. Esta política debe conectarse al frontend solo cuando se autorice.

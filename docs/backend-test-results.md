@@ -137,3 +137,24 @@ No conectar el frontend todavía. No declarar 100% de backend productivo.
 - Suite completa sin acceso real: 17 pruebas aprobadas, 4 integraciones opt-in omitidas; 0 fallidas.
 - backend/test/live-api.test.js ampliado con dos devoluciones de un pago real de prueba, bloqueo de cancelacion parcial, validacion de saldos y retorno de stock; **esa prueba integral ampliada NO se ha podido ejecutar aun por bloqueo de la herramienta**. No se certifica este escenario E2E real ni la recuperacion de una caida de PostgreSQL con datos persistentes.
 - Esta funcionalidad es solo contabilidad offline de barberias. El proyecto SaaS tiene Wompi desactivado y diferido a la futura landing page.
+
+## Cierre técnico adicional: SQL contable, calendario y catch-up (migraciones 014-016)
+
+- SQL 014 aplicado: trigger de comprobación de devoluciones contra pago confirmado, moneda/método, comprobante y total; trigger de inmutabilidad de pagos confirmados/anulados.
+- Transacción real contra Supabase con ROLLBACK: devoluciones parciales válidas de 5.000 + 7.500, rechazo de exceso a 13.000, cambio de pago confirmado y moneda incorrecta.
+- SQL 015 aplicado: cierres excepcionales por día, RLS y bloqueo coordinado con nuevas reservas. Transacción real con ROLLBACK confirmó rechazo de reserva en día cerrado y rechazo de cierre con reserva activa.
+- E2E HTTP real previo aprobado para devoluciones, cierre/reapertura de calendario, Auth, permisos, inventario, caja y Storage; fixtures Auth/empresas/imágenes borrados.
+- SQL 016: índice para sincronización incremental de notificaciones por usuario y par (created_at,id). La primera E2E detectó repeticiones de notificaciones: el cursor redondeaba microsegundos a milisegundos.
+- Corrección: usar to_char de fecha exacta de PostgreSQL, conservando los seis decimales. Prueba unitaria verifica timestamp con precisión micro y aislamiento del usuario.
+- En la última ejecución explícita de Realtime por WebSocket, el usuario no recibió eventos pese a SUBSCRIBED y confirmación de SELECT por REST; por eso Realtime NO está aprobado como entrega garantizada. La nueva API /notifications/sync es la alternativa de recuperación.
+- Dos pruebas funcionales SQL aisladas y E2E de concurrencia/roles aprobaron. Último ensayo de reservas: 10/10 a concurrencia 5 con p95 1212 ms (muestra pequeña, sin SLA).
+- Suite local tras la nueva API: 22 pruebas aprobadas, 4 integrales opt-in omitidas por defecto, 0 fallidas.
+- No se ha validado estabilidad prolongada del proveedor Realtime, carga sostenida, recuperación completa Auth/Storage ni despliegue HTTPS real.
+
+## Regresión definitiva posterior a corrección de microsegundos
+
+- npm test: 26 tests registrados, 22 aprobados, 0 fallidos y 4 E2E opt-in omitidos en modo local.
+- E2E HTTP completo con API de catch-up en Supabase: APROBADO, duración aproximada 47 s, 0 fallos. Conserva microsegundos del timestamp para evitar mensajes duplicados; las empresas, usuarios e imágenes temporales fueron borrados.
+- E2E DB de integridad y E2E concurrente: APROBADOS. E2E Realtime WebSocket: FALLIDO en la última prueba; la API REST de sincronización está validada como alternativa, pero todavía no se certifica el WebSocket.
+- Auditoría de dependencias: 0 altas y 0 críticas; monitor real saludable 3/3; preflight de producción devuelve ready=false intencionalmente.
+- Informe de aceptación técnica y pendientes: docs/informe-cierre-backend.md.

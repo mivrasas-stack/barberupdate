@@ -106,6 +106,13 @@ test('BarberOS E2E: Auth, schedule, bookings, orders, cleanup',
     assert.equal(download.status,200,'Signed upload must be accessible through public Storage URL');
     assert.ok((await download.arrayBuffer()).byteLength>=testImage.length);
     const day=new Date(Date.now()+20*86400000).toISOString().slice(0,10);
+    const closedDay=await call('POST',prefix+'/closed-days',{date:day,reason:'Temporary closure test'});
+    check(closedDay,201,'Owner creates exceptional closed day');
+    const closedSlots=await call('GET','/api/v1/public/tenants/'+tid+
+      '/availability?barberId='+barber.data.id+'&serviceId='+service.data.id+'&date='+day);
+    check(closedSlots,200,'Closed day availability');
+    assert.equal(closedSlots.data.slots.length,0,'Closed business must expose no available slots');
+    check(await call('DELETE',prefix+'/closed-days/'+day),200,'Owner reopens date');
     const availability=await call('GET','/api/v1/public/tenants/'+tid+
       '/availability?barberId='+barber.data.id+'&serviceId='+service.data.id+'&date='+day);
     check(availability,200,'Public slots');
@@ -116,6 +123,8 @@ test('BarberOS E2E: Auth, schedule, bookings, orders, cleanup',
     const bookingKey='booking-'+randomBytes(12).toString('hex');
     const booked=await call('POST',prefix+'/bookings',details,bookingKey);
     check(booked,201,'Book appointment');
+    check(await call('POST',prefix+'/closed-days',{date:day,reason:'Has existing bookings'}),
+      409,'Cannot close a date with active appointments');
     const replay=await call('POST',prefix+'/bookings',details,bookingKey);
     check(replay,200,'Booking replay');assert.equal(replay.data.id,booked.data.id);
     check(await call('POST',prefix+'/bookings',{...details,customerName:'Changed'},bookingKey),
@@ -145,6 +154,15 @@ test('BarberOS E2E: Auth, schedule, bookings, orders, cleanup',
     check(bookingNotices,200,'Read reschedule notices');
     assert.ok(bookingNotices.data.items.some(n=>n.event_status==='rescheduled-2'),
       'Customer should see reschedule notification');
+    const syncFirst=await call('GET','/api/v1/me/notifications/sync?limit=2');
+    check(syncFirst,200,'Durable sync first page');
+    assert.ok(syncFirst.data.items.length>=1);
+    assert.ok(syncFirst.data.nextCursor,'Sync first page needs a continuation cursor');
+    const syncSecond=await call('GET','/api/v1/me/notifications/sync?limit=2&cursor='+
+      encodeURIComponent(syncFirst.data.nextCursor));
+    check(syncSecond,200,'Durable sync second page');
+    const ids1=new Set(syncFirst.data.items.map(n=>n.id));
+    assert.ok(syncSecond.data.items.every(n=>!ids1.has(n.id)),'No overlapping cursor messages');
     const blocker=await call('POST',prefix+'/bookings',
       {...details,startsAt:alternate},'blocker-'+randomBytes(12).toString('hex'));
     check(blocker,201,'Reserve other occupied slot');

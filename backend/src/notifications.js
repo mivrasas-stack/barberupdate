@@ -20,6 +20,34 @@ export async function registerNotificationRoutes(app,{db,security}){
       ]);
       return {unread:count.rows[0].unread,items:items.rows};
     });
+    // Durable polling/catch-up when a Realtime socket reconnects or fails.
+    // Opaque keyset cursor prevents missing messages that share a timestamp.
+    routes.get('/api/v1/me/notifications/sync',async req=>{
+      const q=parseOrThrow(z.object({
+        cursor:z.string().min(1).max(200).optional(),
+        limit:z.coerce.number().int().min(1).max(100).default(50)
+      }).strict(),req.query);
+      let afterTime=null,afterId=null;
+      if(q.cursor){
+        try{
+          const raw=Buffer.from(q.cursor,'base64url').toString('utf8');
+          if(Buffer.from(raw).toString('base64url')!==q.cursor)throw Error('Bad cursor encoding');
+          const parsed=JSON.parse(raw);
+          if(!Array.isArray(parsed)||parsed.length!==2||
+            !z.iso.datetime({offset:true}).safeParse(parsed[0]).success||
+            !id.safeParse(parsed[1]).success)throw Error('Invalid cursor data');
+          afterTime=parsed[0];afterId=parsed[1];
+        }catch{failure(400,'Cursor invalido');}
+      }
+      const rows=await db.query(
+        "SELECT id,tenant_id,category,reference_id,event_status,title,body,read_at,created_at,to_char(created_at AT TIME ZONE 'UTC','YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') AS cursor_time FROM public.notifications WHERE user_id=$1 AND ($2::timestamptz IS NULL OR (created_at,id)>($2::timestamptz,$3::uuid)) ORDER BY created_at,id LIMIT $4",
+        [req.actor.id,afterTime,afterId,q.limit]);
+      const last=rows.rows.at(-1);
+      const nextCursor=last?
+        Buffer.from(JSON.stringify([last.cursor_time||new Date(last.created_at).toISOString(),last.id])).toString('base64url')
+        :q.cursor||null;
+      return {items:rows.rows.map(({cursor_time,...item})=>item),nextCursor,hasMore:rows.rows.length===q.limit};
+    });
     routes.patch('/api/v1/me/notifications/:notificationId/read',async req=>{
       const notification=parseOrThrow(id,req.params.notificationId);
       const result=await db.query('UPDATE public.notifications SET read_at=COALESCE(read_at,now()) WHERE id=$1 AND user_id=$2 RETURNING id,read_at',
