@@ -88,6 +88,9 @@ export async function registerBusinessRoutes(app,{db,security}) {
         const allowed={received:['preparing','cancelled'],preparing:['ready','cancelled'],ready:['delivered','cancelled'],delivered:[],cancelled:[]};
         if(!allowed[before.status].includes(x.status)) failure(409,'Estado del pedido invalido');
         if(x.status==='cancelled'){
+          const confirmed=await tx.query("SELECT 1 FROM public.manual_payments WHERE tenant_id=$1 AND order_id=$2 AND status='confirmed' LIMIT 1",[tenant,orderId]);
+          if(confirmed.rowCount) failure(409,'Pedido con pagos registrados: requiere un proceso de reembolso antes de cancelar');
+          await tx.query("UPDATE public.manual_payments SET status='voided',voided_by=$3,voided_at=now() WHERE tenant_id=$1 AND order_id=$2 AND status='pending'",[tenant,orderId,req.actor.id]);
           const items=await tx.query('SELECT product_id,quantity FROM public.order_items WHERE order_id=$1 AND tenant_id=$2 ORDER BY product_id',[orderId,tenant]);
           for(const item of items.rows){
             await tx.query('UPDATE public.products SET stock=stock+$3,updated_at=now() WHERE tenant_id=$1 AND id=$2',[tenant,item.product_id,item.quantity]);
@@ -147,6 +150,6 @@ export async function registerBusinessRoutes(app,{db,security}) {
   app.get('/api/v1/public/plans',async req=>{
     await limited(req);
     if(!db) failure(503,'Base de datos no configurada');
-    return (await db.query('SELECT id,name,audience,monthly_minor,annual_minor,currency,max_barbers,max_portfolio_images,features FROM public.subscription_plans WHERE is_active ORDER BY monthly_minor LIMIT 100')).rows;
+    return (await db.query('SELECT id,name,audience,monthly_minor,annual_minor,currency,max_barbers,max_portfolio_images,features,billing_enabled FROM public.subscription_plans WHERE is_active ORDER BY monthly_minor LIMIT 100')).rows;
   });
 }

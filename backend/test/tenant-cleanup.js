@@ -10,7 +10,7 @@ export async function cleanupTestTenant(pool,tenantId){
       throw new Error('Refusing to delete a non-test tenant');
     // Explicit deletion prevents unordered FK-cascade conflicts.
     const order=[
-      'order_items','inventory_movements','orders','reviews','loyalty_events',
+      'manual_payments','order_items','inventory_movements','orders','reviews','loyalty_events',
       'loyalty_accounts','appointments','barber_time_off','barber_work_intervals',
       'cash_closings','transactions','tenant_subscriptions','media_assets',
       'outbox_events','products','services','barbers'

@@ -9,6 +9,7 @@ import { registerBusinessRoutes } from './business.js';
 import { registerSchedulingRoutes } from './scheduling.js';
 import { registerNotificationRoutes } from './notifications.js';
 import { registerReportRoutes } from './reports.js';
+import { registerPaymentsRoutes } from './payments.js';
 
 export async function buildApp(env = process.env) {
   const config = configFromEnv(env);
@@ -23,7 +24,7 @@ export async function buildApp(env = process.env) {
   await app.register(cors, {
     origin: (origin, cb) => cb(null, !origin || config.origins.includes(origin)),
     credentials: false,
-    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   });
   app.setErrorHandler((err, req, reply) => {
     const status = err.statusCode && err.statusCode >= 400 && err.statusCode < 600 ? err.statusCode : (err.code === '23P01' || err.code === '23505' || err.code === '23514' ? 409 : err.code === '23503' ? 400 : 500);
@@ -44,6 +45,7 @@ export async function buildApp(env = process.env) {
   await registerSchedulingRoutes(app, { config, db, security });
   await registerNotificationRoutes(app, { config, db, security });
   await registerReportRoutes(app, { config, db, security });
+  await registerPaymentsRoutes(app, { config, db, security });
   app.addHook('onClose', async () => {
     await db?.close();
     security.redis?.disconnect();

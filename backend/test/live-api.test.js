@@ -94,6 +94,38 @@ test('BarberOS E2E: Auth, schedule, bookings, orders, cleanup',
       200,'Cancel order');
     const restored=await call('GET',prefix+'/products');
     assert.equal(restored.data.find(p=>p.id===product.data.id).stock,4);
+    const secondOrder=await call('POST',prefix+'/orders',
+      {customerName:'Test Customer',items:[{productId:product.data.id,quantity:1}]},
+      'order-'+randomBytes(12).toString('hex'));
+    check(secondOrder,201,'Second order for manual payment');
+    const transfer={amountMinor:12500,method:'transfer'};
+    const manualKey='manual-'+randomBytes(12).toString('hex');
+    const pending=await call('POST',prefix+'/orders/'+secondOrder.data.id+'/payments/manual',transfer,manualKey);
+    check(pending,201,'Record pending manual payment');
+    assert.equal(pending.data.status,'pending');
+    const paymentReplay=await call('POST',prefix+'/orders/'+secondOrder.data.id+'/payments/manual',transfer,manualKey);
+    check(paymentReplay,200,'Manual payment idempotent replay');
+    assert.equal(paymentReplay.data.id,pending.data.id);
+    check(await call('POST',prefix+'/orders/'+secondOrder.data.id+'/payments/manual',
+      {...transfer,amountMinor:10000},manualKey),409,'Reject changed manual payment replay');
+    check(await call('POST',prefix+'/payments/'+pending.data.id+'/confirm-manual',{}),
+      400,'Require non-cash evidence');
+    const confirmation=await call('POST',prefix+'/payments/'+pending.data.id+'/confirm-manual',
+      {reference:'E2E-'+randomBytes(9).toString('hex')});
+    check(confirmation,200,'Staff-attested manual transfer');
+    assert.equal(confirmation.data.status,'confirmed');
+    check(await call('POST',prefix+'/payments/'+pending.data.id+'/confirm-manual',{}),
+      409,'No double manual confirmation');
+    const summary=await call('GET',prefix+'/orders/'+secondOrder.data.id+'/payments');
+    check(summary,200,'Manual payment ledger');
+    assert.equal(Number(summary.data.confirmedMinor),12500);
+    assert.equal(summary.data.balanceMinor,0);
+    check(await call('PATCH',prefix+'/orders/'+secondOrder.data.id+'/status',{status:'cancelled'}),
+      409,'Paid order requires refund, not silent cancellation');
+    const options=await call('GET','/api/v1/public/payment-capabilities');
+    check(options,200,'Payment capabilities');
+    assert.equal(options.data.onlinePayments.enabled,false);
+    assert.equal(options.data.onlinePayments.providerSelected,'wompi');
     const entry=await call('POST',prefix+'/transactions',{type:'income',category:'services',concept:'Test cash sale',amountMinor:10000,paymentMethod:'cash'});
     check(entry,201,'Record cash entry');
     const localDay=new Date().toLocaleDateString('sv-SE',{timeZone:'America/Bogota'});
