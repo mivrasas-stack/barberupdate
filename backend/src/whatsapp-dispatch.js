@@ -78,7 +78,9 @@ export async function processWhatsAppJobs({db,config,fetcher=fetch,maxBatch=10})
       await setStatus(db,job.id,'sent',null,messageId);
     }catch(err){
       // A transport failure has uncertain outcome: manual review prevents duplicate messages.
-      if(err.retryable===true&&Number.isInteger(err.status)){
+      if(err.ambiguous===true){
+        await setStatus(db,job.id,'manual_review','meta_unconfirmed');
+      }else if(err.retryable===true&&Number.isInteger(err.status)){
         await db.query("UPDATE public.whatsapp_messages SET status=CASE WHEN attempts<6 THEN 'queued' ELSE 'failed' END,failure_code=$2,next_attempt_at=now()+(LEAST(3600,power(2,LEAST(attempts,10))::int*10)::int*interval '1 second'),updated_at=now() WHERE id=$1",[job.id,'meta_'+err.status]);
       }else if(Number.isInteger(err.status)){
         await setStatus(db,job.id,'failed','meta_'+err.status);
