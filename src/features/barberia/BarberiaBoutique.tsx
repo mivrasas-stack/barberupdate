@@ -248,7 +248,7 @@ export const BarberiaBoutique: React.FC = () => {
               <div>
                 <div className="flex items-start gap-3 mb-3">
                   <img
-                    src={prod.photo} onError={e=>{if(!e.currentTarget.src.endsWith('/images/placeholder.svg'))e.currentTarget.src='/images/placeholder.svg';}}
+                    src={prod.photo || '/images/placeholder.svg'} onError={e=>{if(!e.currentTarget.src.endsWith('/images/placeholder.svg'))e.currentTarget.src='/images/placeholder.svg';}}
                     alt={prod.name}
                     className="w-16 h-16 rounded-xl object-cover border border-neutral-700 shrink-0"
                   />
