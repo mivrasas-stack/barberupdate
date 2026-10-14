@@ -60,3 +60,23 @@ Para supervisión en producción, ejecutarlo cada minuto desde un monitor extern
 - Prueba de carga de reservas/pedidos con métricas p95 y 1000 sesiones conforme a un objetivo acordado.
 - Despliegue HTTPS con dominio, secretos gestionados, límites de servicio, backups y restauración auditados.
 - Wompi **únicamente** para cobro futuro de planes BarberOS desde la landing page, después de terminar el backend; no para cobrar servicios o pedidos de barberías.
+
+## Restauracion PUBLICA reproducible en contenedor efimero
+
+Desde backend/ en la laptop autorizada:
+
+    node --env-file=.env --env-file=.env.admin.local scripts/restore-public-drill.mjs
+
+Condiciones de seguridad: exige usuario de base admin cuyo pooler pertenezca a
+wrfwhftzaflwhkvkzrjm; utiliza TLS contra origen; envia pg_dump version 17 por
+stream directo a pg_restore version 17. Levanta temporalmente un Postgres
+aislado sin red ni puertos publicados. No toca el proyecto cloud ni otros
+contenedores, y elimina el contenedor efimero al terminar incluso ante fallo.
+El ensayo ha restaurado 22 tablas RLS, 3 planes, 12 triggers y 44 politicas.
+Como no se guarda un backup durable, esto solo demuestra que hoy se puede
+exportar/restaurar public; no constituye aun una estrategia de recuperacion
+de desastres completa. Auth y objetos Storage quedan expresamente fuera.
+
+No ejecutar con credenciales de un proyecto diferente ni guardar salida
+de pg_dump en rutas compartidas o Git. No replicar datos reales sensibles
+a equipos sin control de acceso y cifrado.

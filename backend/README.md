@@ -137,3 +137,21 @@ PowerShell:
 - Concurrencia: prueba roles, reserva unica con dos solicitudes al mismo horario, stock limitado y replay idempotente.
 - Realtime: prueba entrega WebSocket a su destinatario, RLS con REST y bloqueo a usuarios ajenos.
 - El resultado Realtime puede verse afectado por latencia de replicacion: monitorear reconexiones y repetir antes de produccion.
+
+## Copia/restauracion PUBLICA aislada (fase 5)
+
+Ensayo seguro y reproducible solamente contra el proyecto dedicado BarberOS:
+
+PowerShell desde backend/:
+  node --env-file=.env --env-file=.env.admin.local scripts/restore-public-drill.mjs
+
+- Requiere Docker con imagen local postgres:17-alpine y la conexion admin exclusiva de BarberOS en .env.admin.local.
+- pg_dump del esquema public via TLS -> stream binario directo -> pg_restore en Postgres temporal con --network none, sin puertos publicados y eliminacion automatica.
+- Verifica 22 tablas y RLS, 3 planes, triggers y politicas; no copia datos en disco, no crea backup durable ni modifica cloud.
+- No demuestra restauracion de Auth, Storage, certificados, roles cloud ni continuidad de servicio; consultar docs/operations-recovery.md.
+
+## IP de visitantes anonimos
+
+Fastify confia en un unico salto reverse proxy Caddy. Caddy establece X-Forwarded-For con la IP del cliente observado directamente.
+Si se incorpora CDN, otro reverse proxy o ingress, revisar su configuracion de cabeceras y limites. No exponer directamente api1/api2 a Internet.
+Validado con backend/test/proxy-security.test.js.

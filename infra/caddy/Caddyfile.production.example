@@ -12,6 +12,8 @@
   }
   handle /api/* {
     reverse_proxy api1:8080 api2:8080 {
+      # For direct HTTPS client connections; adjust trusted proxies if a CDN/LB is introduced.
+      header_up X-Forwarded-For {remote_host}
       lb_policy least_conn
       health_uri /api/v1/health/ready
       health_interval 10s

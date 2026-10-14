@@ -9,10 +9,10 @@ Los porcentajes indican avance estimado, no cobertura de código ni SLA demostra
 |---|---|---|---|
 | 1. Autenticación, seguridad y aislamiento | JWT confiables; políticas por empresa y rol; propietario inmutable; cuenta SQL sin BYPASSRLS; amenazas y abuso revisados | Supabase Auth, RLS en todas las tablas públicas, propiedad protegida, rol PostgreSQL exclusivo probado en E2E, limitador Redis | Prueba de penetración, revisión exhaustiva de todas las rutas, monitor de abuso |
 | 2. Reservas y disponibilidad | Altas/consultas/estados/cancelación/reprogramación, horarios por empleado, ausencias, conflicto atómico y calendario en zonas horarias | Horarios y ausencias con validación PostgreSQL; slots públicos; reservas y cancelaciones atómicas; **reprogramación con control de concurrencia y notificaciones** | Excepciones festivos recurrentes, variantes de horario, escenarios extremos de husos horarios y más casos adversariales |
-| 3. Operación de negocios | Catálogo, productos, inventario, pedidos, cobros conciliados, caja, reseñas, fidelización, reportes | Productos, stock transaccional, pedidos/cancelación, caja, reportes, reseñas, puntos por cita completada, notificaciones internas; **registro y confirmación de pagos manuales** con idempotencia y caja atómica | Facturación, reembolsos, conciliación Wompi diferida, liquidación real de comisiones |
+| 3. Operación de negocios | Catálogo, productos, inventario, pedidos, cobros conciliados, caja, reseñas, fidelización, reportes | Productos, stock transaccional, pedidos/cancelación, caja, reportes, reseñas, puntos por cita completada, notificaciones internas y pagos manuales con idempotencia y caja atómica | Devolución y reversión manual auditada, facturación/comprobantes, liquidación real de comisiones. Wompi NO pertenece a pedidos de barberías |
 | 4. Integraciones y tiempo real | Storage seguro, Auth, Realtime por negocio, correo/SMS/push, y preparación SaaS | Storage firmado probado con subida/lectura/borrado; WebSocket Realtime de notificaciones y RLS de destinatario **verificados en E2E**; outbox Redis; Wompi reservado solo para el futuro SaaS | Ensayos de estabilidad prolongada WebSocket (primera prueba con entrega tardía); correo/SMS/push reales y pasarela SaaS cuando se autorice |
-| 5. Pruebas y escalabilidad | Pruebas funcionales exhaustivas, concurrentes, latencia p95, 1k sesiones, restauración y resiliencia | E2E multirol y concurrencia; réplica API caída (14/14 HTTP 200), **Redis caído (6/6 respuestas de indisponibilidad y recuperación comprobada)**; 10 reservas exitosas a concurrencia 5 (p95 observado 2.001 ms) | Optimizar p95 y ejecutar carga sostenida, fallo de PostgreSQL/Supabase, restauración verificada de backup y objetivo 1000 sesiones |
-| 6. Producción | TLS/dominio, backups/restauración, CI/CD controlada, observabilidad, alertas, cuotas y seguridad de despliegue | Compose aislado y monitor; **plantilla TLS de Caddy validada sin red; preflight de lanzamiento probado y bloqueo seguro de entorno local**; CI y procedimiento de recuperación | Dominio, servidor 24/7, secretos gestionados, monitor/alertas reales, restauración ensayada, pruebas de seguridad y autorización explícita |
+| 5. Pruebas y escalabilidad | Pruebas funcionales exhaustivas, concurrentes, latencia p95, 1k sesiones, restauración y resiliencia | E2E multirol; caída API (14/14 HTTP 200) y Redis (6/6 indisponibilidad y recuperación); reservas 10/10 a concurrencia 5 (p95 nueva muestra 1.245 ms); **restauración aislada del esquema public: 22 tablas RLS, 3 planes, 12 triggers, 44 políticas** | Carga sostenida y 1000 sesiones; fallo Supabase; restauración integral Auth y Storage; validar rendimiento estadísticamente |
+| 6. Producción | TLS/dominio, backups/restauración, CI/CD controlada, observabilidad, alertas, cuotas y seguridad de despliegue | Docker aislado; monitor local; plantilla TLS Caddy y preflight validado; proxy endurecido contra suplantación de IP y rate-limit compartido; ensayo parcial de restauración pública | Dominio, servidor 24/7, secretos gestionados, alertas externas, restauración completa Auth/Storage, pruebas de seguridad y autorización explícita |
 
 ## Resumen de trabajo verificado
 
@@ -26,14 +26,14 @@ Los porcentajes indican avance estimado, no cobertura de código ni SLA demostra
 
 ## Para poder declarar backend 100% terminado
 
-Se requieren decisiones de negocio y accesos que no deben inventarse:
+Para poder declarar la plataforma apta para producción se requieren decisiones de negocio y accesos que no deben inventarse:
 1. **Wompi será EXCLUSIVAMENTE para vender planes de BarberOS desde la futura landing page**, no para cobrar citas ni pedidos de clientes de barberías. Su integración se aplaza hasta completar backend, revisar landing page y preparar producción. Véase `docs/wompi-deferred.md`.
 2. Proveedor de correo/SMS/push y remitente autorizado, política de consentimientos.
 3. Dominio y entorno de producción 24/7 con certificados TLS, políticas de disponibilidad y presupuesto.
 4. Volumen objetivo aprobado (usuarios, barberos, reservas diarias y p95), pruebas de estrés contra entorno de staging y recuperación.
 5. Reglas de negocio: cancelación/reembolsos, vacaciones, comisiones, fidelización y requisitos legales/fiscales.
 
-Hasta que estos criterios se validen, **no declarar el backend 100% ni conectar el frontend original**.
+**Distinguir dos entregables:** (1) backend funcional completo según reglas de negocio aprobadas; (2) backend apto para producción con recuperación integral, seguridad y monitoreo comprobados. Ni uno ni otro se declara al 100% por estimación. La futura integración Wompi de la landing page está explícitamente diferida y NO bloquea el desarrollo de módulos operativos de las barberías. No conectar el frontend original sin autorización.
 
 ## Reglas para todo cambio
 

@@ -13,7 +13,7 @@ import { registerPaymentsRoutes } from './payments.js';
 
 export async function buildApp(env = process.env) {
   const config = configFromEnv(env);
-  const app = Fastify({ logger: { level: env.LOG_LEVEL || 'info', redact: ['req.headers.authorization', 'req.headers.cookie', 'res.headers.set-cookie'] }, bodyLimit: 1024 * 1024, trustProxy: false });
+  const app = Fastify({ logger: { level: env.LOG_LEVEL || 'info', redact: ['req.headers.authorization', 'req.headers.cookie', 'res.headers.set-cookie'] }, bodyLimit: 1024 * 1024, trustProxy: (_address, hop) => hop === 0 });
   const db = createDb(config);
   const security = createSecurity(config);
   if (security.redis) {

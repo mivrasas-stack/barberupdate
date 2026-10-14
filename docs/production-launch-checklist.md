@@ -88,3 +88,14 @@ sin keys, webhooks ni cobros online activados.
 
 Más información: docs/backend-phases.md, docs/backend-test-results.md,
 docs/operations-recovery.md y docs/wompi-deferred.md.
+
+## Restauracion parcial ensayada
+
+- El proyecto actual (PostgreSQL 17) pudo exportar/restaurar el esquema
+  public mediante streaming TLS a un contenedor local temporal sin red;
+  se comprobaron 22 tablas, 22 RLS, 3 planes, 12 triggers y 44 policies.
+- No se preservo un backup durable y NO se ha restaurado Auth ni Storage.
+- El tiempo 19 s no es un RTO completo. Las casillas de backup integral,
+  alta disponibilidad y autorizacion para lanzamiento siguen pendientes.
+- El backend usa ahora un unico proxy Caddy confiable para IP por cliente
+  anonimo; si se agrega un proxy/CDN, revisar la politica de confianza.

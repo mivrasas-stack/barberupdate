@@ -98,12 +98,13 @@ export async function registerRoutes(app,{config,db,security}) {
         }
         // Serialize slot reservation with work-hour and time-off changes.
         await tx.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[tenant+':schedule:'+x.barberId]);
-        const sr=await tx.query("SELECT s.id,s.price_minor,s.duration_minutes FROM public.services s JOIN public.tenants t ON t.id=s.tenant_id WHERE s.tenant_id=$1 AND s.id=$2 AND s.is_active=true AND t.status='active'",[tenant,x.serviceId]);
-        if(!sr.rowCount) failure(404,'Servicio no disponible');
-        const br=await tx.query("SELECT id FROM public.barbers WHERE tenant_id=$1 AND id=$2 AND status='active'",[tenant,x.barberId]);
-        if(!br.rowCount) failure(404,'Barbero no disponible');
-        const endsAt=endOfBooking(startsAt,Number(sr.rows[0].duration_minutes));
-        const inserted=await tx.query('INSERT INTO public.appointments(tenant_id,barber_id,service_id,customer_user_id,customer_name,customer_phone,created_by,starts_at,ends_at,price_minor,notes,idempotency_key,request_hash) VALUES($1,$2,$3,$4,$5,$6,$4,$7,$8,$9,$10,$11,$12) RETURNING *',[tenant,x.barberId,x.serviceId,req.actor.id,x.customerName,x.customerPhone,startsAt,endsAt,sr.rows[0].price_minor,x.notes,key,requestHash]);
+        // One PostgreSQL round trip validates tenant + active barber + service,
+        // computes authoritative duration/price and inserts the reservation.
+        // The database exclusion constraint and schedule trigger remain authoritative.
+        const inserted=await tx.query(
+          "INSERT INTO public.appointments(tenant_id,barber_id,service_id,customer_user_id,customer_name,customer_phone,created_by,starts_at,ends_at,price_minor,notes,idempotency_key,request_hash) SELECT $1,b.id,s.id,$4,$5,$6,$4,$7::timestamptz,$7::timestamptz + s.duration_minutes * interval '1 minute',s.price_minor,$8,$9,$10 FROM public.services s JOIN public.tenants t ON t.id=s.tenant_id AND t.status='active' JOIN public.barbers b ON b.tenant_id=s.tenant_id AND b.id=$2 AND b.status='active' WHERE s.tenant_id=$1 AND s.id=$3 AND s.is_active=true RETURNING *",
+          [tenant,x.barberId,x.serviceId,req.actor.id,x.customerName,x.customerPhone,startsAt,x.notes,key,requestHash]);
+        if(!inserted.rowCount) failure(404,'Servicio o barbero no disponible');
         return {row:inserted.rows[0],repeated:false};
       });
       return reply.code(booking.repeated?200:201).send(booking.row);

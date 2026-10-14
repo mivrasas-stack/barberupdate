@@ -116,3 +116,14 @@ No conectar el frontend todavía. No declarar 100% de backend productivo.
 - infra/caddy/Caddyfile.production.example validado en contenedor Caddy temporal con --network none, sin abrir puertos ni cambiar Caddy local. TLS real NO desplegado.
 - Fase 6 permanece sin terminar: restauracion real de backup, servidor 24/7, dominio, HTTPS, alertas, seguridad e integracion con frontend no aprobados.
 - Checklist de pendientes y procedimiento seguro: docs/production-launch-checklist.md.
+
+## Ultima validacion: restauracion, rendimiento y proxy
+
+- Ensayo real `backend/scripts/restore-public-drill.mjs`: streaming pg_dump en TLS desde SOLO el proyecto Supabase BarberOS hacia PostgreSQL 17 local y efimero con `--network none` y sin publicar puertos. No se genero fichero de backup persistente.
+- Restauracion publica completada: 22/22 tablas, 22/22 con RLS, 3 planes, 12 triggers, 44 policies; 109785 bytes de stream; duracion observada 19 segundos. Contenedor temporal eliminado automaticamente.
+- Alcance limitado: solamente el schema `public`. Auth, objetos de Storage, otras extensiones, roles del sistema y la capacidad de restaurar un desastre completo NO estan certificados.
+- Se optimizo POST reservas a una consulta INSERT SELECT que valida servicio, barbero, precio y duracion sin perder el exclusion constraint, RLS del servidor ni advisory lock.
+- Se repitio E2E HTTP real tras la optimizacion: Auth, empresas, programacion, idempotencia, notificaciones, pedidos, caja, reportes y Storage aprobaron; limpieza de pruebas completa.
+- Segunda muestra de carga real: 10/10 reservas aceptadas con concurrencia 5; p95 1245 ms frente a 2001 ms en muestra anterior. Muestras pequenas; no hay garantia estadistica de rendimiento ni SLA.
+- IP por cliente anonimo: Fastify confia exclusivamente en el salto Caddy inmediato; Caddy sobrescribe X-Forwarded-For con su IP observada. Test de cabecera spoofed aprobado; requiere adaptar config si se instala otro proxy/CDN.
+- Suite local: 13 pruebas aprobadas, 4 pruebas integrales opt-in omitidas en modo local; Caddy validado, monitor local 3/3 correcto, dos APIs y worker desplegados.

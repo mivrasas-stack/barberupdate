@@ -5,6 +5,9 @@
   encode zstd gzip
   handle /api/* {
     reverse_proxy api1:8080 api2:8080 {
+      # Only this proxy's observed peer IP is trusted by Fastify.
+      # Never forward attacker-supplied X-Forwarded-For.
+      header_up X-Forwarded-For {remote_host}
       lb_policy least_conn
       # Route traffic only to replicas able to reach PostgreSQL and Redis.
       health_uri /api/v1/health/ready
