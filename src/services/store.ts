@@ -441,6 +441,24 @@ class Store {
     return newRev;
   }
 
+  // --- Barbershop Management ---
+  public updateBarbershop(id: string, updates: Partial<Barbershop>): { success: boolean; shop?: Barbershop; error?: string } {
+    const shop = this.state.barbershops.find(s => s.id === id);
+    if (!shop) return { success: false, error: 'Barbería no encontrada.' };
+    Object.assign(shop, updates);
+    this.persist();
+    return { success: true, shop };
+  }
+
+  // --- Barber Management ---
+  public updateBarber(id: string, updates: Partial<Barber>): { success: boolean; barber?: Barber; error?: string } {
+    const barber = this.state.barbers.find(b => b.id === id);
+    if (!barber) return { success: false, error: 'Barbero no encontrado.' };
+    Object.assign(barber, updates);
+    this.persist();
+    return { success: true, barber };
+  }
+
   // --- Portfolio Management (Max 10 photos) ---
   public addPortfolioPhoto(entityType: 'barber' | 'barbershop', entityId: string, photoUrl: string): { success: boolean; error?: string } {
     if (entityType === 'barber') {

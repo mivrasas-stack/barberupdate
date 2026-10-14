@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { formatCurrency } from '../../utils/formatters';
+import { formatCurrency, getColombiaDateString } from '../../utils/formatters';
 import {
   Calendar,
   CheckCircle2,
@@ -20,7 +20,7 @@ import {
 export const BarberiaDashboard: React.FC = () => {
   const { currentShop, state, currency, navigate } = useApp();
   const [selectedBarberId, setSelectedBarberId] = useState<string>('all');
-  const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toLocaleDateString('en-CA',{timeZone:'America/Bogota'}));
+  const [selectedDate, setSelectedDate] = useState<string>(() => getColombiaDateString());
 
   const shopId = currentShop?.id || 'shop-1';
   const barbers = state.barbers.filter(b => b.businessId === shopId);
@@ -115,7 +115,7 @@ export const BarberiaDashboard: React.FC = () => {
       {/* Primary KPI Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Ingresos Hoy */}
-        <div className="p-5 rounded-3xl apple-glass-card">
+        <div className="p-5 rounded-3xl liquid-glass-card">
           <div className="flex items-center justify-between text-neutral-400 mb-2">
             <span className="text-xs font-semibold">Ingresos Brutos Hoy</span>
             <DollarSign className="w-4 h-4 text-emerald-400" />
@@ -130,7 +130,7 @@ export const BarberiaDashboard: React.FC = () => {
         </div>
 
         {/* Citas del Día */}
-        <div className="p-5 rounded-3xl apple-glass-card">
+        <div className="p-5 rounded-3xl liquid-glass-card">
           <div className="flex items-center justify-between text-neutral-400 mb-2">
             <span className="text-xs font-semibold">Citas Programadas</span>
             <Calendar className="w-4 h-4 text-blue-400" />
@@ -146,7 +146,7 @@ export const BarberiaDashboard: React.FC = () => {
         </div>
 
         {/* En Sala de Espera / Walk-ins */}
-        <div className="p-5 rounded-3xl apple-glass-card">
+        <div className="p-5 rounded-3xl liquid-glass-card">
           <div className="flex items-center justify-between text-neutral-400 mb-2">
             <span className="text-xs font-semibold">Clientes en Sala / Silla</span>
             <Users className="w-4 h-4 text-amber-400" />
@@ -163,7 +163,7 @@ export const BarberiaDashboard: React.FC = () => {
         </div>
 
         {/* Ocupación de la Agenda */}
-        <div className="p-5 rounded-3xl apple-glass-card">
+        <div className="p-5 rounded-3xl liquid-glass-card">
           <div className="flex items-center justify-between text-neutral-400 mb-2">
             <span className="text-xs font-semibold">Ocupación de Agenda</span>
             <Clock className="w-4 h-4 text-neutral-400" />

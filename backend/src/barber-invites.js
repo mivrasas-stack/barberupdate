@@ -69,13 +69,55 @@ export async function registerBarberInviteRoutes(app,{db,security}){
          if(prior.rowCount)failure(409,'El usuario ya pertenece a otro equipo');
          await tx.query("INSERT INTO public.tenant_members(tenant_id,user_id,role) VALUES($1,$2,'barber')",[tenant,request.user_id]);
          const slug='barber-'+request.user_id.slice(0,12);
-         await tx.query(`INSERT INTO public.barbers(tenant_id,user_id,name,slug,bio,commission_rate)
-           VALUES($1,$2,$3,$4,'',0)`,[tenant,request.user_id,request.full_name,slug]);
+         const bRow=await tx.query(`INSERT INTO public.barbers(tenant_id,user_id,name,slug,bio,commission_rate)
+           VALUES($1,$2,$3,$4,'',0) RETURNING id`,[tenant,request.user_id,request.full_name,slug]);
+         await tx.query(`INSERT INTO public.barber_work_intervals(tenant_id,barber_id,weekday,start_minute,end_minute)
+           VALUES
+             ($1,$2,0,540,1140),
+             ($1,$2,1,540,1140),
+             ($1,$2,2,540,1140),
+             ($1,$2,3,540,1140),
+             ($1,$2,4,540,1140),
+             ($1,$2,5,540,1140),
+             ($1,$2,6,540,1140)
+           ON CONFLICT (tenant_id,barber_id,weekday,start_minute) DO NOTHING`,[tenant,bRow.rows[0].id]);
        }
        await tx.query('UPDATE public.barber_join_requests SET status=$3,reviewed_at=now() WHERE id=$1 AND tenant_id=$2',
          [id,tenant,input.approve?'approved':'rejected']);
        return {status:input.approve?'approved':'rejected'};
      });
+   });
+   routes.post('/api/v1/invites/:token/accept',async(req,reply)=>{
+     const token=parseOrThrow(z.string().min(1).max(128),req.params.token);
+     const result=await db.transaction(async tx=>{
+       const target=await tx.query(`SELECT t.id FROM public.barber_invites i
+         JOIN public.tenants t ON t.id=i.tenant_id WHERE i.code_hash=$1
+         AND i.expires_at>now() AND t.status='active' FOR UPDATE OF i`,[hash(token)]);
+       if(!target.rowCount)failure(404,'Invitación vencida o inválida');
+       const tenant=target.rows[0].id;
+       const prior=await tx.query('SELECT 1 FROM public.tenant_members WHERE user_id=$1',[req.actor.id]);
+       if(prior.rowCount)failure(409,'Esta cuenta ya pertenece a un equipo profesional');
+       await tx.query("INSERT INTO public.tenant_members(tenant_id,user_id,role) VALUES($1,$2,'barber') ON CONFLICT DO NOTHING",[tenant,req.actor.id]);
+       const slug='barber-'+req.actor.id.slice(0,12);
+       const barberName=req.actor.email?req.actor.email.split('@')[0]:'Barbero';
+       const bRow=await tx.query(`INSERT INTO public.barbers(tenant_id,user_id,name,slug,bio,commission_rate)
+         VALUES($1,$2,$3,$4,'',0) RETURNING id`,[tenant,req.actor.id,barberName,slug]);
+       const barberId=bRow.rows[0]?.id;
+       if(barberId){
+         await tx.query(`INSERT INTO public.barber_work_intervals(tenant_id,barber_id,weekday,start_minute,end_minute)
+           VALUES
+             ($1,$2,0,540,1140),
+             ($1,$2,1,540,1140),
+             ($1,$2,2,540,1140),
+             ($1,$2,3,540,1140),
+             ($1,$2,4,540,1140),
+             ($1,$2,5,540,1140),
+             ($1,$2,6,540,1140)
+           ON CONFLICT (tenant_id,barber_id,weekday,start_minute) DO NOTHING`,[tenant,barberId]);
+       }
+       return {status:'accepted',tenantId:tenant,barberId};
+     });
+     return reply.code(201).send(result);
    });
  });
 }

@@ -2,25 +2,25 @@
 
 @layer base {
   :root {
-    --bg-primary: #090909;
-    --bg-surface: #141414;
-    --bg-surface-elevated: #1a1a1a;
-    --border-subtle: #262626;
-    --gold-primary: #D9A323;
-    --gold-hover: #b88928;
-    --text-primary: #f5f5f5;
-    --text-muted: #8e8e8e;
+    --bg-primary: #070707;
+    --bg-surface: #121212;
+    --bg-surface-elevated: #181818;
+    --border-subtle: #242424;
+    --gold-primary: #e5a700;
+    --gold-hover: #cc9400;
+    --text-primary: #f6f6f6;
+    --text-muted: #aaaaaa;
   }
 
   body {
     background-color: var(--bg-primary);
     background-image: 
-      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(217, 163, 35, 0.08), transparent 70%),
-      radial-gradient(ellipse 60% 40% at 90% 80%, rgba(217, 163, 35, 0.04), transparent 60%),
-      radial-gradient(ellipse 50% 50% at 10% 40%, rgba(255, 255, 255, 0.02), transparent 50%);
+      radial-gradient(ellipse 70% 45% at 50% 0%, rgba(229, 167, 0, 0.09), transparent 60%),
+      radial-gradient(ellipse 60% 50% at 85% 90%, rgba(229, 167, 0, 0.04), transparent 55%),
+      radial-gradient(ellipse 50% 50% at 15% 45%, rgba(255, 255, 255, 0.02), transparent 50%);
     background-attachment: fixed;
     color: var(--text-primary);
-    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-family: 'Inter', 'Montserrat', 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     margin: 0;
@@ -29,72 +29,225 @@
   }
 }
 
-/* Apple-style UI Utilities */
-.apple-glass {
-  background: rgba(18, 18, 20, 0.75);
-  backdrop-filter: blur(24px) saturate(190%);
-  -webkit-backdrop-filter: blur(24px) saturate(190%);
+/* Apple & Liquid Glass Premium UI Utilities */
+.liquid-glass {
+  background: radial-gradient(135% 100% at 50% 0%, rgba(255, 255, 255, 0.07) 0%, rgba(18, 18, 22, 0.72) 100%);
+  backdrop-filter: blur(28px) saturate(210%);
+  -webkit-backdrop-filter: blur(28px) saturate(210%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 
+    0 20px 50px -15px rgba(0, 0, 0, 0.7),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 -1px 1px 0 rgba(0, 0, 0, 0.4);
+}
+
+.liquid-glass-card {
+  position: relative;
+  background: linear-gradient(145deg, rgba(26, 26, 32, 0.75) 0%, rgba(14, 14, 18, 0.88) 100%);
+  backdrop-filter: blur(24px) saturate(200%);
+  -webkit-backdrop-filter: blur(24px) saturate(200%);
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 
-    0 10px 30px -10px rgba(0, 0, 0, 0.5),
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.1);
+    0 12px 35px -6px rgba(0, 0, 0, 0.5),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.15);
+  transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+
+.liquid-glass-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), rgba(217, 163, 35, 0.4), transparent);
+  opacity: 0.6;
+  pointer-events: none;
+  transition: opacity 0.35s ease;
+}
+
+.liquid-glass-card:hover {
+  transform: translateY(-3px) scale(1.005);
+  border-color: rgba(217, 163, 35, 0.45);
+  box-shadow: 
+    0 22px 50px -10px rgba(0, 0, 0, 0.7),
+    0 0 30px -4px rgba(217, 163, 35, 0.25),
+    inset 0 1px 2px 0 rgba(255, 255, 255, 0.28);
+}
+
+.liquid-glass-card:hover::before {
+  opacity: 1;
+}
+
+.apple-glass {
+  background: rgba(18, 18, 22, 0.75);
+  backdrop-filter: blur(24px) saturate(190%);
+  -webkit-backdrop-filter: blur(24px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow: 
+    0 12px 36px -10px rgba(0, 0, 0, 0.6),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.14);
 }
 
 .apple-glass-card {
-  background: linear-gradient(135deg, rgba(24, 24, 27, 0.8) 0%, rgba(15, 15, 17, 0.9) 100%);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  position: relative;
+  background: linear-gradient(135deg, rgba(24, 24, 30, 0.8) 0%, rgba(13, 13, 16, 0.92) 100%);
+  backdrop-filter: blur(22px) saturate(190%);
+  -webkit-backdrop-filter: blur(22px) saturate(190%);
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow: 
-    0 8px 32px -4px rgba(0, 0, 0, 0.4),
-    inset 0 1px 1px 0 rgba(255, 255, 255, 0.12);
-  transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+    0 10px 32px -4px rgba(0, 0, 0, 0.45),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.14);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .apple-glass-card:hover {
   transform: translateY(-2px);
-  border-color: rgba(217, 163, 35, 0.35);
+  border-color: rgba(217, 163, 35, 0.4);
   box-shadow: 
-    0 16px 40px -10px rgba(0, 0, 0, 0.6),
-    0 0 24px -4px rgba(217, 163, 35, 0.15),
-    inset 0 1px 1px 0 rgba(255, 255, 255, 0.2);
+    0 18px 45px -10px rgba(0, 0, 0, 0.65),
+    0 0 26px -4px rgba(217, 163, 35, 0.2),
+    inset 0 1px 1.5px 0 rgba(255, 255, 255, 0.25);
 }
 
 .apple-button {
   position: relative;
-  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
 .apple-button:active {
-  transform: scale(0.96);
+  transform: scale(0.97);
 }
 
 .apple-button-gold {
-  background: linear-gradient(180deg, #e4b23d 0%, #c9931b 100%);
+  position: relative;
+  background: linear-gradient(180deg, #f0c355 0%, #d19920 100%);
   box-shadow: 
-    0 4px 14px rgba(217, 163, 35, 0.3),
-    inset 0 1px 1px rgba(255, 255, 255, 0.3);
-  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+    0 4px 16px rgba(217, 163, 35, 0.35),
+    0 1px 2px rgba(0, 0, 0, 0.2),
+    inset 0 1px 1px rgba(255, 255, 255, 0.45),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.25);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .apple-button-gold:hover {
-  background: linear-gradient(180deg, #edbe47 0%, #d89f24 100%);
+  background: linear-gradient(180deg, #ffd366 0%, #e0a72c 100%);
   box-shadow: 
-    0 6px 20px rgba(217, 163, 35, 0.45),
-    inset 0 1px 1px rgba(255, 255, 255, 0.4);
-  transform: translateY(-1px);
+    0 8px 24px rgba(217, 163, 35, 0.5),
+    0 2px 4px rgba(0, 0, 0, 0.3),
+    inset 0 1px 1.5px rgba(255, 255, 255, 0.6),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.2);
+  transform: translateY(-1.5px);
 }
 
 .apple-button-gold:active {
   transform: scale(0.96) translateY(0);
 }
 
+/* Barber Paradise Luxury Styles */
+.bp-button-gold {
+  position: relative;
+  background: linear-gradient(180deg, #f0b000 0%, #d89600 100%);
+  color: #000000;
+  font-weight: 850;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-radius: 16px;
+  box-shadow: 
+    0 10px 25px -5px rgba(229, 167, 0, 0.4),
+    inset 0 1px 1px rgba(255, 255, 255, 0.5),
+    inset 0 -1px 2px rgba(0, 0, 0, 0.3);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.bp-button-gold:hover {
+  background: linear-gradient(180deg, #ffc01a 0%, #e5a700 100%);
+  box-shadow: 
+    0 14px 30px -4px rgba(229, 167, 0, 0.55),
+    inset 0 1px 2px rgba(255, 255, 255, 0.6);
+  transform: translateY(-2px);
+}
+
+.bp-button-gold:active {
+  transform: scale(0.97) translateY(0);
+}
+
+.bp-card {
+  position: relative;
+  background: #181818;
+  border: 1px solid #242424;
+  border-radius: 24px;
+  box-shadow: 0 22px 54px rgba(0, 0, 0, 0.4);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.bp-card:hover {
+  border-color: rgba(229, 167, 0, 0.5);
+  box-shadow: 
+    0 26px 60px rgba(0, 0, 0, 0.6),
+    0 0 30px rgba(229, 167, 0, 0.12);
+  transform: translateY(-3px);
+}
+
+.bp-card-elevated {
+  background: linear-gradient(145deg, #1c1c1c 0%, #131313 100%);
+  border: 1px solid #282828;
+  border-radius: 24px;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.5);
+}
+
+.bp-input {
+  background: #121212;
+  border: 1px solid #242424;
+  border-radius: 14px;
+  color: #f6f6f6;
+  font-size: 13px;
+  padding: 12px 16px;
+  transition: all 0.2s ease;
+}
+
+.bp-input:focus {
+  outline: none;
+  border-color: #e5a700;
+  box-shadow: 0 0 0 2px rgba(229, 167, 0, 0.2);
+}
+
+.bp-pill-active {
+  background: #e5a700;
+  color: #000000;
+  font-weight: 800;
+  border-radius: 12px;
+  box-shadow: 0 4px 14px rgba(229, 167, 0, 0.3);
+}
+
+.bp-pill-inactive {
+  background: #1e1e1e;
+  color: #aaaaaa;
+  font-weight: 600;
+  border-radius: 12px;
+}
+
+.bp-pill-inactive:hover {
+  color: #f6f6f6;
+  background: #252525;
+}
+
+.gold-glow {
+  text-shadow: 0 0 16px rgba(217, 163, 35, 0.6);
+}
+
+.border-liquid {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  position: relative;
+}
+
 /* Smooth Entrance Animation */
 @keyframes apple-enter {
   from {
     opacity: 0;
-    transform: translateY(10px) scale(0.99);
+    transform: translateY(12px) scale(0.985);
   }
   to {
     opacity: 1;
@@ -119,5 +272,5 @@
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.28);
+  background: rgba(217, 163, 35, 0.4);
 }

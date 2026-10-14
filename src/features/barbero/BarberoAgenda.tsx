@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { barberStore } from '../../services/store';
-import { formatCurrency } from '../../utils/formatters';
+import { formatCurrency, getColombiaDateString } from '../../utils/formatters';
 import { Appointment, PaymentMethod } from '../../types';
 import {
   Calendar,
@@ -29,8 +29,8 @@ export const BarberoAgenda: React.FC = () => {
   // View mode: 'week' by default as requested by user
   const [viewMode, setViewMode] = useState<'week' | 'day' | 'list'>('week');
 
-  // Reference date (defaults to Tuesday 2026-10-13)
-  const [currentDateStr, setCurrentDateStr] = useState('2026-10-13');
+  // Reference date (defaults to current date in Colombia)
+  const [currentDateStr, setCurrentDateStr] = useState(() => getColombiaDateString());
 
   // Modals
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
@@ -41,7 +41,7 @@ export const BarberoAgenda: React.FC = () => {
   const [formCustName, setFormCustName] = useState('');
   const [formCustPhone, setFormCustPhone] = useState('');
   const [formServiceId, setFormServiceId] = useState(state.services[0]?.id || '');
-  const [formDate, setFormDate] = useState('2026-10-13');
+  const [formDate, setFormDate] = useState(() => getColombiaDateString());
   const [formTime, setFormTime] = useState('11:00');
   const [formNotes, setFormNotes] = useState('');
 
@@ -119,7 +119,7 @@ export const BarberoAgenda: React.FC = () => {
   };
 
   const handleGoToday = () => {
-    setCurrentDateStr('2026-10-13');
+    setCurrentDateStr(getColombiaDateString());
   };
 
   // Open creation modal prefilled with clicked day and time

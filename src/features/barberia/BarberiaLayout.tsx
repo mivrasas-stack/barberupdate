@@ -70,7 +70,7 @@ export const BarberiaLayout: React.FC<{ children: React.ReactNode }> = ({ childr
 
       {/* Sidebar */}
       <aside
-        className={`fixed lg:sticky top-[57px] left-0 h-[calc(100vh-57px)] w-64 bg-[#0d0d10]/85 backdrop-blur-2xl border-r border-white/[0.08] p-4 flex flex-col justify-between z-40 transition-transform lg:translate-x-0 shadow-[4px_0_30px_rgba(0,0,0,0.5)] ${
+        className={`fixed lg:sticky top-[57px] left-0 h-[calc(100vh-57px)] w-64 liquid-glass border-r border-white/[0.08] p-4 flex flex-col justify-between z-40 transition-transform lg:translate-x-0 shadow-[4px_0_35px_rgba(0,0,0,0.6)] ${
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >

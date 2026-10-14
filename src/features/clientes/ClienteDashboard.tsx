@@ -63,10 +63,10 @@ export const ClienteDashboard: React.FC = () => {
       </div>
 
       {/* Hero Strip: Next Appointment or Empty State */}
-      <div className="bg-gradient-to-r from-[#161616] via-[#141414] to-[#1a1a1a] border border-[#2a2a2a] rounded-2xl p-6 shadow-xl relative overflow-hidden">
+      <div className="liquid-glass rounded-3xl p-6 shadow-2xl relative overflow-hidden">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
           <div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--gold-primary)]/15 border border-[var(--gold-primary)]/30 text-[var(--gold-primary)] text-xs font-bold mb-3">
+            <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-[var(--gold-primary)]/15 border border-[var(--gold-primary)]/30 text-[var(--gold-primary)] text-xs font-bold mb-3 shadow-inner">
               <Clock className="w-3.5 h-3.5" />
               <span>{nextAppointment ? 'Tu Próxima Cita Confirmada' : 'Sin Cita Programada'}</span>
             </div>
@@ -103,7 +103,7 @@ export const ClienteDashboard: React.FC = () => {
             {nextAppointment ? (
               <button
                 onClick={() => navigate('/clientes/sala-espera')}
-                className="px-4 py-2.5 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-bold hover:bg-amber-500/30 transition-colors flex items-center gap-2"
+                className="px-4 py-2.5 rounded-2xl bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-bold hover:bg-amber-500/30 transition-all flex items-center gap-2 shadow-md active:scale-95"
               >
                 <Coffee className="w-4 h-4 text-amber-400" />
                 <span>Sala de Espera & Bebidas</span>
@@ -111,7 +111,7 @@ export const ClienteDashboard: React.FC = () => {
             ) : (
               <button
                 onClick={() => navigate('/clientes/citas/nueva')}
-                className="px-5 py-2.5 rounded-xl bg-[var(--gold-primary)] text-black font-bold text-xs"
+                className="px-5 py-2.5 rounded-2xl apple-button-gold text-black font-extrabold text-xs shadow-md"
               >
                 Reservar Ahora
               </button>
@@ -122,12 +122,12 @@ export const ClienteDashboard: React.FC = () => {
 
       {/* Pending Orders Box (Obligatory Pickup Code) */}
       {pendingOrders.length > 0 && (
-        <div className="p-5 rounded-2xl bg-amber-500/10 border border-amber-500/30">
+        <div className="p-5 rounded-3xl liquid-glass border border-amber-500/30 shadow-xl">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
               <ShoppingBag className="w-4 h-4" /> Pedido Pendiente de Recoger en Caja
             </span>
-            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500 text-black">
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500 text-black shadow-sm">
               Listo en Barra
             </span>
           </div>
@@ -141,7 +141,7 @@ export const ClienteDashboard: React.FC = () => {
                 <p className="text-[11px] text-neutral-400">Total a pagar en caja: {formatCurrency(ord.total, currency)}</p>
               </div>
 
-              <div className="text-center sm:text-right p-3 bg-black/60 rounded-xl border border-neutral-700">
+              <div className="text-center sm:text-right p-3.5 bg-black/60 rounded-2xl border border-white/10 shadow-inner">
                 <span className="text-[10px] text-neutral-400 uppercase block font-semibold">Código de Recogida:</span>
                 <span className="text-xl font-mono font-black text-[var(--gold-primary)] tracking-widest">
                   {ord.pickupCode}
@@ -155,7 +155,7 @@ export const ClienteDashboard: React.FC = () => {
       {/* Three Column Cards: Loyalty & Quick Services */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Loyalty Points */}
-        <div className="bg-[#141414] border border-[#262626] rounded-2xl p-5 flex flex-col justify-between">
+        <div className="liquid-glass-card rounded-3xl p-5 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between text-neutral-400 mb-2">
               <span className="text-xs font-semibold">Club de Puntos VIP</span>

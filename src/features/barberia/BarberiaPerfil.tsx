@@ -841,17 +841,19 @@ export const BarberiaPerfil: React.FC = () => {
         {/* Add Photo Input / Limit Warning */}
         {shop.portfolio.length < 10 ? (
           <div className="space-y-3">
-            <div className="p-4 rounded-2xl bg-[#181818] border border-neutral-800">
-              <span className="text-neutral-300 font-semibold block mb-2">Agregar fotografía a la galería</span>
-              <ImageUpload
-                value={photoInput}
-                onChange={(url) => {
-                  if (url) handleAddPhoto(url);
-                }}
-                kind="portfolio"
-                tenantId={shop.id}
-                aspectRatio="square"
-              />
+            <div className="p-4 rounded-2xl bg-[#181818] border border-neutral-800/80">
+              <span className="text-neutral-300 font-semibold block mb-2.5 text-xs">Agregar fotografía a la galería</span>
+              <div className="max-w-xl">
+                <ImageUpload
+                  value={photoInput}
+                  onChange={(url) => {
+                    if (url) handleAddPhoto(url);
+                  }}
+                  kind="portfolio"
+                  tenantId={shop.id}
+                  aspectRatio="auto"
+                />
+              </div>
             </div>
 
             {/* Quick Presets for Demo / Testing */}

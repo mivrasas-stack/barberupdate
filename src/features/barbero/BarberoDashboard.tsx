@@ -52,15 +52,21 @@ export const BarberoDashboard: React.FC = () => {
 
       {/* KPI Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="p-5 rounded-3xl apple-glass-card">
+        <div className="p-5 rounded-3xl liquid-glass-card">
           <span className="text-xs text-neutral-400 font-semibold block mb-1">Mis Ingresos Hoy</span>
           <div className="text-3xl font-extrabold font-mono text-emerald-400">
             {formatCurrency(todayIncome || 110000, currency)}
           </div>
-          <span className="text-[10px] text-neutral-400 mt-2 block font-medium">100% de comisiones directas</span>
+          <span className="text-[10px] text-neutral-400 mt-2 block font-medium">
+            {barber.contractType === 'chair_rental'
+              ? 'Arriendo de silla (100% servicios propios)'
+              : barber.contractType === 'hybrid'
+              ? `Híbrido: ${(barber.commissionRate * 100).toFixed(0)}% comisión + canon silla`
+              : `${(barber.commissionRate * 100).toFixed(0)}% comisiones directas`}
+          </span>
         </div>
 
-        <div className="p-5 rounded-3xl apple-glass-card">
+        <div className="p-5 rounded-3xl liquid-glass-card">
           <span className="text-xs text-neutral-400 font-semibold block mb-1">Citas Agendadas Hoy</span>
           <div className="text-3xl font-extrabold font-mono text-white">
             {todayApts.length || 3} <span className="text-xs font-normal text-neutral-400 font-sans">reservas</span>
@@ -68,7 +74,7 @@ export const BarberoDashboard: React.FC = () => {
           <span className="text-[10px] text-neutral-400 mt-2 block font-medium">{completedToday} cortes finalizados</span>
         </div>
 
-        <div className="p-5 rounded-3xl apple-glass-card">
+        <div className="p-5 rounded-3xl liquid-glass-card">
           <span className="text-xs text-neutral-400 font-semibold block mb-1">Clientes Registrados</span>
           <div className="text-3xl font-extrabold font-mono text-white">
             {barberApts.length + 18} <span className="text-xs font-normal text-neutral-400 font-sans">frecuentes</span>
@@ -76,7 +82,7 @@ export const BarberoDashboard: React.FC = () => {
           <span className="text-[10px] text-neutral-400 mt-2 block font-medium">Cartera propia</span>
         </div>
 
-        <div className="p-5 rounded-3xl apple-glass-card">
+        <div className="p-5 rounded-3xl liquid-glass-card">
           <span className="text-xs text-neutral-400 font-semibold block mb-1">Mi Calificación</span>
           <div className="text-3xl font-extrabold font-mono text-amber-400 flex items-center gap-1.5">
             <Star className="w-6 h-6 fill-amber-400" />
@@ -87,7 +93,7 @@ export const BarberoDashboard: React.FC = () => {
       </div>
 
       {/* Today schedule timeline */}
-      <div className="bg-[#141418]/80 backdrop-blur-2xl border border-white/[0.08] rounded-3xl p-6 shadow-[0_20px_50px_rgba(0,0,0,0.6),inset_0_1px_1px_rgba(255,255,255,0.08)]">
+      <div className="liquid-glass rounded-3xl p-6 shadow-[0_20px_50px_rgba(0,0,0,0.6)]">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-extrabold text-white">Mi Horario & Citas</h3>
           <span className="text-xs text-[var(--gold-primary)] font-bold cursor-pointer hover:underline" onClick={() => navigate(`/barbero/${barber.slug}/agenda`)}>

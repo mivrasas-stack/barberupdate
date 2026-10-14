@@ -144,19 +144,19 @@ export const ImageUpload: React.FC<ImageUploadProps> = ({
             </div>
           </div>
         ) : (
-          <div className="p-6 flex flex-col items-center justify-center text-center space-y-3">
+          <div className="py-4 px-4 flex flex-col items-center justify-center text-center space-y-2">
             {imgLoadFailed ? (
-              <div className="p-3 rounded-full bg-amber-500/10 text-amber-400">
-                <AlertCircle className="w-8 h-8" />
+              <div className="p-2 rounded-full bg-amber-500/10 text-amber-400">
+                <AlertCircle className="w-5 h-5" />
               </div>
             ) : (
-              <div className="p-3 rounded-full bg-neutral-900 border border-neutral-800 text-neutral-400">
-                <ImageIcon className="w-8 h-8" />
+              <div className="p-2 rounded-full bg-neutral-900 border border-neutral-800 text-neutral-400">
+                <ImageIcon className="w-5 h-5" />
               </div>
             )}
 
             <div>
-              <p className="font-semibold text-white">
+              <p className="font-semibold text-white text-xs">
                 {imgLoadFailed ? 'No se pudo cargar la imagen previa' : 'Ninguna imagen seleccionada'}
               </p>
               <p className="text-[11px] text-neutral-500 mt-0.5">

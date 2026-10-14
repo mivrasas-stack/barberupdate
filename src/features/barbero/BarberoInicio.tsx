@@ -130,30 +130,34 @@ export const BarberoInicio: React.FC = () => {
 
   return (
     <div className="space-y-8 animate-fade-in pb-12">
-      {/* Apple-style Hero Banner */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#18181c]/90 via-[#121215]/80 to-[#0d0d10]/95 border border-white/[0.08] p-6 sm:p-8 backdrop-blur-2xl shadow-[0_16px_50px_rgba(0,0,0,0.5)]">
-        {/* Ambient Color Glows */}
-        <div className="absolute -top-24 -right-24 w-80 h-80 rounded-full bg-[var(--gold-primary)]/12 blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-20 -left-20 w-64 h-64 rounded-full bg-orange-500/10 blur-3xl pointer-events-none" />
+      {/* Barber Paradise Luxury Hero Banner */}
+      <div className="relative overflow-hidden rounded-[28px] bg-[#141414] border border-[#242424] p-6 sm:p-8 shadow-[0_22px_54px_rgba(0,0,0,0.5)]">
+        {/* Ambient Amber Glow */}
+        <div className="absolute -top-24 -right-24 w-80 h-80 rounded-full bg-[#e5a700]/15 blur-3xl pointer-events-none" />
 
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="flex items-start sm:items-center gap-4">
-            <img
-              src={barber?.photo}
-              alt={barber?.name}
-              className="w-16 h-16 rounded-2xl object-cover ring-2 ring-[var(--gold-primary)]/80 shadow-xl shrink-0"
-            />
-            <div className="space-y-1">
-              <div className="inline-flex items-center gap-2 px-3 py-0.5 rounded-full bg-white/[0.06] border border-white/[0.1] text-xs font-semibold text-neutral-300">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-[var(--gold-primary)] font-bold">En Turno Activo</span>
-                <span className="text-neutral-500">•</span>
-                <span className="text-neutral-300">{barber?.isIndependent ? 'Estudio Propio' : 'Barber Club'}</span>
+            <div className="relative">
+              <img
+                src={barber?.photo}
+                alt={barber?.name}
+                className="w-16 h-16 rounded-2xl object-cover ring-2 ring-[#e5a700] shadow-xl shrink-0"
+              />
+              <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-[#181818] border border-[#242424] flex items-center justify-center">
+                <Scissors className="w-2.5 h-2.5 text-[#e5a700]" />
               </div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
-                Inicio • {barber?.name}
+            </div>
+            <div className="space-y-1">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#1e1e1e] border border-[#2c2c2c] text-xs font-semibold">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-[#e5a700] font-extrabold uppercase tracking-wider text-[11px]">En Turno Activo</span>
+                <span className="text-neutral-500">•</span>
+                <span className="text-neutral-300 font-mono text-[11px]">{barber?.isIndependent ? 'Estudio Propio' : 'Barber Club'}</span>
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-[850] uppercase tracking-[-0.8px] text-white">
+                INICIO • <span className="text-[#e5a700]">{barber?.name}</span>
               </h1>
-              <p className="text-xs sm:text-sm text-neutral-400">
+              <p className="text-xs sm:text-sm text-[#aaaaaa]">
                 Tu estación digital de barbero profesional. Gestiona tu agenda semanal, clientes, servicios y caja.
               </p>
             </div>
@@ -161,45 +165,45 @@ export const BarberoInicio: React.FC = () => {
 
           {/* Quick Metrics Capsule */}
           <div className="flex flex-wrap items-center gap-3">
-            <div className="px-4 py-3 rounded-2xl bg-white/[0.04] border border-white/[0.08] backdrop-blur-md">
-              <span className="text-[10px] uppercase font-bold tracking-wider text-neutral-400 block">Citas Semana</span>
+            <div className="px-4 py-3 rounded-2xl bg-[#181818] border border-[#242424]">
+              <span className="text-[10px] uppercase font-bold tracking-wider text-[#aaaaaa] block">Citas Semana</span>
               <span className="text-lg font-black text-white font-mono">{weeklyAppointments.length} Programadas</span>
             </div>
-            <div className="px-4 py-3 rounded-2xl bg-white/[0.04] border border-white/[0.08] backdrop-blur-md">
-              <span className="text-[10px] uppercase font-bold tracking-wider text-neutral-400 block">Citas Hoy</span>
-              <span className="text-lg font-black text-[var(--gold-primary)] font-mono">{appointmentsToday.length} Hoy</span>
+            <div className="px-4 py-3 rounded-2xl bg-[#181818] border border-[#242424]">
+              <span className="text-[10px] uppercase font-bold tracking-wider text-[#aaaaaa] block">Citas Hoy</span>
+              <span className="text-lg font-black text-[#e5a700] font-mono">{appointmentsToday.length} Hoy</span>
             </div>
-            <div className="px-4 py-3 rounded-2xl bg-white/[0.04] border border-white/[0.08] backdrop-blur-md">
-              <span className="text-[10px] uppercase font-bold tracking-wider text-neutral-400 block">Est. Semanal</span>
+            <div className="px-4 py-3 rounded-2xl bg-[#181818] border border-[#242424]">
+              <span className="text-[10px] uppercase font-bold tracking-wider text-[#aaaaaa] block">Est. Semanal</span>
               <span className="text-lg font-black text-emerald-400 font-mono">{formatCurrency(estimatedWeeklyEarnings, currency)}</span>
             </div>
           </div>
         </div>
 
         {/* Quick Actions Shortcuts */}
-        <div className="relative z-10 mt-6 pt-5 border-t border-white/[0.08] flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-xs text-neutral-400">
-            <Sparkles className="w-4 h-4 text-[var(--gold-primary)]" />
-            <span>Tus Accesos Directos:</span>
+        <div className="relative z-10 mt-6 pt-5 border-t border-[#242424] flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-xs text-[#aaaaaa]">
+            <Sparkles className="w-4 h-4 text-[#e5a700]" />
+            <span className="font-semibold uppercase tracking-wider text-[11px]">Tus Accesos Directos:</span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => navigate(`/barbero/${slug}/agenda`)}
-              className="px-3.5 py-1.5 rounded-xl bg-[var(--gold-primary)]/15 hover:bg-[var(--gold-primary)]/25 border border-[var(--gold-primary)]/30 text-xs font-semibold text-[var(--gold-primary)] transition-all cursor-pointer active:scale-95 flex items-center gap-1.5"
+              className="px-3.5 py-1.5 rounded-xl bg-[#e5a700]/15 hover:bg-[#e5a700]/25 border border-[#e5a700]/40 text-xs font-bold text-[#e5a700] transition-all cursor-pointer active:scale-95 flex items-center gap-1.5"
             >
               <Calendar className="w-3.5 h-3.5" />
               <span>Ver Mi Agenda Semanal</span>
             </button>
             <button
               onClick={() => navigate(`/barbero/${slug}/contabilidad`)}
-              className="px-3 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.1] text-xs font-medium text-white transition-all cursor-pointer active:scale-95 flex items-center gap-1.5"
+              className="px-3.5 py-1.5 rounded-xl bg-[#1e1e1e] hover:bg-[#252525] border border-[#2c2c2c] text-xs font-medium text-white transition-all cursor-pointer active:scale-95 flex items-center gap-1.5"
             >
               <Wallet className="w-3.5 h-3.5" />
               <span>Mi Caja & Propinas</span>
             </button>
             <button
               onClick={() => navigate(`/barbero/${slug}/qr`)}
-              className="px-3 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.1] text-xs font-medium text-white transition-all cursor-pointer active:scale-95 flex items-center gap-1.5"
+              className="px-3.5 py-1.5 rounded-xl bg-[#1e1e1e] hover:bg-[#252525] border border-[#2c2c2c] text-xs font-medium text-white transition-all cursor-pointer active:scale-95 flex items-center gap-1.5"
             >
               <QrCode className="w-3.5 h-3.5" />
               <span>Mi QR Personal</span>
@@ -235,7 +239,7 @@ export const BarberoInicio: React.FC = () => {
         </div>
       </div>
 
-      {/* Grid of Apple-style Module Cards */}
+      {/* Grid of Barber Paradise Luxury Module Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
         {filteredModules.map(module => {
           const Icon = module.icon;
@@ -243,41 +247,37 @@ export const BarberoInicio: React.FC = () => {
             <div
               key={module.id}
               onClick={() => navigate(module.path)}
-              className="group relative overflow-hidden rounded-3xl bg-gradient-to-br from-white/[0.06] to-white/[0.02] border border-white/[0.08] hover:border-[var(--gold-primary)]/40 p-6 backdrop-blur-xl transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_16px_40px_rgba(0,0,0,0.6),0_0_24px_rgba(217,163,35,0.12)] cursor-pointer flex flex-col justify-between"
+              className="group relative overflow-hidden rounded-[24px] bp-card p-6 cursor-pointer flex flex-col justify-between"
             >
               {/* Top specular highlight line */}
-              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+              <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-[#e5a700]/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
 
               <div>
                 <div className="flex items-start justify-between gap-3 mb-4">
-                  {/* Apple Squircle Icon */}
-                  <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${module.gradient} p-0.5 shadow-lg flex items-center justify-center text-white shrink-0 group-hover:scale-105 transition-transform duration-300`}>
-                    <div className="w-full h-full rounded-[14px] bg-black/20 backdrop-blur-sm flex items-center justify-center">
-                      <Icon className="w-6 h-6 drop-shadow-sm" />
-                    </div>
+                  <div className="w-12 h-12 rounded-full bg-[#222222] border border-[#2c2c2c] flex items-center justify-center text-[#e5a700] shrink-0 group-hover:scale-105 group-hover:border-[#e5a700]/50 transition-all duration-300">
+                    <Icon className="w-5 h-5" strokeWidth={1.8} />
                   </div>
 
-                  {/* Dynamic Badge */}
-                  <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border font-mono ${module.badgeColor}`}>
+                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border font-mono ${module.badgeColor}`}>
                     {module.badge}
                   </span>
                 </div>
 
-                <h3 className="text-lg font-bold text-white group-hover:text-[var(--gold-primary)] transition-colors">
+                <h3 className="text-base font-[850] uppercase tracking-[-0.5px] text-[#f6f6f6] group-hover:text-[#e5a700] transition-colors">
                   {module.title}
                 </h3>
-                <p className="text-xs text-neutral-400 mt-1.5 leading-relaxed">
+                <p className="text-xs text-[#aaaaaa] mt-2 leading-relaxed">
                   {module.desc}
                 </p>
               </div>
 
               {/* Card Footer / Action Link */}
-              <div className="mt-6 pt-4 border-t border-white/[0.06] flex items-center justify-between">
-                <span className="text-xs font-medium text-neutral-400 group-hover:text-white transition-colors">
-                  Abrir módulo
+              <div className="mt-6 pt-4 border-t border-[#242424] flex items-center justify-between">
+                <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#aaaaaa] group-hover:text-white transition-colors">
+                  Abrir herramienta
                 </span>
-                <div className="w-8 h-8 rounded-full bg-white/[0.05] border border-white/[0.08] flex items-center justify-center text-neutral-300 group-hover:text-black group-hover:bg-[var(--gold-primary)] group-hover:border-[var(--gold-primary)] transition-all duration-300">
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                <div className="w-8 h-8 rounded-full bg-[#222222] border border-[#2a2a2a] flex items-center justify-center text-neutral-300 group-hover:text-black group-hover:bg-[#e5a700] group-hover:border-[#e5a700] transition-all duration-300">
+                  <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
                 </div>
               </div>
             </div>

@@ -113,56 +113,56 @@ export const ClienteInicio: React.FC = () => {
 
   return (
     <div className="space-y-8 animate-fade-in pb-12">
-      {/* Apple-style Hero Banner & Loyalty Card */}
+      {/* Barber Paradise Luxury Client Hero Banner & Loyalty Card */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Welcome Section */}
-        <div className="lg:col-span-2 relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#18181c]/90 via-[#121215]/80 to-[#0d0d10]/95 border border-white/[0.08] p-6 sm:p-8 backdrop-blur-2xl shadow-[0_16px_50px_rgba(0,0,0,0.5)] flex flex-col justify-between">
-          <div className="absolute -top-24 -right-24 w-80 h-80 rounded-full bg-[var(--gold-primary)]/10 blur-3xl pointer-events-none" />
+        <div className="lg:col-span-2 relative overflow-hidden rounded-[28px] bg-[#141414] border border-[#242424] p-6 sm:p-8 shadow-[0_22px_54px_rgba(0,0,0,0.5)] flex flex-col justify-between">
+          <div className="absolute -top-24 -right-24 w-80 h-80 rounded-full bg-[#e5a700]/12 blur-3xl pointer-events-none" />
 
           <div className="relative z-10 space-y-4">
             <div className="flex items-center gap-3">
               <img
                 src={currentUser?.avatar || 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80'}
                 alt={currentUser?.name || 'Cliente'}
-                className="w-14 h-14 rounded-2xl object-cover ring-2 ring-[var(--gold-primary)]/80 shadow-md"
+                className="w-14 h-14 rounded-2xl object-cover ring-2 ring-[#e5a700] shadow-md"
               />
               <div>
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/[0.06] border border-white/[0.1] text-[11px] font-semibold text-neutral-300">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#1e1e1e] border border-[#2c2c2c] text-[11px] font-semibold text-neutral-300">
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  <span>Cliente Miembro Gold</span>
+                  <span className="text-[#e5a700] font-extrabold uppercase tracking-wider text-[10px]">Cliente Preferencial</span>
                 </div>
-                <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight mt-0.5">
-                  ¡Hola, {currentUser?.name?.split(' ')[0] || 'Camilo'}! 👋
+                <h1 className="text-2xl sm:text-3xl font-[850] uppercase tracking-[-0.8px] text-white mt-1">
+                  ¡HOLA, <span className="text-[#e5a700]">{currentUser?.name?.split(' ')[0] || 'CAMILO'}</span>! 👋
                 </h1>
               </div>
             </div>
 
-            <p className="text-xs sm:text-sm text-neutral-400 max-w-xl">
+            <p className="text-xs sm:text-sm text-[#aaaaaa] max-w-xl">
               Bienvenido a tu portal personal. Agenda tus citas, monitorea tu turno en vivo en la sala de espera y aprovecha tus puntos acumulados.
             </p>
 
             {/* Next appointment highlight */}
             {nextAppointment ? (
-              <div className="p-3.5 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-between gap-3">
+              <div className="p-4 rounded-2xl bg-[#181818] border border-[#242424] flex items-center justify-between gap-3 shadow-inner">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[var(--gold-primary)] flex items-center justify-center shrink-0">
+                  <div className="w-10 h-10 rounded-full bg-[#222222] border border-[#2a2a2a] text-[#e5a700] flex items-center justify-center shrink-0">
                     <Calendar className="w-5 h-5" />
                   </div>
                   <div>
-                    <span className="text-[10px] uppercase font-bold tracking-wider text-[var(--gold-primary)] block">
+                    <span className="text-[10px] uppercase font-bold tracking-wider text-[#e5a700] block">
                       Próxima Cita Confirmada
                     </span>
                     <p className="text-xs font-bold text-white">
                       {nextAppointment.serviceName} • {nextAppointmentBarber?.name || 'Barbero'}
                     </p>
-                    <p className="text-[11px] text-neutral-400 font-mono">
+                    <p className="text-[11px] text-[#aaaaaa] font-mono">
                       {nextAppointment.date} a las {nextAppointment.startTime} ({nextAppointment.durationMinutes} min)
                     </p>
                   </div>
                 </div>
                 <button
                   onClick={() => navigate('/clientes/sala-espera')}
-                  className="px-3 py-1.5 rounded-xl bg-[var(--gold-primary)] text-black text-xs font-bold hover:bg-[var(--gold-hover)] transition-all cursor-pointer active:scale-95 shrink-0"
+                  className="px-3.5 py-1.5 rounded-xl bp-button-gold text-xs shadow-md shrink-0"
                 >
                   Ver Sala
                 </button>
@@ -171,79 +171,79 @@ export const ClienteInicio: React.FC = () => {
           </div>
 
           {/* Quick shortcuts */}
-          <div className="relative z-10 mt-6 pt-4 border-t border-white/[0.08] flex flex-wrap items-center gap-2">
+          <div className="relative z-10 mt-6 pt-4 border-t border-[#242424] flex flex-wrap items-center gap-2">
             <button
               onClick={() => navigate('/clientes/citas/nueva')}
-              className="px-3.5 py-1.5 rounded-xl bg-[var(--gold-primary)] text-black text-xs font-bold hover:bg-[var(--gold-hover)] transition-all cursor-pointer active:scale-95 flex items-center gap-1.5 shadow-md"
+              className="px-4 py-2 rounded-xl bp-button-gold text-xs flex items-center gap-1.5 shadow-md"
             >
               <Calendar className="w-3.5 h-3.5" />
               <span>Agendar Nueva Cita</span>
             </button>
             <button
               onClick={() => navigate('/clientes/sala-espera')}
-              className="px-3 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.1] text-xs font-medium text-white transition-all cursor-pointer active:scale-95 flex items-center gap-1.5"
+              className="px-3.5 py-2 rounded-xl bg-[#1e1e1e] hover:bg-[#252525] border border-[#2c2c2c] text-xs font-medium text-white transition-all cursor-pointer active:scale-95 flex items-center gap-1.5"
             >
-              <Coffee className="w-3.5 h-3.5" />
+              <Coffee className="w-3.5 h-3.5 text-[#e5a700]" />
               <span>Sala de Espera</span>
             </button>
             <button
               onClick={() => navigate('/clientes/vincular')}
-              className="px-3 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.1] text-xs font-medium text-white transition-all cursor-pointer active:scale-95 flex items-center gap-1.5"
+              className="px-3.5 py-2 rounded-xl bg-[#1e1e1e] hover:bg-[#252525] border border-[#2c2c2c] text-xs font-medium text-white transition-all cursor-pointer active:scale-95 flex items-center gap-1.5"
             >
-              <QrCode className="w-3.5 h-3.5" />
+              <QrCode className="w-3.5 h-3.5 text-[#e5a700]" />
               <span>Escanear QR</span>
             </button>
           </div>
         </div>
 
-        {/* Apple Wallet Style Loyalty Pass Card */}
+        {/* Barber Paradise Luxury Loyalty Pass Card */}
         <div
           onClick={() => navigate('/clientes/fidelizacion')}
-          className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#262015] via-[#1a1712] to-[#121110] border border-[var(--gold-primary)]/30 p-6 flex flex-col justify-between shadow-[0_16px_40px_rgba(217,163,35,0.15)] group cursor-pointer hover:border-[var(--gold-primary)]/60 transition-all duration-300 hover:-translate-y-1"
+          className="relative overflow-hidden rounded-[28px] bg-[#141414] border border-[#e5a700]/30 p-6 flex flex-col justify-between shadow-[0_22px_54px_rgba(0,0,0,0.5)] group cursor-pointer hover:border-[#e5a700]/60 transition-all duration-300 hover:-translate-y-1"
         >
           {/* Gold shimmer background effect */}
-          <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-[var(--gold-primary)]/20 to-transparent rounded-full blur-2xl pointer-events-none" />
+          <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-br from-[#e5a700]/20 to-transparent rounded-full blur-2xl pointer-events-none" />
 
           <div>
             <div className="flex items-center justify-between gap-2 mb-4">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-[var(--gold-primary)] text-black flex items-center justify-center font-black">
+                <div className="w-8 h-8 rounded-full bg-[#222222] border border-[#2a2a2a] text-[#e5a700] flex items-center justify-center font-black">
                   <Award className="w-4 h-4" />
                 </div>
                 <div>
-                  <span className="text-[10px] uppercase font-bold tracking-widest text-[var(--gold-primary)] block">
-                    Apple Pass Card
+                  <span className="text-[10px] uppercase font-bold tracking-widest text-[#e5a700] block">
+                    Membresía VIP
                   </span>
-                  <h3 className="text-sm font-black text-white">Barber Club VIP</h3>
+                  <h3 className="text-sm font-[850] uppercase tracking-wide text-white">Barber Club Elite</h3>
                 </div>
               </div>
-              <span className="px-2 py-0.5 rounded-full bg-[var(--gold-primary)]/20 border border-[var(--gold-primary)]/40 text-[10px] font-bold text-[var(--gold-primary)]">
+              <span className="px-2.5 py-0.5 rounded-full bg-[#e5a700]/20 border border-[#e5a700]/40 text-[10px] font-bold text-[#e5a700]">
                 Nivel Oro
               </span>
             </div>
 
-            <div className="mt-4 p-4 rounded-2xl bg-black/40 border border-white/[0.08] backdrop-blur-md">
-              <span className="text-[10px] uppercase tracking-wider text-neutral-400 block font-medium">Puntos Acumulados</span>
+            <div className="mt-4 p-4 rounded-2xl bg-[#181818] border border-[#242424]">
+              <span className="text-[10px] uppercase tracking-wider text-[#aaaaaa] block font-semibold">Puntos Acumulados</span>
               <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-3xl font-black text-[var(--gold-primary)] font-mono">{loyalty.points ?? 0}</span>
-                <span className="text-xs text-neutral-400 font-medium">/ 500 para corte gratis</span>
+                <span className="text-3xl font-[850] text-[#e5a700] font-mono">{loyalty.points ?? 0}</span>
+                <span className="text-xs text-[#aaaaaa] font-medium">/ 500 para corte gratis</span>
               </div>
 
               {/* Progress bar */}
-              <div className="w-full bg-neutral-800 h-2 rounded-full mt-2.5 overflow-hidden">
+              <div className="w-full bg-[#222222] h-2 rounded-full mt-2.5 overflow-hidden border border-[#2c2c2c]">
                 <div
-                  className="bg-gradient-to-r from-amber-400 to-[var(--gold-primary)] h-full rounded-full transition-all duration-500"
+                  className="bg-gradient-to-r from-amber-500 to-[#e5a700] h-full rounded-full transition-all duration-500"
                   style={{ width: `${Math.min(100, ((loyalty.points ?? 0) / 500) * 100)}%` }}
                 />
               </div>
-              <span className="text-[10px] text-neutral-400 block mt-1.5 text-right font-mono">
+              <span className="text-[10px] text-[#aaaaaa] block mt-1.5 text-right font-mono">
                 Faltan {Math.max(0, 500 - (loyalty.points ?? 0))} pts
               </span>
             </div>
           </div>
 
-          <div className="mt-6 pt-3 border-t border-white/[0.08] flex items-center justify-between text-xs text-[var(--gold-primary)] font-semibold">
-            <span>Ver recompensas y canjes</span>
+          <div className="mt-6 pt-3 border-t border-[#242424] flex items-center justify-between text-xs text-[#e5a700] font-bold">
+            <span>VER RECOMPENSAS Y CANJES</span>
             <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
           </div>
         </div>
@@ -294,7 +294,7 @@ export const ClienteInicio: React.FC = () => {
         </div>
       </div>
 
-      {/* Grid of Apple-style Module Cards */}
+      {/* Grid of Barber Paradise Luxury Module Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
         {filteredModules.map(module => {
           const Icon = module.icon;
@@ -302,41 +302,37 @@ export const ClienteInicio: React.FC = () => {
             <div
               key={module.id}
               onClick={() => navigate(module.path)}
-              className="group relative overflow-hidden rounded-3xl bg-gradient-to-br from-white/[0.06] to-white/[0.02] border border-white/[0.08] hover:border-[var(--gold-primary)]/40 p-6 backdrop-blur-xl transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_16px_40px_rgba(0,0,0,0.6),0_0_24px_rgba(217,163,35,0.12)] cursor-pointer flex flex-col justify-between"
+              className="group relative overflow-hidden rounded-[24px] bp-card p-6 cursor-pointer flex flex-col justify-between"
             >
               {/* Top specular highlight */}
-              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+              <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-[#e5a700]/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
 
               <div>
                 <div className="flex items-start justify-between gap-3 mb-4">
-                  {/* Apple Squircle Icon */}
-                  <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${module.gradient} p-0.5 shadow-lg flex items-center justify-center text-white shrink-0 group-hover:scale-105 transition-transform duration-300`}>
-                    <div className="w-full h-full rounded-[14px] bg-black/20 backdrop-blur-sm flex items-center justify-center">
-                      <Icon className="w-6 h-6 drop-shadow-sm" />
-                    </div>
+                  <div className="w-12 h-12 rounded-full bg-[#222222] border border-[#2c2c2c] flex items-center justify-center text-[#e5a700] shrink-0 group-hover:scale-105 group-hover:border-[#e5a700]/50 transition-all duration-300">
+                    <Icon className="w-5 h-5" strokeWidth={1.8} />
                   </div>
 
-                  {/* Dynamic Badge */}
-                  <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border font-mono ${module.badgeColor}`}>
+                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border font-mono ${module.badgeColor}`}>
                     {module.badge}
                   </span>
                 </div>
 
-                <h3 className="text-lg font-bold text-white group-hover:text-[var(--gold-primary)] transition-colors">
+                <h3 className="text-base font-[850] uppercase tracking-[-0.5px] text-[#f6f6f6] group-hover:text-[#e5a700] transition-colors">
                   {module.title}
                 </h3>
-                <p className="text-xs text-neutral-400 mt-1.5 leading-relaxed">
+                <p className="text-xs text-[#aaaaaa] mt-2 leading-relaxed">
                   {module.desc}
                 </p>
               </div>
 
               {/* Card Footer / Action Link */}
-              <div className="mt-6 pt-4 border-t border-white/[0.06] flex items-center justify-between">
-                <span className="text-xs font-medium text-neutral-400 group-hover:text-white transition-colors">
+              <div className="mt-6 pt-4 border-t border-[#242424] flex items-center justify-between">
+                <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#aaaaaa] group-hover:text-white transition-colors">
                   Abrir módulo
                 </span>
-                <div className="w-8 h-8 rounded-full bg-white/[0.05] border border-white/[0.08] flex items-center justify-center text-neutral-300 group-hover:text-black group-hover:bg-[var(--gold-primary)] group-hover:border-[var(--gold-primary)] transition-all duration-300">
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                <div className="w-8 h-8 rounded-full bg-[#222222] border border-[#2a2a2a] flex items-center justify-center text-neutral-300 group-hover:text-black group-hover:bg-[#e5a700] group-hover:border-[#e5a700] transition-all duration-300">
+                  <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
                 </div>
               </div>
             </div>

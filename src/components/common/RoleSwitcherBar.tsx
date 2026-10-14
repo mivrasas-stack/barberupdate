@@ -42,7 +42,7 @@ export const RoleSwitcherBar: React.FC = () => {
 
   return (
     <div className="fixed bottom-5 left-5 z-40 hidden sm:block">
-      <div className="bg-[#121215]/85 backdrop-blur-2xl border border-white/[0.12] rounded-2xl shadow-[0_12px_40px_rgba(0,0,0,0.6),inset_0_1px_1px_rgba(255,255,255,0.18)] overflow-hidden transition-all duration-300">
+      <div className="liquid-glass rounded-2xl shadow-[0_16px_45px_rgba(0,0,0,0.7)] overflow-hidden transition-all duration-300">
         {/* Dynamic Island Toggle Bar */}
         <button
           onClick={() => setIsExpanded(!isExpanded)}

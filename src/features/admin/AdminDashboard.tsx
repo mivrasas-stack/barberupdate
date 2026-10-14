@@ -54,27 +54,27 @@ export const AdminDashboard: React.FC = () => {
         </div>
 
         {/* Period Selector */}
-        <div className="flex items-center gap-1 p-1 bg-[#161616] border border-[#2a2a2a] rounded-xl self-start sm:self-auto text-xs">
+        <div className="flex items-center gap-1 p-1.5 liquid-glass rounded-2xl self-start sm:self-auto text-xs shadow-lg">
           <button
             onClick={() => setPeriod('month')}
-            className={`px-3 py-1.5 rounded-lg font-medium transition-colors ${
-              period === 'month' ? 'bg-[var(--gold-primary)] text-black font-bold' : 'text-neutral-400 hover:text-white'
+            className={`px-3.5 py-1.5 rounded-xl font-medium transition-all ${
+              period === 'month' ? 'apple-button-gold text-black font-extrabold shadow-sm' : 'text-neutral-400 hover:text-white'
             }`}
           >
             Este Mes
           </button>
           <button
             onClick={() => setPeriod('quarter')}
-            className={`px-3 py-1.5 rounded-lg font-medium transition-colors ${
-              period === 'quarter' ? 'bg-[var(--gold-primary)] text-black font-bold' : 'text-neutral-400 hover:text-white'
+            className={`px-3.5 py-1.5 rounded-xl font-medium transition-all ${
+              period === 'quarter' ? 'apple-button-gold text-black font-extrabold shadow-sm' : 'text-neutral-400 hover:text-white'
             }`}
           >
             Trimestre
           </button>
           <button
             onClick={() => setPeriod('year')}
-            className={`px-3 py-1.5 rounded-lg font-medium transition-colors ${
-              period === 'year' ? 'bg-[var(--gold-primary)] text-black font-bold' : 'text-neutral-400 hover:text-white'
+            className={`px-3.5 py-1.5 rounded-xl font-medium transition-all ${
+              period === 'year' ? 'apple-button-gold text-black font-extrabold shadow-sm' : 'text-neutral-400 hover:text-white'
             }`}
           >
             Año 2026
@@ -85,7 +85,7 @@ export const AdminDashboard: React.FC = () => {
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* MRR SaaS */}
-        <div className="p-4 rounded-2xl bg-[#141414] border border-[#262626] relative overflow-hidden">
+        <div className="p-5 rounded-3xl liquid-glass-card">
           <div className="flex items-center justify-between text-neutral-400 mb-2">
             <span className="text-xs font-medium">MRR Recurrente Plataforma</span>
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold">
@@ -102,7 +102,7 @@ export const AdminDashboard: React.FC = () => {
         </div>
 
         {/* Barberías Activas */}
-        <div className="p-4 rounded-2xl bg-[#141414] border border-[#262626]">
+        <div className="p-5 rounded-3xl liquid-glass-card">
           <div className="flex items-center justify-between text-neutral-400 mb-2">
             <span className="text-xs font-medium">Barberías Comerciales</span>
             <Store className="w-4 h-4 text-neutral-500" />
@@ -117,7 +117,7 @@ export const AdminDashboard: React.FC = () => {
         </div>
 
         {/* Barberos Independientes */}
-        <div className="p-4 rounded-2xl bg-[#141414] border border-[#262626]">
+        <div className="p-5 rounded-3xl liquid-glass-card">
           <div className="flex items-center justify-between text-neutral-400 mb-2">
             <span className="text-xs font-medium">Barberos Independientes</span>
             <Scissors className="w-4 h-4 text-neutral-500" />
@@ -132,7 +132,7 @@ export const AdminDashboard: React.FC = () => {
         </div>
 
         {/* Volumen de Cortes Procesados */}
-        <div className="p-4 rounded-2xl bg-[#141414] border border-[#262626]">
+        <div className="p-5 rounded-3xl liquid-glass-card">
           <div className="flex items-center justify-between text-neutral-400 mb-2">
             <span className="text-xs font-medium">GMV Cortes & Boutique</span>
             <TrendingUp className="w-4 h-4 text-emerald-400" />

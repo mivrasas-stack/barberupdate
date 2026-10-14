@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { barberStore } from '../../services/store';
 import {isLiveBackend,addBooking,updateBooking,refreshLiveData} from '../../services/liveBackend';
-import { formatCurrency, formatTime } from '../../utils/formatters';
+import { formatCurrency, formatTime, getColombiaDateString } from '../../utils/formatters';
 import { Appointment, AppointmentStatus, PaymentMethod } from '../../types';
 import {
   Calendar,
@@ -25,7 +25,7 @@ import {
 export const BarberiaAgenda: React.FC = () => {
   const { currentShop, currentUser, state, currency, addToast } = useApp();
   const [viewType, setViewType] = useState<'day' | 'week' | 'list'>('week');
-  const [selectedDate, setSelectedDate] = useState('2026-10-13');
+  const [selectedDate, setSelectedDate] = useState(() => getColombiaDateString());
   const [selectedBarberId, setSelectedBarberId] = useState<string>(
     currentUser?.role === 'barber_employee' && currentUser?.barberId ? currentUser.barberId : 'all'
   );
@@ -237,7 +237,7 @@ export const BarberiaAgenda: React.FC = () => {
           {/* Walk-in Button */}
           <button
             onClick={() => setIsWalkInModalOpen(true)}
-            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-300 text-xs font-bold hover:bg-amber-500/25 transition-all shadow-md"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-amber-500/15 border border-amber-500/40 text-amber-300 text-xs font-bold hover:bg-amber-500/25 transition-all shadow-md active:scale-95"
           >
             <UserPlus className="w-4 h-4 text-amber-400" />
             <span>Registrar Llegada Sin Cita</span>
@@ -246,7 +246,7 @@ export const BarberiaAgenda: React.FC = () => {
           {/* New Appointment Button */}
           <button
             onClick={() => setIsNewAptModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--gold-primary)] text-black text-xs font-bold hover:bg-[var(--gold-hover)] transition-all shadow-lg shadow-[var(--gold-primary)]/10"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-2xl apple-button-gold text-black text-xs font-extrabold shadow-md active:scale-95"
           >
             <Plus className="w-4 h-4" />
             <span>Nueva Cita</span>
@@ -255,7 +255,7 @@ export const BarberiaAgenda: React.FC = () => {
       </div>
 
       {/* Date Navigation & Filters Bar */}
-      <div className="bg-[#141414] border border-[#262626] rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
+      <div className="liquid-glass rounded-3xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-xl">
         {/* Date Navigator */}
         <div className="flex items-center gap-2">
           <button

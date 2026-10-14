@@ -12,6 +12,7 @@ export default defineConfig(() => {
       },
     },
     server: {
+      allowedHosts: true as const,
       // Same-origin development proxy: API stays on localhost, no CORS or secrets in browser.
       proxy: { '/api/v1': { target: 'http://127.0.0.1:8188', changeOrigin: false } },
       // HMR is disabled in AI Studio via DISABLE_HMR env var.

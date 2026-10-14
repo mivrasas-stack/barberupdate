@@ -1,5 +1,62 @@
 import { CurrencyType } from '../types';
 
+export const COLOMBIA_TIMEZONE = 'America/Bogota';
+
+/**
+ * Retorna la fecha actual en Colombia en formato YYYY-MM-DD
+ */
+export const getColombiaDateString = (date: Date = new Date()): string => {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: COLOMBIA_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+};
+
+/**
+ * Retorna las partes de fecha y hora actuales en Colombia
+ */
+export const getColombiaTimeParts = (date: Date = new Date()) => {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: COLOMBIA_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).formatToParts(date);
+
+  const pick = (k: string) => parts.find(p => p.type === k)?.value || '00';
+  const hour = parseInt(pick('hour'), 10);
+  const minute = parseInt(pick('minute'), 10);
+  const second = parseInt(pick('second'), 10);
+  const dateStr = `${pick('year')}-${pick('month')}-${pick('day')}`;
+  const timeStr = `${pick('hour')}:${pick('minute')}`;
+
+  return {
+    date: dateStr,
+    time: timeStr,
+    hour,
+    minute,
+    second,
+  };
+};
+
+/**
+ * Formatea la fecha y hora en vivo de Colombia para cabeceras y relojes
+ */
+export const formatColombiaLiveClock = (date: Date = new Date()): string => {
+  return new Intl.DateTimeFormat('es-CO', {
+    timeZone: COLOMBIA_TIMEZONE,
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  }).format(date);
+};
+
 export const formatCurrency = (amount: number, currency: CurrencyType = 'COP'): string => {
   if (currency === 'COP') {
     return new Intl.NumberFormat('es-CO', {

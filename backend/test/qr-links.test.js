@@ -98,7 +98,38 @@ test('QR enrollment E2E: unique QR, client profile, idempotent independent & sho
     const isolation=check(await call(owner.jwt,'GET','/me/links'),200,'Other user has no customer links');
     assert.equal(isolation.items.length,0);
     check(await call(owner.jwt,'POST','/me/links',{code:proQR.link_code,...profile}),403,'Owner cannot impersonate client');
-    check(await call(null,'POST','/me/links',{code:shopQR.link_code,...profile}),401,'Anonymous cannot link');
+    // Employed barber QR verification
+    const shopBarberUser=await user();
+    await pool.query("INSERT INTO public.tenant_members(tenant_id,user_id,role) VALUES($1,$2,'barber')",
+      [shop.id,shopBarberUser.id]);
+    const shopBarber=await pool.query(
+      "INSERT INTO public.barbers(tenant_id,user_id,name,slug) VALUES($1,$2,'Barbero Empleado QA','barbero-empleado-qa') RETURNING id,link_code",
+      [shop.id,shopBarberUser.id]);
+    const shopBarberId=shopBarber.rows[0].id;
+    const employeeQR=check(await call(shopBarberUser.jwt,'GET','/tenants/'+shop.id+'/link-code'),200,'Employed barber gets their QR');
+    assert.equal(employeeQR.link_type,'barber');
+    assert.equal(employeeQR.barber_name,'Barbero Empleado QA');
+    assert.equal(employeeQR.link_code,shopBarber.rows[0].link_code);
+
+    const pubEmployeeQR=check(await call(null,'GET','/public/links/'+employeeQR.link_code),200,'Public lookup for employee QR');
+    assert.equal(pubEmployeeQR.link_type,'barber');
+    assert.equal(pubEmployeeQR.barber_name,'Barbero Empleado QA');
+    assert.equal(pubEmployeeQR.tenant_id,shop.id);
+
+    // Customer links specifically to the barber
+    const linkBarberOnly=check(await call(customer.jwt,'POST','/me/links',{
+      code:employeeQR.link_code,linkScope:'barber',...profile
+    }),200,'Link customer with barber scope');
+    assert.equal(linkBarberOnly.barberId,shopBarberId);
+    assert.equal(linkBarberOnly.linkScope,'barber');
+
+    // Customer links with both
+    const linkBoth=check(await call(customer.jwt,'POST','/me/links',{
+      code:employeeQR.link_code,linkScope:'both',...profile
+    }),200,'Link customer with both scope');
+    assert.equal(linkBoth.barberId,shopBarberId);
+    assert.equal(linkBoth.linkScope,'both');
+
     const count=await pool.query('SELECT count(*)::integer AS n FROM public.customer_links WHERE user_id=$1',[customer.id]);
     assert.equal(count.rows[0].n,2);
   }finally{

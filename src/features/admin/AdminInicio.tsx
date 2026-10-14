@@ -124,65 +124,64 @@ export const AdminInicio: React.FC = () => {
 
   return (
     <div className="space-y-8 animate-fade-in pb-12">
-      {/* Apple-style Hero Banner */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#18181c]/90 via-[#121215]/80 to-[#0d0d10]/95 border border-white/[0.08] p-6 sm:p-8 backdrop-blur-2xl shadow-[0_16px_50px_rgba(0,0,0,0.5)]">
-        {/* Ambient Glows */}
-        <div className="absolute -top-24 -right-24 w-80 h-80 rounded-full bg-[var(--gold-primary)]/10 blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-20 -left-20 w-64 h-64 rounded-full bg-blue-500/10 blur-3xl pointer-events-none" />
+      {/* Barber Paradise Luxury Superadmin Hero Banner */}
+      <div className="relative overflow-hidden rounded-[28px] bg-[#141414] border border-[#242424] p-6 sm:p-8 shadow-[0_22px_54px_rgba(0,0,0,0.5)]">
+        {/* Ambient Amber Glow */}
+        <div className="absolute -top-24 -right-24 w-80 h-80 rounded-full bg-[#e5a700]/12 blur-3xl pointer-events-none" />
 
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.05] border border-white/[0.1] text-xs font-semibold text-neutral-300">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#1e1e1e] border border-[#2c2c2c] text-xs font-semibold">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span>Plataforma Maestro Global • v3.2 Apple Glass</span>
+              <span className="text-[#e5a700] font-extrabold uppercase tracking-wider text-[11px]">Plataforma Maestro Global • BarberOS</span>
             </div>
-            <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
-              Inicio Superadmin
+            <h1 className="text-3xl sm:text-4xl font-[850] uppercase tracking-[-0.9px] text-white">
+              INICIO <span className="text-[#e5a700]">SUPERADMIN</span>
             </h1>
-            <p className="text-sm text-neutral-400 max-w-xl">
+            <p className="text-sm text-[#aaaaaa] max-w-xl">
               Bienvenido, <strong className="text-white">{currentUser?.name || 'Carlos Mendoza'}</strong>. Control centralizado de toda la red de barberías, usuarios, suscripciones y facturación global.
             </p>
           </div>
 
           {/* Quick Metrics Capsule */}
           <div className="flex flex-wrap items-center gap-3">
-            <div className="px-4 py-3 rounded-2xl bg-white/[0.04] border border-white/[0.08] backdrop-blur-md">
-              <span className="text-[10px] uppercase font-bold tracking-wider text-neutral-400 block">MRR Mensual</span>
+            <div className="px-4 py-3 rounded-2xl bg-[#181818] border border-[#242424]">
+              <span className="text-[10px] uppercase font-bold tracking-wider text-[#aaaaaa] block">MRR Mensual</span>
               <span className="text-lg font-black text-white font-mono">{formatCurrency(totalMRR, currency)}</span>
             </div>
-            <div className="px-4 py-3 rounded-2xl bg-white/[0.04] border border-white/[0.08] backdrop-blur-md">
-              <span className="text-[10px] uppercase font-bold tracking-wider text-neutral-400 block">Barberías</span>
-              <span className="text-lg font-black text-[var(--gold-primary)] font-mono">{totalShops} Activas</span>
+            <div className="px-4 py-3 rounded-2xl bg-[#181818] border border-[#242424]">
+              <span className="text-[10px] uppercase font-bold tracking-wider text-[#aaaaaa] block">Barberías</span>
+              <span className="text-lg font-black text-[#e5a700] font-mono">{totalShops} Activas</span>
             </div>
-            <div className="px-4 py-3 rounded-2xl bg-white/[0.04] border border-white/[0.08] backdrop-blur-md">
-              <span className="text-[10px] uppercase font-bold tracking-wider text-neutral-400 block">Usuarios</span>
+            <div className="px-4 py-3 rounded-2xl bg-[#181818] border border-[#242424]">
+              <span className="text-[10px] uppercase font-bold tracking-wider text-[#aaaaaa] block">Usuarios</span>
               <span className="text-lg font-black text-emerald-400 font-mono">{totalUsers} Cuentas</span>
             </div>
           </div>
         </div>
 
         {/* Quick Actions Strip */}
-        <div className="relative z-10 mt-6 pt-5 border-t border-white/[0.08] flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-xs text-neutral-400">
-            <Sparkles className="w-4 h-4 text-[var(--gold-primary)]" />
-            <span>Acciones Rápidas del Sistema:</span>
+        <div className="relative z-10 mt-6 pt-5 border-t border-[#242424] flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-xs text-[#aaaaaa]">
+            <Sparkles className="w-4 h-4 text-[#e5a700]" />
+            <span className="font-semibold uppercase tracking-wider text-[11px]">Acciones Rápidas del Sistema:</span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => navigate('/admin/usuarios')}
-              className="px-3 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.1] text-xs font-medium text-white transition-all cursor-pointer active:scale-95"
+              className="px-3.5 py-1.5 rounded-xl bg-[#1e1e1e] hover:bg-[#252525] border border-[#2c2c2c] text-xs font-semibold text-white transition-all cursor-pointer active:scale-95"
             >
               + Nuevo Usuario
             </button>
             <button
               onClick={() => navigate('/admin/franquicias')}
-              className="px-3 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.1] text-xs font-medium text-white transition-all cursor-pointer active:scale-95"
+              className="px-3.5 py-1.5 rounded-xl bg-[#1e1e1e] hover:bg-[#252525] border border-[#2c2c2c] text-xs font-semibold text-white transition-all cursor-pointer active:scale-95"
             >
               + Nueva Franquicia
             </button>
             <button
               onClick={() => navigate('/admin/suscripciones')}
-              className="px-3 py-1.5 rounded-xl bg-[var(--gold-primary)]/15 hover:bg-[var(--gold-primary)]/25 border border-[var(--gold-primary)]/30 text-xs font-semibold text-[var(--gold-primary)] transition-all cursor-pointer active:scale-95"
+              className="px-3.5 py-1.5 rounded-xl bg-[#e5a700]/15 hover:bg-[#e5a700]/25 border border-[#e5a700]/40 text-xs font-bold text-[#e5a700] transition-all cursor-pointer active:scale-95"
             >
               Ver Facturación
             </button>
@@ -253,7 +252,7 @@ export const AdminInicio: React.FC = () => {
         </div>
       </div>
 
-      {/* Grid of Apple-style Module Cards */}
+      {/* Grid of Barber Paradise Luxury Module Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
         {filteredModules.map(module => {
           const Icon = module.icon;
@@ -261,41 +260,37 @@ export const AdminInicio: React.FC = () => {
             <div
               key={module.id}
               onClick={() => navigate(module.path)}
-              className="group relative overflow-hidden rounded-3xl bg-gradient-to-br from-white/[0.06] to-white/[0.02] border border-white/[0.08] hover:border-[var(--gold-primary)]/40 p-6 backdrop-blur-xl transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_16px_40px_rgba(0,0,0,0.6),0_0_24px_rgba(217,163,35,0.12)] cursor-pointer flex flex-col justify-between"
+              className="group relative overflow-hidden rounded-[24px] bp-card p-6 cursor-pointer flex flex-col justify-between"
             >
-              {/* Subtle top reflection line */}
-              <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+              {/* Subtle top amber highlight */}
+              <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-[#e5a700]/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
 
               <div>
                 <div className="flex items-start justify-between gap-3 mb-4">
-                  {/* Apple Squircle Icon */}
-                  <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${module.gradient} p-0.5 shadow-lg flex items-center justify-center text-white shrink-0 group-hover:scale-105 transition-transform duration-300`}>
-                    <div className="w-full h-full rounded-[14px] bg-black/20 backdrop-blur-sm flex items-center justify-center">
-                      <Icon className="w-6 h-6 drop-shadow-sm" />
-                    </div>
+                  <div className="w-12 h-12 rounded-full bg-[#222222] border border-[#2c2c2c] flex items-center justify-center text-[#e5a700] shrink-0 group-hover:scale-105 group-hover:border-[#e5a700]/50 transition-all duration-300">
+                    <Icon className="w-5 h-5" strokeWidth={1.8} />
                   </div>
 
-                  {/* Dynamic Badge */}
-                  <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border font-mono ${module.badgeColor}`}>
+                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border font-mono ${module.badgeColor}`}>
                     {module.badge}
                   </span>
                 </div>
 
-                <h3 className="text-lg font-bold text-white group-hover:text-[var(--gold-primary)] transition-colors">
+                <h3 className="text-base font-[850] uppercase tracking-[-0.5px] text-[#f6f6f6] group-hover:text-[#e5a700] transition-colors">
                   {module.title}
                 </h3>
-                <p className="text-xs text-neutral-400 mt-1.5 leading-relaxed">
+                <p className="text-xs text-[#aaaaaa] mt-2 leading-relaxed">
                   {module.desc}
                 </p>
               </div>
 
               {/* Card Footer / Action Link */}
-              <div className="mt-6 pt-4 border-t border-white/[0.06] flex items-center justify-between">
-                <span className="text-xs font-medium text-neutral-400 group-hover:text-white transition-colors">
+              <div className="mt-6 pt-4 border-t border-[#242424] flex items-center justify-between">
+                <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#aaaaaa] group-hover:text-white transition-colors">
                   Abrir módulo
                 </span>
-                <div className="w-8 h-8 rounded-full bg-white/[0.05] border border-white/[0.08] flex items-center justify-center text-neutral-300 group-hover:text-black group-hover:bg-[var(--gold-primary)] group-hover:border-[var(--gold-primary)] transition-all duration-300">
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                <div className="w-8 h-8 rounded-full bg-[#222222] border border-[#2a2a2a] flex items-center justify-center text-neutral-300 group-hover:text-black group-hover:bg-[#e5a700] group-hover:border-[#e5a700] transition-all duration-300">
+                  <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
                 </div>
               </div>
             </div>

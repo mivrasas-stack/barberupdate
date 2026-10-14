@@ -27,6 +27,7 @@ export interface ToastItem {
 interface AppContextType {
   // Auth & Roles
   currentUser: User | null;
+  setCurrentUser: (user: User | null) => void;
   activeRole: UserRole;
   loginAs: (user: User) => void;
   loginWithCredentials: (email: string, password: string, requestedRole?: UserRole) => Promise<void>;
@@ -314,6 +315,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     <AppContext.Provider
       value={{
         currentUser,
+        setCurrentUser,
         activeRole,
         loginAs,
         loginWithCredentials,

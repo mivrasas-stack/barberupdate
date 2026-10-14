@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { barberStore } from '../../services/store';
 import {isLiveBackend,recordTransaction,closeCash,refreshLiveData} from '../../services/liveBackend';
-import { formatCurrency, formatDate, exportToCSV } from '../../utils/formatters';
+import { formatCurrency, formatDate, exportToCSV, getColombiaDateString } from '../../utils/formatters';
 import { Transaction, PaymentMethod, CashClosing } from '../../types';
 import {
   Wallet,
@@ -22,7 +22,7 @@ import {
 
 export const BarberiaContabilidad: React.FC = () => {
   const { currentShop, state, currency, addToast } = useApp();
-  const [activeTab, setActiveTab] = useState<'summary' | 'transactions' | 'cash_closing'>('summary');
+  const [activeTab, setActiveTab] = useState<'summary' | 'transactions' | 'cash_closing' | 'barber_agreements'>('summary');
 
   // Modals
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
@@ -108,7 +108,7 @@ export const BarberiaContabilidad: React.FC = () => {
     if(isLiveBackend){
       try{
         await closeCash(shopId,{
-          id:'',businessId:shopId,date:new Date().toISOString().slice(0,10),
+          id:'',businessId:shopId,date:getColombiaDateString(),
           openedAt:'',closedAt:'',responsibleName:'',
           openingCash,cashIncome,electronicIncome,expensesPaidFromCash:cashExpenses,
           withdrawals:0,theoreticalCash:theoreticalCashBalance,actualCashCounted:cashCounted,
@@ -123,9 +123,9 @@ export const BarberiaContabilidad: React.FC = () => {
 
     barberStore.recordCashClosing({
       businessId: shopId,
-      date: new Date().toISOString().split('T')[0],
+      date: getColombiaDateString(),
       openedAt: '08:00',
-      closedAt: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }),
+      closedAt: new Date().toLocaleTimeString('es-CO', { timeZone: 'America/Bogota', hour: '2-digit', minute: '2-digit' }),
       responsibleName: 'Mateo Restrepo (Administrador)',
       openingCash,
       cashIncome,
@@ -154,7 +154,7 @@ export const BarberiaContabilidad: React.FC = () => {
       Metodo_Pago: t.paymentMethod,
       Notas: t.notes || '',
     }));
-    exportToCSV(`reporte_contable_${shopId}_${new Date().toISOString().split('T')[0]}`, rows);
+    exportToCSV(`reporte_contable_${shopId}_${getColombiaDateString()}`, rows);
     addToast('Reporte contable CSV descargado exitosamente', 'success');
   };
 
@@ -176,7 +176,7 @@ export const BarberiaContabilidad: React.FC = () => {
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={handleExportCSV}
-            className="flex items-center gap-2 px-3 py-2 rounded-xl bg-[#202020] border border-neutral-700 text-xs font-semibold text-neutral-200 hover:text-white transition-colors"
+            className="flex items-center gap-2 px-3.5 py-2.5 rounded-2xl liquid-glass text-xs font-semibold text-neutral-200 hover:text-white transition-all active:scale-95 shadow-sm"
           >
             <Download className="w-3.5 h-3.5" />
             <span>Exportar CSV</span>
@@ -184,7 +184,7 @@ export const BarberiaContabilidad: React.FC = () => {
 
           <button
             onClick={() => setIsExpenseModalOpen(true)}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 text-xs font-semibold hover:bg-red-500/25 transition-colors"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-red-500/15 border border-red-500/30 text-red-300 text-xs font-semibold hover:bg-red-500/25 transition-all active:scale-95 shadow-sm"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>Registrar Gasto</span>
@@ -195,7 +195,7 @@ export const BarberiaContabilidad: React.FC = () => {
               setCashCounted(theoreticalCashBalance);
               setIsCashClosingModalOpen(true);
             }}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[var(--gold-primary)] text-black text-xs font-bold hover:bg-[var(--gold-hover)] transition-all shadow-md"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-2xl apple-button-gold text-black text-xs font-extrabold shadow-md active:scale-95"
           >
             <Lock className="w-3.5 h-3.5" />
             <span>Cierre de Caja</span>
@@ -204,30 +204,38 @@ export const BarberiaContabilidad: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-2 border-b border-[#262626] pb-2 text-xs">
+      <div className="flex items-center gap-2 border-b border-white/[0.08] pb-2 text-xs">
         <button
           onClick={() => setActiveTab('summary')}
-          className={`px-3.5 py-1.5 rounded-lg font-bold transition-colors ${
-            activeTab === 'summary' ? 'bg-[var(--gold-primary)] text-black' : 'text-neutral-400 hover:text-white'
+          className={`px-4 py-2 rounded-2xl font-bold transition-all cursor-pointer ${
+            activeTab === 'summary' ? 'apple-button-gold text-black font-extrabold shadow-sm' : 'text-neutral-400 hover:text-white'
           }`}
         >
           Resumen Financiero
         </button>
         <button
           onClick={() => setActiveTab('transactions')}
-          className={`px-3.5 py-1.5 rounded-lg font-bold transition-colors ${
-            activeTab === 'transactions' ? 'bg-[var(--gold-primary)] text-black' : 'text-neutral-400 hover:text-white'
+          className={`px-4 py-2 rounded-2xl font-bold transition-all cursor-pointer ${
+            activeTab === 'transactions' ? 'apple-button-gold text-black font-extrabold shadow-sm' : 'text-neutral-400 hover:text-white'
           }`}
         >
           Movimientos Detallados ({transactions.length})
         </button>
         <button
           onClick={() => setActiveTab('cash_closing')}
-          className={`px-3.5 py-1.5 rounded-lg font-bold transition-colors ${
-            activeTab === 'cash_closing' ? 'bg-[var(--gold-primary)] text-black' : 'text-neutral-400 hover:text-white'
+          className={`px-4 py-2 rounded-2xl font-bold transition-all cursor-pointer ${
+            activeTab === 'cash_closing' ? 'apple-button-gold text-black font-extrabold shadow-sm' : 'text-neutral-400 hover:text-white'
           }`}
         >
           Historial de Cierres ({state.cashClosings.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('barber_agreements')}
+          className={`px-4 py-2 rounded-2xl font-bold transition-all cursor-pointer ${
+            activeTab === 'barber_agreements' ? 'apple-button-gold text-black font-extrabold shadow-sm' : 'text-neutral-400 hover:text-white'
+          }`}
+        >
+          Liquidación de Barberos & Sillas
         </button>
       </div>
 
@@ -235,36 +243,36 @@ export const BarberiaContabilidad: React.FC = () => {
         <div className="space-y-6">
           {/* KPI Strip */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="p-4 rounded-2xl bg-[#141414] border border-[#262626]">
+            <div className="p-5 rounded-3xl liquid-glass-card">
               <span className="text-xs text-neutral-400 font-medium block mb-1">Ingresos Brutos</span>
               <div className="text-2xl font-bold font-mono text-emerald-400">
                 {formatCurrency(totalIncome, currency)}
               </div>
-              <span className="text-[10px] text-neutral-500 mt-2 block">Cortes + Boutique + Bebidas</span>
+              <span className="text-[10px] text-neutral-400 mt-2 block font-medium">Cortes + Boutique + Bebidas</span>
             </div>
 
-            <div className="p-4 rounded-2xl bg-[#141414] border border-[#262626]">
+            <div className="p-5 rounded-3xl liquid-glass-card">
               <span className="text-xs text-neutral-400 font-medium block mb-1">Gastos Operativos</span>
               <div className="text-2xl font-bold font-mono text-red-400">
                 {formatCurrency(totalExpenses, currency)}
               </div>
-              <span className="text-[10px] text-neutral-500 mt-2 block">Insumos, nómina, arriendo</span>
+              <span className="text-[10px] text-neutral-400 mt-2 block font-medium">Insumos, nómina, arriendo</span>
             </div>
 
-            <div className="p-4 rounded-2xl bg-[#141414] border border-[#262626]">
+            <div className="p-5 rounded-3xl liquid-glass-card">
               <span className="text-xs text-neutral-400 font-medium block mb-1">Ganancia Neta Estimada</span>
               <div className="text-2xl font-bold font-mono text-[var(--gold-primary)]">
                 {formatCurrency(netProfit, currency)}
               </div>
-              <span className="text-[10px] text-neutral-500 mt-2 block">Margen operativo calculado</span>
+              <span className="text-[10px] text-neutral-400 mt-2 block font-medium">Margen operativo calculado</span>
             </div>
 
-            <div className="p-4 rounded-2xl bg-[#141414] border border-[#262626]">
+            <div className="p-5 rounded-3xl liquid-glass-card">
               <span className="text-xs text-neutral-400 font-medium block mb-1">Saldo Teórico en Caja Física</span>
               <div className="text-2xl font-bold font-mono text-white">
                 {formatCurrency(theoreticalCashBalance, currency)}
               </div>
-              <span className="text-[10px] text-neutral-500 mt-2 block">Base inicial + Efectivo</span>
+              <span className="text-[10px] text-neutral-400 mt-2 block font-medium">Base inicial + Efectivo</span>
             </div>
           </div>
 
@@ -393,6 +401,93 @@ export const BarberiaContabilidad: React.FC = () => {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'barber_agreements' && (
+        <div className="space-y-6">
+          <div className="p-5 rounded-3xl bg-[#141414] border border-[#262626]">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+              <div>
+                <h3 className="text-sm font-bold text-white">Liquidación Financiera y Cánones de Silla</h3>
+                <p className="text-xs text-neutral-400">
+                  Monitoreo de ingresos generados por los barberos de la barbería, acuerdos de cobro y pagos pactados.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {state.barbers.filter(b => b.businessId === shopId).map(b => {
+                const barberApts = state.appointments.filter(a => a.barberId === b.id && a.status === 'completed');
+                const totalGenerated = barberApts.reduce((sum, a) => sum + (a.finalPrice || 0), 0);
+                const barberCommission = b.contractType === 'chair_rental' 
+                  ? totalGenerated 
+                  : totalGenerated * (b.commissionRate || 0.5);
+                const shopCommission = b.contractType === 'chair_rental'
+                  ? 0
+                  : totalGenerated * (1 - (b.commissionRate || 0.5));
+
+                return (
+                  <div key={b.id} className="p-4 rounded-2xl bg-[#181818] border border-neutral-800 space-y-3 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center gap-3 pb-3 border-b border-neutral-800">
+                        <img src={b.photo} alt={b.name} className="w-10 h-10 rounded-xl object-cover border border-[var(--gold-primary)]" />
+                        <div className="min-w-0 flex-1">
+                          <h4 className="text-xs font-bold text-white truncate">{b.name}</h4>
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                            b.contractType === 'chair_rental'
+                              ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                              : b.contractType === 'hybrid'
+                              ? 'bg-sky-500/10 text-sky-400 border border-sky-500/20'
+                              : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                          }`}>
+                            {b.contractType === 'chair_rental' ? 'Arriendo de Silla' : b.contractType === 'hybrid' ? 'Híbrido' : 'Comisión'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="pt-3 space-y-2 text-xs">
+                        <div className="flex justify-between text-neutral-400">
+                          <span>Servicios Realizados:</span>
+                          <span className="font-mono text-white font-bold">{barberApts.length}</span>
+                        </div>
+                        <div className="flex justify-between text-neutral-400">
+                          <span>Facturado en Cortes:</span>
+                          <span className="font-mono text-white font-bold">{formatCurrency(totalGenerated, currency)}</span>
+                        </div>
+                        <div className="flex justify-between text-neutral-400">
+                          <span>Para el Barbero:</span>
+                          <span className="font-mono text-emerald-400 font-bold">{formatCurrency(barberCommission, currency)}</span>
+                        </div>
+                        <div className="flex justify-between text-neutral-400">
+                          <span>Comisión Barbería:</span>
+                          <span className="font-mono text-[var(--gold-primary)] font-bold">{formatCurrency(shopCommission, currency)}</span>
+                        </div>
+                        {(b.contractType === 'chair_rental' || b.contractType === 'hybrid') && (
+                          <div className="pt-2 border-t border-neutral-800/80 flex justify-between items-center text-xs">
+                            <span className="text-amber-400 font-semibold">Canon Silla:</span>
+                            <span className="font-mono font-bold text-amber-400">
+                              {formatCurrency(b.chairRentalFee || 0, currency)}
+                              <span className="text-[10px] text-neutral-500 font-sans ml-1">
+                                /{b.chairRentalPeriod === 'daily' ? 'día' : b.chairRentalPeriod === 'weekly' ? 'sem' : b.chairRentalPeriod === 'biweekly' ? 'quincena' : 'mes'}
+                              </span>
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="pt-3 border-t border-neutral-800 text-[11px] text-neutral-500 flex justify-between items-center">
+                      <span>Cód: {b.publicCode}</span>
+                      <span className="text-neutral-400 font-semibold">
+                        {b.contractType === 'chair_rental' ? 'Fijo periódico' : `${(b.commissionRate * 100).toFixed(0)}% comisión`}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}

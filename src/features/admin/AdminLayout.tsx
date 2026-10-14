@@ -57,12 +57,12 @@ export const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children 
 
       {/* Sidebar */}
       <aside
-        className={`fixed lg:sticky top-[57px] left-0 h-[calc(100vh-57px)] w-64 bg-[#121212] border-r border-[#242424] p-4 flex flex-col justify-between z-40 transition-transform lg:translate-x-0 ${
+        className={`fixed lg:sticky top-[57px] left-0 h-[calc(100vh-57px)] w-64 liquid-glass border-r border-white/[0.08] p-4 flex flex-col justify-between z-40 transition-transform lg:translate-x-0 shadow-[4px_0_35px_rgba(0,0,0,0.6)] ${
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         <div>
-          <div className="px-3 py-2 mb-4 bg-[#181818] rounded-xl border border-[#2a2a2a]">
+          <div className="px-3.5 py-3 mb-4 liquid-glass-card rounded-2xl border border-white/[0.08] shadow-inner">
             <span className="text-[10px] uppercase font-bold tracking-wider text-[var(--gold-primary)] block">
               Plataforma Maestro
             </span>

@@ -32,7 +32,7 @@ export async function buildApp(env = process.env) {
   app.setErrorHandler((err, req, reply) => {
     const status = err.statusCode && err.statusCode >= 400 && err.statusCode < 600 ? err.statusCode : (err.code === '23P01' || err.code === '23505' || err.code === '23514' ? 409 : err.code === '23503' ? 400 : 500);
     if (status >= 500) req.log.error({ err }, 'request failed');
-    const message = status >= 500 ? 'Error interno o dependencia no disponible' : status === 409 ? 'Conflicto: horario o recurso no disponible' : err.message;
+    const message = status >= 500 ? 'Error interno o dependencia no disponible' : (err.message || (status === 409 ? 'Conflicto: horario o recurso no disponible' : 'Error en la solicitud'));
     reply.code(status).send({ error: message, requestId: req.id });
   });
   app.get('/api/v1/health/live', async () => ({ status: 'ok', version: '0.1.0' }));
