@@ -7,15 +7,30 @@ export function ImageUploader({tenant,category,onUploaded,label='Subir imagen'}:
  const upload=async(file:File)=>{
   if(busy)return;
   setError('');
-  if(file.size>4_000_000){setError('La imagen debe pesar menos de 4 MB');return;}
+  if(file.size>15_000_000){setError('La imagen original debe pesar menos de 15 MB');return;}
   if(!['image/jpeg','image/png','image/webp'].includes(file.type)){setError('Solo JPEG, PNG o WebP');return;}
   setBusy(true);
   try{
+   let selected:Blob=file;
+   if(file.size>3_000_000){
+    const bitmap=await createImageBitmap(file);
+    try{
+     const ratio=Math.min(1,1600/Math.max(bitmap.width,bitmap.height));
+     const canvas=document.createElement('canvas');
+     canvas.width=Math.max(1,Math.round(bitmap.width*ratio));
+     canvas.height=Math.max(1,Math.round(bitmap.height*ratio));
+     const ctx=canvas.getContext('2d');
+     if(!ctx)throw Error('No se pudo procesar la imagen');
+     ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);
+     selected=await new Promise<Blob>((resolve,reject)=>canvas.toBlob(blob=>blob?resolve(blob):reject(Error('No se pudo comprimir la imagen')),'image/webp',0.78));
+    }finally{bitmap.close();}
+   }
+   if(selected.size>4_000_000)throw Error('La imagen sigue siendo demasiado grande; intenta otra fotografía');
    const data=await new Promise<string>((resolve,reject)=>{
     const reader=new FileReader();
     reader.onerror=()=>reject(Error('No se pudo leer el archivo'));
     reader.onload=()=>resolve(String(reader.result).split(',')[1]||'');
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(selected);
    });
    const result=await backendRequest<{url:string}>('/tenants/'+encodeURIComponent(tenant)+'/images',{method:'POST',body:JSON.stringify({data,category})});
    onUploaded(result.url);
