@@ -240,7 +240,7 @@ export const BarberiaBoutique: React.FC = () => {
               <div>
                 <div className="flex items-start gap-3 mb-3">
                   <img
-                    src={prod.photo}
+                    src={prod.photo} onError={e=>{if(!e.currentTarget.src.endsWith('/images/placeholder.svg'))e.currentTarget.src='/images/placeholder.svg';}}
                     alt={prod.name}
                     className="w-16 h-16 rounded-xl object-cover border border-neutral-700 shrink-0"
                   />
@@ -386,7 +386,7 @@ export const BarberiaBoutique: React.FC = () => {
 
             <form onSubmit={handleCreateProduct} className="py-4 space-y-3 text-xs">
               {isLiveBackend && <ImageUploader tenant={shopId} category="products" onUploaded={setNewProdPhoto} label="Subir imagen del producto"/>}
-              {newProdPhoto && <img src={newProdPhoto} alt="Vista previa del producto" className="h-24 object-contain"/>}
+              {newProdPhoto && <img src={newProdPhoto} onError={e=>{if(!e.currentTarget.src.endsWith('/images/placeholder.svg'))e.currentTarget.src='/images/placeholder.svg';}} alt="Vista previa del producto" className="h-24 object-contain"/>}
               <div>
                 <label className="text-neutral-400 block mb-1">Nombre Comercial del Producto</label>
                 <input
