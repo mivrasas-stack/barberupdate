@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { barberStore } from '../../services/store';
+import { ImageUploader } from './ImageUploader';
 import { formatCurrency } from '../../utils/formatters';
 import { Product, ProductCategory } from '../../types';
 import {isLiveBackend, addProduct, adjustStock, setProductVisibility, refreshLiveData} from '../../services/liveBackend';
@@ -34,7 +35,7 @@ export const BarberiaBoutique: React.FC = () => {
   // Form states for New Product
   const [newProdName, setNewProdName] = useState('');
   const [newProdDesc, setNewProdDesc] = useState('');
-  const [newProdPhoto, setNewProdPhoto] = useState('https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=200&auto=format&fit=crop&q=80');
+  const [newProdPhoto, setNewProdPhoto] = useState('');
   const [newProdPrice, setNewProdPrice] = useState(50000);
   const [newProdCost, setNewProdCost] = useState(25000);
   const [newProdStock, setNewProdStock] = useState(10);
@@ -384,6 +385,8 @@ export const BarberiaBoutique: React.FC = () => {
             </div>
 
             <form onSubmit={handleCreateProduct} className="py-4 space-y-3 text-xs">
+              {isLiveBackend && <ImageUploader tenant={shopId} category="products" onUploaded={setNewProdPhoto} label="Subir imagen del producto"/>}
+              {newProdPhoto && <img src={newProdPhoto} alt="Vista previa del producto" className="h-24 object-contain"/>}
               <div>
                 <label className="text-neutral-400 block mb-1">Nombre Comercial del Producto</label>
                 <input
