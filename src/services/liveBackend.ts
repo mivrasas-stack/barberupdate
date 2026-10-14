@@ -285,7 +285,7 @@ export async function addBooking(tenant:string,data:{barberId:string;serviceId:s
    .then(async res=>{const body=await res.json();if(!res.ok)throw Error(body.error||'No se pudo consultar disponibilidad');return body as {slots:{starts_at:string}[]};});
  const selected=slots.slots.find(s=>dayParts(s.starts_at,zone).time===data.startTime);
  if(!selected)throw Error('El horario seleccionado ya no está disponible. Actualiza la agenda.');
- const idempotencyKey='b'+crypto.randomUUID().replace(/-/g,'');
+ const idempotencyKey='b'+Array.from(crypto.getRandomValues(new Uint8Array(16)),byte=>byte.toString(16).padStart(2,'0')).join('');
  return backendRequest<Db>('/tenants/'+tenant+'/bookings',{method:'POST',
    body:JSON.stringify({barberId:data.barberId,serviceId:data.serviceId,
      startsAt:selected.starts_at,customerName:data.customerName,customerPhone:data.customerPhone,
