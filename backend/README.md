@@ -100,8 +100,17 @@ de Wompi, APIs de checkout, webhooks ni cobros reales en línea.
 - Los planes tienen `billing_enabled=false` y precios de ejemplo, sin suscripciones cobrables.
 
 **Confirmación manual = constancia del responsable del negocio.** Nunca equivale a
-aprobación bancaria o verificación de Wompi.
+aprobación bancaria. Wompi se reserva EXCLUSIVAMENTE para vender suscripciones
+de BarberOS en la futura landing page. NO procesará pedidos ni citas de barberías.
 
 Contrato futuro y criterios de activación:
 `docs/wompi-deferred.md`. No añadir credenciales de Wompi al código ni
 activar cobros antes de tener un entorno TLS y autorización explícita.
+
+## Nueva funcionalidad: reprogramación segura de citas
+
+- PATCH /api/v1/me/bookings/:appointmentId/reschedule — permite al cliente modificar una cita propia pendiente/confirmada, con 2 horas de anticipación.
+- PATCH /api/v1/tenants/:tenantId/appointments/:appointmentId/reschedule — propietario o gerente puede reprogramar una cita del negocio.
+- Cuerpo: {"startsAt":"2026-11-05T15:00:00-05:00","barberId":"UUID-opcional"}. Si barberId se omite, se mantiene el barbero original.
+- PostgreSQL comprueba disponibilidad, jornada, ausencia y superposición; se registra reschedule_count y notificación al cliente. No se permite mover citas canceladas/completadas.
+- La integración Wompi sigue FUERA DE ALCANCE: será únicamente el checkout de planes de BarberOS en la futura landing page, nunca pagos de pedidos/citas de las barberías.

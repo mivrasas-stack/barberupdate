@@ -6,7 +6,7 @@ Proyecto único: Supabase `wrfwhftzaflwhkvkzrjm`.
 
 | Comprobación | Resultado |
 |---|---|
-| Migraciones Supabase | 11 registradas, 22 tablas públicas con RLS (incluye `manual_payments`) |
+| Migraciones Supabase | 12 registradas, 22 tablas públicas con RLS (incluye `manual_payments`) |
 | Asesor de seguridad de Supabase | 0 avisos |
 | `npm audit --omit=dev` tras actualizar Fastify 5.12.7 | 0 vulnerabilidades de cualquier severidad |
 | `npm run check` | correcto |
@@ -58,3 +58,12 @@ No conectar el frontend todavía. No declarar 100% de backend productivo.
 - Wompi seguirá **sin implementación ni credenciales** hasta producción, por decisión explícita del usuario.
 - Es necesario completar las otras condiciones de producción antes de considerar el backend 100% apto para lanzamiento.
 - Plan: `docs/wompi-deferred.md`.
+
+## Nueva fase de agenda y separación comercial (octubre de 2026)
+
+- Reprogramación por cliente: PATCH /api/v1/me/bookings/:appointmentId/reschedule.
+- Reprogramación por propietario o gerente: PATCH /api/v1/tenants/:tenantId/appointments/:appointmentId/reschedule.
+- La validación conserva la duración original, impide mover una cita completada o cancelada, respeta horarios y ausencias, y evita dobles reservas mediante la exclusión PostgreSQL.
+- Bloqueo de agenda consistente para evitar carreras entre creación de cita, horarios, ausencia y reprogramación; notificación y evento sin PII al cambiar fecha/barbero.
+- Prueba E2E ampliada: dos propietarios y empresas independientes, rechazo de acceso a servicios, pedidos, informes y horarios de la otra empresa; reprogramación de cliente y administrador; rechazo de conflictos. Eliminación comprobada de los datos temporales.
+- Wompi exclusivamente para vender suscripciones a BarberOS, por una landing page futura. Cero cobros de Wompi a clientes finales de barberías. Véase docs/wompi-deferred.md.

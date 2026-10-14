@@ -35,8 +35,62 @@ export function validateSlotDate(value,now=Date.now()) {
   const t=Date.parse(value+'T12:00:00Z');
   if(!Number.isFinite(t)||t<now-2*86400000||t>now+366*86400000) failure(400,'Fecha fuera de rango');
 }
+const rescheduleBody=z.object({
+  startsAt:z.iso.datetime({offset:true}),
+  barberId:id.optional()
+}).strict();
+
 export async function registerSchedulingRoutes(app,{db,security}) {
   const {authenticated,limited,requireTenant}=security;
+  async function reschedule(req,tenantId,appointmentId,customerOnly){
+    const value=parseOrThrow(rescheduleBody,req.body);
+    const newStart=new Date(value.startsAt);
+    const minimum=Date.now()+(customerOnly?2*3600000:5*60000);
+    if(newStart.getTime()<minimum||newStart.getTime()>Date.now()+365*86400000)
+      failure(400,'La nueva cita debe estar dentro del plazo permitido');
+    return db.transaction(async tx=>{
+      const original=await tx.query(
+        'SELECT id,tenant_id,customer_user_id,barber_id,service_id,starts_at,ends_at,status,reschedule_count FROM public.appointments WHERE tenant_id=$1 AND id=$2',
+        [tenantId,appointmentId]);
+      if(!original.rowCount) failure(404,'Reserva no encontrada');
+      const before=original.rows[0];
+      if(customerOnly){
+        if(before.customer_user_id!==req.actor.id) failure(403,'Solo puedes modificar una reserva propia');
+        if(new Date(before.starts_at).getTime()<Date.now()+2*3600000)
+          failure(409,'Reprogramacion disponible hasta 2 horas antes');
+      }
+      if(!['pending','confirmed'].includes(before.status)) failure(409,'Reserva no reprogramable');
+      const newBarber=value.barberId||before.barber_id;
+      const oldStarts=new Date(before.starts_at).getTime();
+      if(newStart.getTime()===oldStarts&&newBarber===before.barber_id)
+        failure(409,'La reserva ya se encuentra en ese horario');
+      // Consistent advisory-lock order serializes scheduling changes and new
+      // bookings on both the previous and the requested barber calendars.
+      for(const barber of [...new Set([before.barber_id,newBarber])].sort()){
+        await tx.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',
+          [tenantId+':schedule:'+barber]);
+      }
+      const locked=await tx.query(
+        'SELECT barber_id,starts_at,status,ends_at FROM public.appointments WHERE tenant_id=$1 AND id=$2 FOR UPDATE',
+        [tenantId,appointmentId]);
+      const current=locked.rows[0];
+      if(current.barber_id!==before.barber_id ||
+        new Date(current.starts_at).getTime()!==oldStarts ||
+        current.status!==before.status)failure(409,'La reserva cambio durante la reprogramacion: recarga la agenda');
+      const target=await tx.query(
+        "SELECT b.id FROM public.barbers b JOIN public.tenants t ON t.id=b.tenant_id WHERE b.tenant_id=$1 AND b.id=$2 AND b.status='active' AND t.status='active'",
+        [tenantId,newBarber]);
+      if(!target.rowCount)failure(404,'Barbero no disponible');
+      const duration=new Date(before.ends_at).getTime()-oldStarts;
+      if(!Number.isFinite(duration)||duration<300000||duration>600*60000)
+        failure(409,'Duracion original invalida');
+      const newEnd=new Date(newStart.getTime()+duration);
+      return (await tx.query(
+        'UPDATE public.appointments SET barber_id=$3,starts_at=$4,ends_at=$5,updated_at=now() WHERE id=$2 AND tenant_id=$1 RETURNING id,tenant_id,barber_id,service_id,starts_at,ends_at,status,reschedule_count',
+        [tenantId,appointmentId,newBarber,newStart.toISOString(),newEnd.toISOString()]
+      )).rows[0];
+    });
+  }
   const memberAccess=async(req,tenant,barber)=>{
     const role=await requireTenant(db,tenant,req.actor.id);
     if(role==='barber'){
@@ -51,6 +105,18 @@ export async function registerSchedulingRoutes(app,{db,security}) {
       await authenticated(req);
       await limited(req);
       if(!db) failure(503,'Base de datos no configurada');
+    });
+    routes.patch('/api/v1/me/bookings/:appointmentId/reschedule',async req=>{
+      const appointment=parseOrThrow(id,req.params.appointmentId);
+      const row=await db.query('SELECT tenant_id FROM public.appointments WHERE id=$1 AND customer_user_id=$2',[appointment,req.actor.id]);
+      if(!row.rowCount) failure(404,'Reserva propia no encontrada');
+      return reschedule(req,row.rows[0].tenant_id,appointment,true);
+    });
+    routes.patch('/api/v1/tenants/:tenantId/appointments/:appointmentId/reschedule',async req=>{
+      const tenant=parseOrThrow(id,req.params.tenantId);
+      const appointment=parseOrThrow(id,req.params.appointmentId);
+      await requireTenant(db,tenant,req.actor.id,['owner','manager']);
+      return reschedule(req,tenant,appointment,false);
     });
     routes.get('/api/v1/tenants/:tenantId/barbers/:barberId/hours',async req=>{
       const tenant=parseOrThrow(id,req.params.tenantId),barber=parseOrThrow(id,req.params.barberId);

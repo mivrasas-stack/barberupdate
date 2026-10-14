@@ -17,7 +17,7 @@ test('BarberOS E2E: Auth, schedule, bookings, orders, cleanup',
   const anon=createClient(process.env.SUPABASE_URL,process.env.SUPABASE_PUBLISHABLE_KEY,
     {auth:{persistSession:false,autoRefreshToken:false}});
   const pool=new pg.Pool({connectionString:process.env.ADMIN_DATABASE_URL||process.env.DATABASE_URL,max:1,connectionTimeoutMillis:10000});
-  let uid=null,tid=null,token=null;
+  let uid=null,tid=null,token=null,otherUid=null,otherTid=null;
   const call=async(method,path,body,key)=>{
     const r=await fetch(base+path,{method,
       headers:{...(token?{Authorization:'Bearer '+token}:{}),
@@ -49,6 +49,41 @@ test('BarberOS E2E: Auth, schedule, bookings, orders, cleanup',
     const hours=await call('PUT',bpath+'/hours',{intervals:
       Array.from({length:7},(_,weekday)=>({weekday,startMinute:540,endMinute:1080}))});
     check(hours,200,'Update weekly schedule');
+    const otherEmail='barberos-itest-'+randomUUID()+'@example.com';
+    const otherPassword='Ab!'+randomBytes(24).toString('hex');
+    const otherUser=await admin.auth.admin.createUser({
+      email:otherEmail,password:otherPassword,email_confirm:true
+    });
+    assert.ifError(otherUser.error);
+    otherUid=otherUser.data.user.id;
+    const otherClient=createClient(process.env.SUPABASE_URL,process.env.SUPABASE_PUBLISHABLE_KEY,
+      {auth:{persistSession:false,autoRefreshToken:false}});
+    const otherSession=await otherClient.auth.signInWithPassword({
+      email:otherEmail,password:otherPassword
+    });
+    assert.ifError(otherSession.error);
+    const otherToken=otherSession.data.session.access_token;
+    const otherCall=async(method,path,body)=>{
+      const r=await fetch(base+path,{method,headers:{
+        Authorization:'Bearer '+otherToken,...(body?{'Content-Type':'application/json'}:{})
+      },body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(12000)});
+      return {status:r.status,data:await r.json().catch(()=>null)};
+    };
+    const otherTenant=await otherCall('POST','/api/v1/tenants',{
+      name:'Isolated Barber Two',slug:'barberos-itest-'+randomBytes(8).toString('hex'),
+      currency:'COP',timeZone:'America/Bogota'
+    });
+    check(otherTenant,201,'Other owner creates separate company');
+    otherTid=otherTenant.data.id;
+    check(await otherCall('GET',prefix+'/services'),403,'Reject cross-tenant services');
+    check(await otherCall('GET',prefix+'/orders'),403,'Reject cross-tenant orders');
+    check(await otherCall('GET',prefix+'/reports/overview?from=2026-10-01&to=2026-10-31'),
+      403,'Reject cross-tenant financial reports');
+    check(await otherCall('PUT',bpath+'/hours',{intervals:[]}),403,'Reject cross-tenant schedule edits');
+    check(await otherCall('GET','/api/v1/tenants/'+otherTid+'/services'),200,
+      'Second company owner can read their own company');
+    check(await call('GET','/api/v1/tenants/'+otherTid+'/services'),403,
+      'First company owner cannot read second company');
     const day=new Date(Date.now()+20*86400000).toISOString().slice(0,10);
     const availability=await call('GET','/api/v1/public/tenants/'+tid+
       '/availability?barberId='+barber.data.id+'&serviceId='+service.data.id+'&date='+day);
@@ -66,6 +101,34 @@ test('BarberOS E2E: Auth, schedule, bookings, orders, cleanup',
       409,'Mismatched booking replay');
     check(await call('POST',prefix+'/bookings',details,'booking-'+randomBytes(12).toString('hex')),
       409,'Overlapping appointment');
+    const availableAfterBooking=await call('GET','/api/v1/public/tenants/'+tid+
+      '/availability?barberId='+barber.data.id+'&serviceId='+service.data.id+'&date='+day);
+    check(availableAfterBooking,200,'Alternate open slot');
+    assert.ok(availableAfterBooking.data.slots.length>2);
+    const alternate=availableAfterBooking.data.slots[0].starts_at;
+    const moved=await call('PATCH','/api/v1/me/bookings/'+booked.data.id+'/reschedule',
+      {startsAt:alternate});
+    check(moved,200,'Customer reprograms own reservation');
+    assert.equal(moved.data.reschedule_count,1);
+    assert.equal(moved.data.starts_at,alternate);
+    check(await call('PATCH','/api/v1/me/bookings/'+booked.data.id+'/reschedule',
+      {startsAt:alternate}),409,'Reject noop reschedule');
+    const anotherTime=availableAfterBooking.data.slots.find(x=>
+      new Date(x.starts_at).getTime()>=new Date(alternate).getTime()+60*60000);
+    assert.ok(anotherTime,'Need non-overlapping slot for staff rescheduling');
+    const changedByStaff=await call('PATCH',prefix+'/appointments/'+booked.data.id+'/reschedule',
+      {startsAt:anotherTime.starts_at});
+    check(changedByStaff,200,'Owner reprograms tenant reservation');
+    assert.equal(changedByStaff.data.reschedule_count,2);
+    const bookingNotices=await call('GET','/api/v1/me/notifications');
+    check(bookingNotices,200,'Read reschedule notices');
+    assert.ok(bookingNotices.data.items.some(n=>n.event_status==='rescheduled-2'),
+      'Customer should see reschedule notification');
+    const blocker=await call('POST',prefix+'/bookings',
+      {...details,startsAt:alternate},'blocker-'+randomBytes(12).toString('hex'));
+    check(blocker,201,'Reserve other occupied slot');
+    check(await call('PATCH','/api/v1/me/bookings/'+booked.data.id+'/reschedule',
+      {startsAt:alternate}),409,'Cannot reschedule into another booked slot');
     check(await call('POST',prefix+'/members',{userId:uid,role:'manager'}),409,'Owner immutability');
     const notification=await call('GET','/api/v1/me/notifications');
     check(notification,200,'Read notifications');
@@ -125,7 +188,11 @@ test('BarberOS E2E: Auth, schedule, bookings, orders, cleanup',
     const options=await call('GET','/api/v1/public/payment-capabilities');
     check(options,200,'Payment capabilities');
     assert.equal(options.data.onlinePayments.enabled,false);
-    assert.equal(options.data.onlinePayments.providerSelected,'wompi');
+    assert.equal(options.data.onlinePayments.providerSelected,null);
+    assert.equal(options.data.platformBilling.providerSelected,'wompi');
+    assert.equal(options.data.platformBilling.scope,'barberos_saas_subscriptions');
+    assert.equal(options.data.platformBilling.enabled,false);
+    assert.equal(options.data.subscriptionBilling.enabled,false);
     const entry=await call('POST',prefix+'/transactions',{type:'income',category:'services',concept:'Test cash sale',amountMinor:10000,paymentMethod:'cash'});
     check(entry,201,'Record cash entry');
     const localDay=new Date().toLocaleDateString('sv-SE',{timeZone:'America/Bogota'});
@@ -147,6 +214,11 @@ test('BarberOS E2E: Auth, schedule, bookings, orders, cleanup',
     console.log('PASS: E2E Auth, scheduling, booking, order, notifications, reports and cleanup');
   }finally{
     let cleanupError=null;
+    if(otherTid){
+      try {await cleanupTestTenant(pool,otherTid);
+        console.log('CLEANUP: second isolated tenant deleted');
+      }catch(e){cleanupError=e;console.error('CLEANUP SECOND TENANT ERROR_CODE='+(e.code||e.name));}
+    }
     if(tid){
       try {
         const removed=await cleanupTestTenant(pool,tid);
@@ -158,6 +230,11 @@ test('BarberOS E2E: Auth, schedule, bookings, orders, cleanup',
       const removed=await admin.auth.admin.deleteUser(uid);
       if(removed.error)cleanupError=cleanupError||removed.error;
       console.log('CLEANUP: temporary auth user '+(removed.error?'FAILED':'deleted'));
+    }
+    if(otherUid){
+      const removed=await admin.auth.admin.deleteUser(otherUid);
+      if(removed.error)cleanupError=cleanupError||removed.error;
+      console.log('CLEANUP: second temporary auth user '+(removed.error?'FAILED':'deleted'));
     }
     await pool.end();
     if(cleanupError)throw cleanupError;

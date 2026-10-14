@@ -6,7 +6,10 @@ import { failure, parseOrThrow } from './security.js';
 // Provider-specific behavior belongs in a future, explicitly approved adapter.
 export const paymentCapabilities = Object.freeze({
   manualPayments: { enabled: true, confirmation: 'staff_attested' },
-  onlinePayments: { enabled: false, providerSelected: 'wompi', providerConnected: false },
+  // Barber shop customer purchases remain wholly separate from SaaS checkout.
+  onlinePayments: { enabled: false, providerSelected: null, providerConnected: false, scope: 'barbershop_orders' },
+  platformBilling: { enabled: false, providerSelected: 'wompi', providerConnected: false,
+    scope: 'barberos_saas_subscriptions', checkoutSurface: 'future_landing_page' },
   subscriptionBilling: { enabled: false },
 });
 

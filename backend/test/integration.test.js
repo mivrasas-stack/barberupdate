@@ -61,7 +61,17 @@ test('BarberOS PostgreSQL integration: isolation, schedules and integrity', {ski
     await rejects(bookingSQL,noAccess,'23514');
     const appointment=await db.query('SELECT id FROM public.appointments WHERE tenant_id=$1',[tenant]);
     const apptId=appointment.rows[0].id;
+    const shifted=await db.query(
+      "UPDATE public.appointments SET starts_at=starts_at+interval '1 hour',ends_at=ends_at+interval '1 hour' WHERE id=$1 RETURNING reschedule_count",[apptId]);
+    assert.equal(shifted.rows[0].reschedule_count,1,'Reschedule counter increments exactly once');
+    const notice=await db.query(
+      "SELECT count(*)::int AS n FROM public.notifications WHERE tenant_id=$1 AND user_id=$2 AND event_status='rescheduled-1'",
+      [tenant,customer]);
+    assert.equal(notice.rows[0].n,1,'Customer is notified about rescheduled appointment');
     await db.query("UPDATE public.appointments SET status='completed' WHERE id=$1",[apptId]);
+    await rejects(
+      "UPDATE public.appointments SET starts_at=starts_at+interval '1 hour',ends_at=ends_at+interval '1 hour' WHERE id=$1",
+      [apptId],'23514');
     await db.query("UPDATE public.appointments SET status='completed' WHERE id=$1",[apptId]);
     const loyalty=await db.query('SELECT points,visits_count FROM public.loyalty_accounts WHERE tenant_id=$1 AND user_id=$2',[tenant,customer]);
     assert.equal(loyalty.rows[0].points,10);

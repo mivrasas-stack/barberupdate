@@ -1,57 +1,60 @@
-# BarberOS — Wompi seleccionado, integración aplazada
+# BarberOS — Wompi para vender BarberOS, integración pospuesta
 
-**Decisión de producto (13 de octubre de 2026):** La pasarela definitiva será Wompi.
-**Estado obligatorio actual:** NO INTEGRAR NI ACTIVAR WOMPI HASTA LA ETAPA DE PRODUCCIÓN.
-**Ámbito:** Solo BarberOS, proyecto Supabase `wrfwhftzaflwhkvkzrjm` y GitHub `mivrasas-stack/barberupdate`. Frontend intacto.
+**Decisión del propietario (octubre 2026):** Wompi se utilizará exclusivamente para que dueños de barberías y profesionales paguen por adquirir y usar el sistema BarberOS desde una landing page futura. NO se utilizará para las reservas, servicios o pedidos que las barberías cobren a sus propios clientes.
 
-## Qué funciona ahora
+**Wompi NO está implementado ni conectado:** no hay checkout, claves de comercio, webhooks, suscripciones cobrables ni enlaces de pago. La landing page y el frontend no se tocan ahora.
 
-- Reservas y agenda NO requieren una compra en línea para reservar.
-- Pedidos e inventario: creación atómica y reserva de existencias; cancelación devuelve stock.
-- El propietario o gerente puede crear **un registro de pago manual pendiente** de un pedido, especificando cantidad y método (efectivo, transferencia o medio offline aceptado).
-- Un propietario o gerente debe confirmar por separado que recibió ese pago: las transferencias necesitan una referencia y el efectivo queda como constancia del operador.
-- La confirmación añade una sola transacción de ingresos a la caja, dentro de la misma transacción PostgreSQL; la clave de idempotencia evita duplicación de registros.
-- Nunca se permite marcar confirmado un importe mayor al total del pedido; la confirmación duplicada es rechazada.
-- Un pedido con dinero confirmado **no se puede cancelar de forma automática**. Antes debe existir un proceso explícito de devolución/reembolso, por seguridad contable.
-- Las suscripciones y sus importes de ejemplo son **no cobrables**: `billing_enabled=false`; los valores 0 almacenados son placeholders y NO significan que se ofrece el servicio gratis.
-- `GET /api/v1/public/payment-capabilities` informa `onlinePayments.enabled=false`, `providerSelected=wompi`, `providerConnected=false`, `subscriptionBilling.enabled=false`.
-- Ningún endpoint de Wompi, credencial del comercio, webhook de cobro, token de tarjeta, checkout ni solicitud HTTP al gateway funciona o existe todavía. No hay cobro real en línea.
-- Sigue prohibido modificar el frontend hasta que finalice el backend y se autorice su integración.
+## Dominios de cobro independientes
 
-## Contratos API (presentes, bajo JWT salvo consulta pública)
+| Ámbito | Quien paga | Cómo funciona hoy | Wompi |
+|---|---|---|---|
+| Operación de barbería | Cliente final paga al negocio | Registro de efectivo/transferencia por personal autorizado, inventario y caja | Nunca |
+| Suscripción BarberOS | Negocio/profesional paga al operador de BarberOS | Planes no cobrables; sin checkout ni renovación | Exclusivamente aquí, en la futura landing page |
 
-- `GET /api/v1/public/payment-capabilities`: características disponibles.
-- `GET /api/v1/tenants/:tenantId/orders/:orderId/payments`: importes y saldo de un pedido, visible para propietario/gerente o su cliente.
-- `POST /api/v1/tenants/:tenantId/orders/:orderId/payments/manual`: genera registro **pendiente**. Cuerpo: `{"amountMinor":12500,"method":"transfer"}`; header obligatorio `Idempotency-Key` (12 a 100 caracteres), acceso propietario/gerente.
-- `POST /api/v1/tenants/:tenantId/payments/:paymentId/confirm-manual`: constancia **verificada manualmente por el personal**, cuerpo `{"reference":"TRX-12345"}`. Transferencias y métodos distintos a efectivo requieren referencia de al menos tres caracteres. Solo propietario/gerente.
-- `POST /api/v1/tenants/:tenantId/payments/:paymentId/void-pending`: anula un registro pendiente, sin movimiento de dinero. Un pago confirmado no puede anularse por este medio.
-- `GET /api/v1/public/plans`: cada plan expone `billing_enabled=false` mientras no existan tarifas y un proveedor activo.
+manual_payments es para PEDIDOS DE PRODUCTOS DE LAS BARBERÍAS, no para cobrar BarberOS.
+subscription_plans y tenant_subscriptions son modelos de la suscripción del software; los importes cero actuales son PLACEHOLDERS, no ofertas comerciales.
 
-Todos los importes del backend se expresan en unidades menores de moneda (`amountMinor`).
-La confirmación manual **no significa** que Wompi, un banco o una red de tarjetas haya aprobado el pago.
+## Contrato actual de capacidades del backend
 
-## Diseño para enchufar Wompi cuando corresponda
+GET /api/v1/public/payment-capabilities:
 
-La integración futura se hará mediante un adaptador **server-side**, sin cambiar la lógica central de reservas y pedidos:
-1. Crear el contrato de pasarela: crear intento de pago, leer estado verificado, confirmar evento, iniciar reembolso, conciliar transacciones, registrar fallos e idempotencia.
-2. Crear tablas de intents/eventos financieros inmutables o extender mediante migración (NO reutilizar `manual_payments` para aparentar una aprobación de Wompi).
-3. Construir checkout con referencia y monto calculados en servidor a partir de la orden; nunca aceptar importes definitivos del navegador.
-4. Configurar las credenciales de Wompi exclusivamente como secretos del servidor y separar **sandbox** y **producción**.
-5. Verificar integridad criptográfica de los eventos antes de cualquier cambio de estado, comprobar referencia, moneda, monto y `transaction_id`, deduplicar eventos y aceptar entregas fuera de orden.
-6. El navegador solo verá estados verificados; nunca estará autorizado a marcar un pago como aprobado.
-7. Activar el flujo únicamente con HTTPS, dominio, monitoreo, pruebas de webhooks/reembolsos, conciliación, política de disputas y autorización explícita del propietario.
-8. Acordar moneda: **Wompi Colombia admite actualmente COP en su API de transacciones**. El SaaS almacena otras monedas para otras regiones; no permitir Wompi en comercios USD/EUR sin reglas comerciales/FX válidas.
-9. Definir precios reales de suscripciones, periodos, prorrateos, expiración, reintentos, comisiones e impuestos antes de habilitar cobro.
+- manualPayments.enabled = true: registros manuales de los comercios.
+- onlinePayments.enabled = false; providerSelected = null; scope = barbershop_orders:
+  no se integra una pasarela para pagos de clientes de barberías.
+- platformBilling.providerSelected = wompi;
+  platformBilling.scope = barberos_saas_subscriptions;
+  platformBilling.checkoutSurface = future_landing_page;
+  platformBilling.enabled = false: proveedor reservado solo para vender BarberOS.
+- subscriptionBilling.enabled = false: sin facturación recurrente.
 
-Documentación oficial consultada al preparar este plan:
-- https://docs.wompi.co/docs/colombia/widget-checkout-web/
-- https://docs.wompi.co/docs/colombia/transacciones/
-- https://docs.wompi.co/docs/colombia/eventos/
+Nunca reutilizar manual_payments o las transacciones de caja de barberías para la contabilidad de la plataforma SaaS. Sus fondos y libros contables son distintos.
 
-Las condiciones y APIs pueden cambiar: releer documentación oficial **cuando se implemente** Wompi. No se almacena ninguna clave de Wompi ahora.
+## APIs operativas sin Wompi
 
-## Fases y límites
+- GET /api/v1/tenants/:tenantId/orders/:orderId/payments
+- POST /api/v1/tenants/:tenantId/orders/:orderId/payments/manual
+- POST /api/v1/tenants/:tenantId/payments/:paymentId/confirm-manual
+- POST /api/v1/tenants/:tenantId/payments/:paymentId/void-pending
 
-- **Backend funcional sin cobros en línea:** reservas, catálogos, inventario, pagos manuales registrados, clientes, empleados, caja, reportes, notificaciones internas.
-- **Fase de lanzamiento comercial:** habilitar Wompi mediante trabajo y pruebas aparte, con definición de precios, HTTPS, protección antifraude, webhooks firmados, conciliación, reembolsos.
-- **La plataforma no debe etiquetarse 100% productiva** mientras queden incompletos disponibilidad 24/7, notificaciones externas, carga, copias verificadas, observabilidad y controles operacionales.
+Estas APIs registran pagos offline de pedidos de los negocios. Una confirmación manual refleja la declaración de su personal, no una confirmación bancaria.
+
+## Implementación de Wompi para la landing page: SOLO FUTURO
+
+No comenzar hasta que el backend esté terminado y el usuario presente la landing page.
+
+1. Acordar precios COP de planes de BarberOS, periodo de prueba, renovación, cambios de plan, facturación, cancelación y reembolsos.
+2. Diseñar checkout exclusivamente para contratar BarberOS, nunca para pagar servicios de barbería.
+3. Crear un ledger financiero separado para pagos de la plataforma, intentos, transacciones, webhooks y suscripciones. Aislar empresas y asegurar idempotencia.
+4. Mantener secretos del comercio únicamente en backend; separar sandbox y producción.
+5. Verificar criptográficamente los eventos y comprobar importe, moneda, referencia, suscripción y transacción antes de habilitar un plan.
+6. Implementar conciliación, fallos, disputas, reembolsos, posible renovación y recuperación. No asumir que Wompi procesa recurrencia automáticamente: revisar capacidades vigentes.
+7. Activar solo con dominio, HTTPS, pruebas integrales, monitoreo y aprobación del propietario.
+
+Documentación oficial para revisar al implementar: https://docs.wompi.co/docs/colombia/
+
+## Continuidad ahora
+
+Seguir con seguridad multiempresa, agenda y reprogramación, inventario, caja,
+notificaciones, Storage, Realtime, pruebas y despliegue. La integración comercial
+de Wompi en la landing page queda fuera del alcance operativo actual por decisión
+expresa del propietario. No declarar el backend terminado hasta probar el resto.
