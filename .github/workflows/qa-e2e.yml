@@ -1,0 +1,127 @@
+name: QA real end-to-end (release gate)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [fix/stabilization-five-priorities-20261014]
+
+permissions:
+  contents: read
+
+jobs:
+  browser-integration:
+    if: github.ref_name == 'fix/stabilization-five-priorities-20261014'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      SUPABASE_URL: https://wrfwhftzaflwhkvkzrjm.supabase.co
+      SUPABASE_PUBLISHABLE_KEY: sb_publishable_erynODEgAENb4ZR7HfkxrA_Lm70A8PE
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      DATABASE_URL: ${{ secrets.QA_DATABASE_URL }}
+      ADMIN_DATABASE_URL: ${{ secrets.QA_ADMIN_DATABASE_URL }}
+      VITE_SUPABASE_URL: https://wrfwhftzaflwhkvkzrjm.supabase.co
+      VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_erynODEgAENb4ZR7HfkxrA_Lm70A8PE
+      VITE_BACKEND_MODE: live
+      VITE_API_BASE_URL: /api/v1
+      CORS_ORIGINS: http://127.0.0.1:3001,http://localhost:3001
+      PUBLIC_API_PORT: '8188'
+      RATE_LIMIT_PER_MINUTE: '900' # Only for synthetic E2E clients; production default remains 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Announce QA-only validation
+        run: echo 'Checking configured QA secrets and isolated test environment; no WhatsApp delivery or production deployment'
+      - name: Verify SECRET_BASE is available without reading its value
+        env:
+          SECRET_BASE_EXISTS: ${{ secrets.SECRET_BASE != '' }}
+        shell: bash
+        run: |
+          if [ "$SECRET_BASE_EXISTS" = "true" ]; then
+            echo "SECRET_BASE is available to GitHub Actions."
+          else
+            echo "::warning::SECRET_BASE is not configured or is unavailable to this workflow."
+          fi
+      - name: Check isolated QA prerequisites
+        id: qa
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=0
+          for key in SUPABASE_URL SUPABASE_PUBLISHABLE_KEY SUPABASE_SERVICE_ROLE_KEY DATABASE_URL ADMIN_DATABASE_URL; do
+            if test -z "${!key}"; then
+              echo "::error::QA secret missing: $key"
+              missing=1
+            fi
+          done
+          if test "$missing" -ne 0; then
+            echo "Set the listed private secrets in repository Actions settings, then rerun QA."
+            exit 1
+          fi
+          test "$SUPABASE_URL" = "https://wrfwhftzaflwhkvkzrjm.supabase.co" || { echo "Refusing: wrong Supabase QA project"; exit 1; }
+          [[ "$DATABASE_URL" == *wrfwhftzaflwhkvkzrjm* ]] || { echo "Refusing: API database not QA project"; exit 1; }
+          [[ "$ADMIN_DATABASE_URL" == *wrfwhftzaflwhkvkzrjm* ]] || { echo "Refusing: admin database not QA project"; exit 1; }
+          echo "REDIS_PASSWORD=$(openssl rand -hex 20)" >> "$GITHUB_ENV"
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+      - if: steps.qa.outputs.ready == 'true'
+        run: npm ci
+      - if: steps.qa.outputs.ready == 'true'
+        run: npm ci
+        working-directory: backend
+      - if: steps.qa.outputs.ready == 'true'
+        name: Validate PostgreSQL URLs without exposing their contents
+        run: |
+          node <<'NODE'
+          for (const name of ['DATABASE_URL','ADMIN_DATABASE_URL']) {
+            const raw=process.env[name] || '';
+            let reason='';
+            if (/^\s*(?:QA_)?(?:DATABASE_URL|ADMIN_DATABASE_URL)\s*[:=]/i.test(raw)) reason='VALUE_INCLUDES_SECRET_NAME';
+            else if (!/^postgres(?:ql)?:\/\//i.test(raw.trim())) reason='INCORRECT_POSTGRESQL_PREFIX';
+            else {
+              try {
+                const u=new URL(raw.trim());
+                if(!u.hostname) reason='DATABASE_HOST_MISSING';
+                else if(!u.username) reason='DATABASE_USERNAME_MISSING';
+                else if(!u.password) reason='DATABASE_PASSWORD_MISSING';
+                else if(!u.pathname || u.pathname==='/') reason='DATABASE_NAME_MISSING';
+                else if(/YOUR-PASSWORD|TU_CONTRASEÑA|PASSWORD_HERE/i.test(u.password)) reason='PASSWORD_PLACEHOLDER_NOT_REPLACED';
+              } catch { reason='MALFORMED_DATABASE_URI'; }
+            }
+            if(reason) { console.error('::error::'+name+' format diagnosis: '+reason); process.exitCode=1; }
+            else console.log(name+' format OK');
+          }
+          NODE
+      - if: steps.qa.outputs.ready == 'true'
+        name: Start isolated test API and Redis
+        run: docker compose -f infra/compose.yaml up -d --build --wait
+      - if: steps.qa.outputs.ready == 'true'
+        name: Wait for backend readiness
+        shell: bash
+        run: |
+          for i in $(seq 1 15); do
+            if curl --fail --silent --show-error --connect-timeout 2 --max-time 5 http://127.0.0.1:8188/api/v1/health/ready >/dev/null 2>&1; then
+              echo "API and PostgreSQL/Redis readiness verified"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::Backend never became ready; collecting error codes only."
+          docker compose -f infra/compose.yaml ps
+          docker compose -f infra/compose.yaml exec -T api1 node --input-type=module -e 'import pg from "pg"; const p=new pg.Pool({connectionString:process.env.DATABASE_URL,connectionTimeoutMillis:3000}); try { await p.query("SELECT 1"); console.log("PostgreSQL connection: OK"); } catch(e) { console.error("PostgreSQL diagnostic:",e.code || (/password|authentication|SASL|SCRAM/i.test(e.message)?"AUTHENTICATION":/SSL|TLS|certificate/i.test(e.message)?"TLS":/timeout|connect|socket/i.test(e.message)?"NETWORK":/invalid|protocol|parse|URL/i.test(e.message)?"URL_FORMAT":"UNCLASSIFIED")); } finally { await p.end(); }' || true
+          exit 1
+      - if: steps.qa.outputs.ready == 'true'
+        run: npx playwright install --with-deps chromium
+      - if: steps.qa.outputs.ready == 'true'
+        name: Exercise live roles, QR, bookings, inventory and image persistence
+        run: npx playwright test tests/e2e/connection.spec.js --config=playwright.local3001.config.ts --reporter=line
+      - if: failure() && steps.qa.outputs.ready == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-playwright-failures
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+      - if: always() && steps.qa.outputs.ready == 'true'
+        run: docker compose -f infra/compose.yaml down --volumes || true

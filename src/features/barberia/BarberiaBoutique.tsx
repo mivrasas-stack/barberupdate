@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { barberStore } from '../../services/store';
+import { ImageUploader } from './ImageUploader';
 import { formatCurrency } from '../../utils/formatters';
 import { Product, ProductCategory } from '../../types';
-import {isLiveBackend, addProduct, adjustStock, setProductVisibility, refreshLiveData} from '../../services/liveBackend';
+import {isLiveBackend, addProduct, adjustStock, setProductVisibility, refreshLiveData, backendRequest} from '../../services/liveBackend';
 import {
   ShoppingBag,
   Sparkles,
@@ -34,7 +35,7 @@ export const BarberiaBoutique: React.FC = () => {
   // Form states for New Product
   const [newProdName, setNewProdName] = useState('');
   const [newProdDesc, setNewProdDesc] = useState('');
-  const [newProdPhoto, setNewProdPhoto] = useState('https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=200&auto=format&fit=crop&q=80');
+  const [newProdPhoto, setNewProdPhoto] = useState('');
   const [newProdPrice, setNewProdPrice] = useState(50000);
   const [newProdCost, setNewProdCost] = useState(25000);
   const [newProdStock, setNewProdStock] = useState(10);
@@ -88,8 +89,18 @@ export const BarberiaBoutique: React.FC = () => {
     setNewProdDesc('');
   };
 
+  const updateProductPhoto=async(id:string,url:string)=>{
+    try{
+      await backendRequest('/tenants/'+shopId+'/products/'+id+'/photo',{method:'PATCH',body:JSON.stringify({url})});
+      await refreshLiveData();
+      addToast('Imagen del producto actualizada','success');
+    }catch(e){addToast(e instanceof Error?e.message:'No se guardó la imagen','error');}
+  };
+
   const handleAdjustStock = async (isAddition: boolean) => {
     if (!adjustingProduct) return;
+    if(!Number.isInteger(adjustQuantity)||adjustQuantity<1||adjustQuantity>100000){addToast('Introduce una cantidad entera de 1 a 100.000 unidades','error');return;}
+    if(!adjustReason.trim()){addToast('Indica el motivo del movimiento de inventario','error');return;}
     if(isLiveBackend){
       try{
         const delta=isAddition?adjustQuantity:-adjustQuantity;
@@ -239,7 +250,7 @@ export const BarberiaBoutique: React.FC = () => {
               <div>
                 <div className="flex items-start gap-3 mb-3">
                   <img
-                    src={prod.photo}
+                    src={prod.photo || '/images/placeholder.svg'} onError={e=>{if(!e.currentTarget.src.endsWith('/images/placeholder.svg'))e.currentTarget.src='/images/placeholder.svg';}}
                     alt={prod.name}
                     className="w-16 h-16 rounded-xl object-cover border border-neutral-700 shrink-0"
                   />
@@ -262,6 +273,7 @@ export const BarberiaBoutique: React.FC = () => {
                   </div>
                 </div>
 
+                {isLiveBackend && <div className="mb-3"><ImageUploader tenant={shopId} category="products" label="Reemplazar imagen" onUploaded={url=>void updateProductPhoto(prod.id,url)}/></div>}
                 <div className="p-3 bg-[#181818] rounded-xl border border-neutral-800 space-y-1.5 text-xs">
                   <div className="flex items-center justify-between">
                     <span className="text-neutral-400">Precio Venta:</span>
@@ -384,6 +396,8 @@ export const BarberiaBoutique: React.FC = () => {
             </div>
 
             <form onSubmit={handleCreateProduct} className="py-4 space-y-3 text-xs">
+              {isLiveBackend && <ImageUploader tenant={shopId} category="products" onUploaded={setNewProdPhoto} label="Subir imagen del producto"/>}
+              {newProdPhoto && <img src={newProdPhoto} onError={e=>{if(!e.currentTarget.src.endsWith('/images/placeholder.svg'))e.currentTarget.src='/images/placeholder.svg';}} alt="Vista previa del producto" className="h-24 object-contain"/>}
               <div>
                 <label className="text-neutral-400 block mb-1">Nombre Comercial del Producto</label>
                 <input

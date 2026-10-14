@@ -2,17 +2,35 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Barber } from '../../types';
 import { barberStore } from '../../services/store';
+import { ImageUploader } from './ImageUploader';
+import { BarberInvites } from './BarberInvites';
+import {backendRequest,isLiveBackend,refreshLiveData} from '../../services/liveBackend';
 import { Scissors, Plus, Star, Phone, Mail, Clock, Calendar, Image, X, Check, Trash2 } from 'lucide-react';
 
 export const BarberiaBarberos: React.FC = () => {
   const { currentShop, state, addToast } = useApp();
   const [selectedBarber, setSelectedBarber] = useState<Barber | null>(null);
   const [newPhotoUrl, setNewPhotoUrl] = useState('');
+  const [showInvites, setShowInvites] = useState(false);
 
   const shopId = currentShop?.id || 'shop-1';
   const barbers = state.barbers.filter(b => b.businessId === shopId);
 
-  const handleAddPhoto = () => {
+  const updatePortrait=async(barberId:string,url:string)=>{
+    try{
+      await backendRequest('/tenants/'+shopId+'/barbers/'+barberId+'/photo',{method:'PATCH',body:JSON.stringify({url})});
+      await refreshLiveData();
+      addToast('Fotografía del barbero actualizada','success');
+    }catch(e){addToast(e instanceof Error?e.message:'No se guardó el retrato','error');}
+  };
+
+  const handleAddPhoto = async (photoUrl=newPhotoUrl) => {
+    if(isLiveBackend){
+      if(!selectedBarber||!photoUrl)return;
+      try{await backendRequest('/tenants/'+shopId+'/barbers/'+selectedBarber.id+'/gallery',{method:'PATCH',body:JSON.stringify({photos:[...selectedBarber.portfolio,photoUrl]})});await refreshLiveData();setSelectedBarber({...selectedBarber,portfolio:[...selectedBarber.portfolio,photoUrl]});setNewPhotoUrl('');addToast('Portafolio actualizado','success');}
+      catch(e){addToast(e instanceof Error?e.message:'No se guardó la foto','error');}
+      return;
+    }
     if (!selectedBarber || !newPhotoUrl) return;
     const res = barberStore.addPortfolioPhoto('barber', selectedBarber.id, newPhotoUrl);
     if (!res.success) {
@@ -26,7 +44,14 @@ export const BarberiaBarberos: React.FC = () => {
     if (updated) setSelectedBarber({ ...updated });
   };
 
-  const handleRemovePhoto = (index: number) => {
+  const handleRemovePhoto = async (index: number) => {
+    if(isLiveBackend){
+      if(!selectedBarber)return;
+      const photos=selectedBarber.portfolio.filter((_,i)=>i!==index);
+      try{await backendRequest('/tenants/'+shopId+'/barbers/'+selectedBarber.id+'/gallery',{method:'PATCH',body:JSON.stringify({photos})});await refreshLiveData();setSelectedBarber({...selectedBarber,portfolio:photos});addToast('Fotografía eliminada','success');}
+      catch(e){addToast(e instanceof Error?e.message:'No se eliminó la foto','error');}
+      return;
+    }
     if (!selectedBarber) return;
     barberStore.removePortfolioPhoto('barber', selectedBarber.id, index);
     addToast('Fotografía eliminada del portafolio', 'info');
@@ -46,7 +71,9 @@ export const BarberiaBarberos: React.FC = () => {
             Gestiona comisiones, horarios de trabajo, especialidades y portafolios fotográficos
           </p>
         </div>
+        {isLiveBackend && <button type="button" onClick={()=>setShowInvites(value=>!value)} className="rounded-xl bg-[var(--gold-primary)] text-black font-bold px-4 py-2 text-sm">{showInvites?'Ocultar invitaciones':'Añadir barbero'}</button>}
       </div>
+      {showInvites && isLiveBackend && <BarberInvites/>}
 
       {/* Barbers Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -61,7 +88,7 @@ export const BarberiaBarberos: React.FC = () => {
               <div>
                 <div className="flex items-start gap-4 mb-4">
                   <img
-                    src={barber.photo}
+                    src={barber.photo || '/images/placeholder.svg'} onError={e=>{if(!e.currentTarget.src.endsWith('/images/placeholder.svg'))e.currentTarget.src='/images/placeholder.svg';}}
                     alt={barber.name}
                     className="w-16 h-16 rounded-xl object-cover border-2 border-[var(--gold-primary)] shrink-0"
                   />
@@ -80,6 +107,7 @@ export const BarberiaBarberos: React.FC = () => {
                   </div>
                 </div>
 
+                {isLiveBackend && <div className="mb-3"><ImageUploader tenant={shopId} category="barber" label="Actualizar foto de perfil" onUploaded={url=>void updatePortrait(barber.id,url)}/></div>}
                 <div className="p-3 bg-[#181818] rounded-xl border border-neutral-800 space-y-2 text-xs">
                   <div className="flex items-center justify-between text-neutral-300">
                     <span className="text-neutral-500">Comisión por Servicio:</span>
@@ -104,7 +132,7 @@ export const BarberiaBarberos: React.FC = () => {
                   {barber.portfolio.map((img, idx) => (
                     <img
                       key={idx}
-                      src={img}
+                      src={img} onError={e=>{if(!e.currentTarget.src.endsWith('/images/placeholder.svg'))e.currentTarget.src='/images/placeholder.svg';}}
                       alt="Trabajo"
                       className="w-12 h-12 rounded-lg object-cover border border-neutral-700 shrink-0"
                     />
@@ -154,7 +182,8 @@ export const BarberiaBarberos: React.FC = () => {
               {selectedBarber.portfolio.length < 10 ? (
                 <div className="p-3 bg-[#181818] rounded-xl border border-neutral-800 space-y-2">
                   <span className="text-neutral-300 font-semibold block">Subir enlace de fotografía de trabajo realizado:</span>
-                  <div className="flex gap-2">
+                  {isLiveBackend && <ImageUploader tenant={shopId} category="barber" onUploaded={u=>void handleAddPhoto(u)}/>}
+                  {!isLiveBackend && <div className="flex gap-2">
                     <input
                       type="url"
                       value={newPhotoUrl}
@@ -163,12 +192,12 @@ export const BarberiaBarberos: React.FC = () => {
                       className="flex-1 bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-1.5 text-white"
                     />
                     <button
-                      onClick={handleAddPhoto}
+                      onClick={()=>void handleAddPhoto()}
                       className="px-4 py-1.5 rounded-lg bg-[var(--gold-primary)] text-black font-bold hover:bg-[var(--gold-hover)]"
                     >
                       Añadir
                     </button>
-                  </div>
+                  </div>}
                 </div>
               ) : (
                 <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300">
@@ -180,9 +209,9 @@ export const BarberiaBarberos: React.FC = () => {
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 max-h-80 overflow-y-auto pr-1">
                 {selectedBarber.portfolio.map((img, i) => (
                   <div key={i} className="relative group rounded-xl overflow-hidden border border-neutral-700 aspect-square bg-neutral-900">
-                    <img src={img} alt={`Portafolio ${i + 1}`} className="w-full h-full object-cover" />
+                    <img src={img} onError={e=>{if(!e.currentTarget.src.endsWith('/images/placeholder.svg'))e.currentTarget.src='/images/placeholder.svg';}} alt={`Portafolio ${i + 1}`} className="w-full h-full object-cover" />
                     <button
-                      onClick={() => handleRemovePhoto(i)}
+                      onClick={() => void handleRemovePhoto(i)}
                       className="absolute top-1.5 right-1.5 p-1 rounded-md bg-black/70 text-red-400 hover:bg-red-500 hover:text-white transition-colors"
                       title="Eliminar imagen"
                     >

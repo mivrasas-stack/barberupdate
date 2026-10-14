@@ -36,7 +36,7 @@ export async function registerRoutes(app,{config,db,security}) {
       )).rows;
     });
     routes.get('/api/v1/tenants',async req=>{
-      const result=await db.query('SELECT t.id,t.name,t.slug,t.currency,t.time_zone,t.status,t.business_kind,m.role FROM public.tenants t JOIN public.tenant_members m ON m.tenant_id=t.id WHERE m.user_id=$1 ORDER BY t.created_at DESC LIMIT 100',[req.actor.id]);
+      const result=await db.query('SELECT t.*,m.role FROM public.tenants t JOIN public.tenant_members m ON m.tenant_id=t.id WHERE m.user_id=$1 ORDER BY t.created_at DESC LIMIT 100',[req.actor.id]);
       return result.rows;
     });
     routes.post('/api/v1/tenants',async (req,reply)=>{
@@ -67,7 +67,7 @@ export async function registerRoutes(app,{config,db,security}) {
     routes.get('/api/v1/tenants/:tenantId/barbers',async req=>{
       const tenant=parseOrThrow(id,req.params.tenantId);
       await requireTenant(db,tenant,req.actor.id);
-      return (await db.query('SELECT id,tenant_id,slug,name,bio,status,commission_rate,user_id,created_at FROM public.barbers WHERE tenant_id=$1 ORDER BY name LIMIT 200',[tenant])).rows;
+      return (await db.query('SELECT * FROM public.barbers WHERE tenant_id=$1 ORDER BY name LIMIT 200',[tenant])).rows;
     });
     routes.post('/api/v1/tenants/:tenantId/barbers',async (req,reply)=>{
       const tenant=parseOrThrow(id,req.params.tenantId);
@@ -231,7 +231,7 @@ export async function registerRoutes(app,{config,db,security}) {
   });
   app.get('/api/v1/public/tenants',async req=>{
     await limited(req);if(!db)failure(503,'Base de datos no configurada');
-    return (await db.query("SELECT id,name,slug,currency,time_zone,business_kind FROM public.tenants WHERE status='active' ORDER BY name LIMIT 100")).rows;
+    return (await db.query("SELECT id,name,slug,currency,time_zone,business_kind,logo_url,cover_url,tagline,address,city,phone,portfolio FROM public.tenants WHERE status='active' ORDER BY name LIMIT 100")).rows;
   });
   app.get('/api/v1/public/tenants/:tenantId/products',async req=>{
     await limited(req);if(!db)failure(503,'Base de datos no configurada');
@@ -245,7 +245,7 @@ export async function registerRoutes(app,{config,db,security}) {
     if(!t.rowCount) failure(404,'Negocio no encontrado');
     const tenant=t.rows[0];
     const [barbers,services]=await Promise.all([
-      db.query("SELECT id,slug,name,bio FROM public.barbers WHERE tenant_id=$1 AND status='active' ORDER BY name LIMIT 100",[tenant.id]),
+      db.query("SELECT id,slug,name,bio,photo_url,portfolio FROM public.barbers WHERE tenant_id=$1 AND status='active' ORDER BY name LIMIT 100",[tenant.id]),
       db.query("SELECT id,name,description,price_minor,duration_minutes,category FROM public.services WHERE tenant_id=$1 AND is_active=true ORDER BY name LIMIT 100",[tenant.id])
     ]);
     return {tenant,barbers:barbers.rows,services:services.rows};

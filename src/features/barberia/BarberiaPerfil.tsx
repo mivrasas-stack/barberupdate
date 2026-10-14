@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { BarberInvites } from './BarberInvites';
+import { ImageUploader } from './ImageUploader';
+import {backendRequest,isLiveBackend,refreshLiveData} from '../../services/liveBackend';
 import { barberStore } from '../../services/store';
 import { Store, MapPin, Phone, Mail, Instagram, Clock, Image, Trash2, Plus, Star, Save } from 'lucide-react';
 
@@ -16,7 +18,20 @@ export const BarberiaPerfil: React.FC = () => {
   const [formCity, setFormCity] = useState(shop.city);
   const [formPhone, setFormPhone] = useState(shop.phone);
 
-  const handleAddPhoto = () => {
+  const uploadBranding = async (kind:'logo'|'cover',url:string) => {
+    try{
+      await backendRequest('/tenants/'+shop.id+'/branding',{method:'PATCH',body:JSON.stringify({kind,url})});
+      await refreshLiveData();
+      addToast('Imagen comercial actualizada','success');
+    }catch(e){addToast(e instanceof Error?e.message:'No se pudo guardar la imagen','error');}
+  };
+  const handleAddPhoto = async (photoUrl=photoInput) => {
+    if(isLiveBackend){
+      if(!photoUrl)return;
+      try{await backendRequest('/tenants/'+shop.id+'/gallery',{method:'PATCH',body:JSON.stringify({photos:[...shop.portfolio,photoUrl]})});await refreshLiveData();setPhotoInput('');addToast('Fotografía guardada','success');}
+      catch(e){addToast(e instanceof Error?e.message:'Error al guardar fotografía','error');}
+      return;
+    }
     if (!photoInput) return;
     const res = barberStore.addPortfolioPhoto('barbershop', shop.id, photoInput);
     if (!res.success) {
@@ -27,12 +42,23 @@ export const BarberiaPerfil: React.FC = () => {
     setPhotoInput('');
   };
 
-  const handleRemovePhoto = (index: number) => {
+  const handleRemovePhoto = async (index: number) => {
+    if(isLiveBackend){
+      try{await backendRequest('/tenants/'+shop.id+'/gallery',{method:'PATCH',body:JSON.stringify({photos:shop.portfolio.filter((_,i)=>i!==index)})});await refreshLiveData();addToast('Fotografía eliminada','success');}
+      catch(e){addToast(e instanceof Error?e.message:'Error al eliminar fotografía','error');}
+      return;
+    }
     barberStore.removePortfolioPhoto('barbershop', shop.id, index);
     addToast('Fotografía removida', 'info');
   };
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    if(isLiveBackend){
+      e.preventDefault();
+      try{await backendRequest('/tenants/'+shop.id+'/profile',{method:'PATCH',body:JSON.stringify({name:formName,tagline:formTagline,address:formAddress,city:formCity,phone:formPhone})});await refreshLiveData();setIsEditing(false);addToast('Perfil comercial guardado','success');}
+      catch(e){addToast(e instanceof Error?e.message:'No se guardó el perfil','error');}
+      return;
+    }
     e.preventDefault();
     shop.name = formName;
     shop.tagline = formTagline;
@@ -46,6 +72,13 @@ export const BarberiaPerfil: React.FC = () => {
   return (
     <div className="space-y-6">
       <BarberInvites/>
+      {isLiveBackend && <div className="rounded-2xl bg-[#141414] border border-neutral-700 p-4 space-y-3">
+        <h2 className="font-semibold text-sm text-white">Imágenes de identidad comercial</h2>
+        <div className="flex flex-wrap gap-5">
+          <div><p className="text-xs text-neutral-400 mb-2">Logotipo</p><ImageUploader tenant={shop.id} category="shop" label="Subir logotipo" onUploaded={url=>void uploadBranding('logo',url)}/></div>
+          <div><p className="text-xs text-neutral-400 mb-2">Portada</p><ImageUploader tenant={shop.id} category="shop" label="Subir portada" onUploaded={url=>void uploadBranding('cover',url)}/></div>
+        </div>
+      </div>}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#242424]">
         <div>
           <span className="text-xs font-semibold uppercase tracking-wider text-[var(--gold-primary)]">
@@ -68,14 +101,14 @@ export const BarberiaPerfil: React.FC = () => {
       {/* Cover & Brand Lockup */}
       <div className="relative rounded-2xl overflow-hidden border border-[#262626] bg-[#141414]">
         <div className="h-44 w-full bg-neutral-900 relative">
-          <img src={shop.coverImage} alt={shop.name} className="w-full h-full object-cover" />
+          <img src={shop.coverImage || '/images/placeholder.svg'} onError={e=>{if(!e.currentTarget.src.endsWith('/images/placeholder.svg'))e.currentTarget.src='/images/placeholder.svg';}} alt={shop.name} className="w-full h-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-t from-[#141414] via-[#141414]/30 to-transparent" />
         </div>
 
         <div className="p-6 pt-0 relative -mt-10 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div className="flex items-end gap-4">
             <img
-              src={shop.logo}
+              src={shop.logo || '/images/placeholder.svg'} onError={e=>{if(!e.currentTarget.src.endsWith('/images/placeholder.svg'))e.currentTarget.src='/images/placeholder.svg';}}
               alt={shop.name}
               className="w-20 h-20 rounded-2xl object-cover border-4 border-[#141414] shadow-2xl"
             />
@@ -173,7 +206,9 @@ export const BarberiaPerfil: React.FC = () => {
         </div>
 
         {shop.portfolio.length < 10 ? (
-          <div className="flex gap-2 text-xs">
+          <div className="space-y-2 text-xs">
+            {isLiveBackend && <ImageUploader tenant={shop.id} category="shop" onUploaded={u=>void handleAddPhoto(u)}/>}
+            {!isLiveBackend && <div className="flex gap-2">
             <input
               type="url"
               value={photoInput}
@@ -182,11 +217,12 @@ export const BarberiaPerfil: React.FC = () => {
               className="flex-1 bg-[#181818] border border-[#2a2a2a] rounded-xl px-3 py-2 text-white"
             />
             <button
-              onClick={handleAddPhoto}
+              onClick={()=>void handleAddPhoto()}
               className="px-4 py-2 rounded-xl bg-[var(--gold-primary)] text-black font-bold hover:bg-[var(--gold-hover)]"
             >
               Añadir Foto
             </button>
+            </div>}
           </div>
         ) : (
           <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-300">
@@ -198,9 +234,9 @@ export const BarberiaPerfil: React.FC = () => {
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           {shop.portfolio.map((img, i) => (
             <div key={i} className="relative group rounded-xl overflow-hidden border border-neutral-800 aspect-square bg-neutral-900">
-              <img src={img} alt={`Foto ${i + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+              <img src={img} onError={e=>{if(!e.currentTarget.src.endsWith('/images/placeholder.svg'))e.currentTarget.src='/images/placeholder.svg';}} alt={`Foto ${i + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
               <button
-                onClick={() => handleRemovePhoto(i)}
+                onClick={() => void handleRemovePhoto(i)}
                 className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/70 text-red-400 hover:bg-red-500 hover:text-white transition-colors"
                 title="Eliminar foto"
               >
