@@ -57,6 +57,7 @@ export interface Barbershop {
 
 export interface Barber {
   id: string;
+  userId?: string;
   businessId?: string; // If null/empty, independent
   slug: string;
   name: string;

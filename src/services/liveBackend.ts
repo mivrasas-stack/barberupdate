@@ -138,7 +138,7 @@ export function mapBarber(r:Db,tenant:string):Barber{
   const portfolioRaw=val(r,'portfolio');
   const portfolio=Array.isArray(portfolioRaw)?portfolioRaw.map(x=>String(x)):[];
   return {
-    id:txt(r,'id'),businessId:tenant,slug:txt(r,'slug'),
+    id:txt(r,'id'),userId:txt(r,'user_id'),businessId:tenant,slug:txt(r,'slug'),
     name:txt(r,'name'),photo:txt(r,'photo_url',''),phone:'',email:'',specialties:[],
     bio:txt(r,'bio'),commissionRate:num(r,'commission_rate'),
     status:txt(r,'status','active')==='active'?'active':'inactive',
@@ -370,7 +370,7 @@ export async function getAvailabilitySlots(
   }
 }
 
-export async function addBooking(tenant:string,data:{barberId:string;serviceId:string;date:string;startTime:string;customerName:string;customerPhone:string;notes?:string},zone='America/Bogota'){
+export async function addBooking(tenant:string,data:{barberId:string;serviceId:string;date:string;startTime:string;customerName:string;customerPhone:string;whatsappOptIn?:boolean;notes?:string},zone='America/Bogota'){
  // Obtain a server-computed instant instead of constructing a misleading UTC timestamp in the browser.
  const slots=await fetch(apiOrigin+'/public/tenants/'+encodeURIComponent(tenant)+
    '/availability?barberId='+encodeURIComponent(data.barberId)+
@@ -382,6 +382,7 @@ export async function addBooking(tenant:string,data:{barberId:string;serviceId:s
  return backendRequest<Db>('/tenants/'+tenant+'/bookings',{method:'POST',
    body:JSON.stringify({barberId:data.barberId,serviceId:data.serviceId,
      startsAt:selected.starts_at,customerName:data.customerName,customerPhone:data.customerPhone,
+     whatsappOptIn:Boolean(data.whatsappOptIn),
      notes:data.notes||''})},idempotencyKey);
 }
 export async function updateBooking(tenant:string,id:string,status:string){
