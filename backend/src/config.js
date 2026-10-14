@@ -16,5 +16,13 @@ export function configFromEnv(env = process.env) {
     origins,
     rateLimit: Math.max(10, Number(env.RATE_LIMIT_PER_MINUTE || 90)),
     mediaBucket: env.MEDIA_BUCKET || 'barberos-images',
+    whatsapp: {
+      enabled: env.WHATSAPP_SEND_ENABLED === 'true',
+      accessToken: env.WHATSAPP_ACCESS_TOKEN || '',
+      phoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID || '',
+      graphVersion: env.WHATSAPP_GRAPH_VERSION || 'v23.0',
+      templateName: env.WHATSAPP_TEMPLATE_NAME || 'barberos_booking_confirmation',
+      templateLanguage: env.WHATSAPP_TEMPLATE_LANGUAGE || 'es',
+    },
   };
 }
