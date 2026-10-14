@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { BarberInvites } from './BarberInvites';
+import { ImageUploader } from './ImageUploader';
+import {backendRequest,isLiveBackend,refreshLiveData} from '../../services/liveBackend';
 import { barberStore } from '../../services/store';
 import { Store, MapPin, Phone, Mail, Instagram, Clock, Image, Trash2, Plus, Star, Save } from 'lucide-react';
 
@@ -16,7 +18,13 @@ export const BarberiaPerfil: React.FC = () => {
   const [formCity, setFormCity] = useState(shop.city);
   const [formPhone, setFormPhone] = useState(shop.phone);
 
-  const handleAddPhoto = () => {
+  const handleAddPhoto = async (photoUrl=photoInput) => {
+    if(isLiveBackend){
+      if(!photoUrl)return;
+      try{await backendRequest('/tenants/'+shop.id+'/gallery',{method:'PATCH',body:JSON.stringify({photos:[...shop.portfolio,photoUrl]})});await refreshLiveData();setPhotoInput('');addToast('Fotografía guardada','success');}
+      catch(e){addToast(e instanceof Error?e.message:'Error al guardar fotografía','error');}
+      return;
+    }
     if (!photoInput) return;
     const res = barberStore.addPortfolioPhoto('barbershop', shop.id, photoInput);
     if (!res.success) {
@@ -27,12 +35,23 @@ export const BarberiaPerfil: React.FC = () => {
     setPhotoInput('');
   };
 
-  const handleRemovePhoto = (index: number) => {
+  const handleRemovePhoto = async (index: number) => {
+    if(isLiveBackend){
+      try{await backendRequest('/tenants/'+shop.id+'/gallery',{method:'PATCH',body:JSON.stringify({photos:shop.portfolio.filter((_,i)=>i!==index)})});await refreshLiveData();addToast('Fotografía eliminada','success');}
+      catch(e){addToast(e instanceof Error?e.message:'Error al eliminar fotografía','error');}
+      return;
+    }
     barberStore.removePortfolioPhoto('barbershop', shop.id, index);
     addToast('Fotografía removida', 'info');
   };
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    if(isLiveBackend){
+      e.preventDefault();
+      try{await backendRequest('/tenants/'+shop.id+'/profile',{method:'PATCH',body:JSON.stringify({name:formName,tagline:formTagline,address:formAddress,city:formCity,phone:formPhone})});await refreshLiveData();setIsEditing(false);addToast('Perfil comercial guardado','success');}
+      catch(e){addToast(e instanceof Error?e.message:'No se guardó el perfil','error');}
+      return;
+    }
     e.preventDefault();
     shop.name = formName;
     shop.tagline = formTagline;
@@ -173,7 +192,9 @@ export const BarberiaPerfil: React.FC = () => {
         </div>
 
         {shop.portfolio.length < 10 ? (
-          <div className="flex gap-2 text-xs">
+          <div className="space-y-2 text-xs">
+            {isLiveBackend && <ImageUploader tenant={shop.id} category="shop" onUploaded={u=>void handleAddPhoto(u)}/>}
+            {!isLiveBackend && <div className="flex gap-2">
             <input
               type="url"
               value={photoInput}
@@ -182,11 +203,12 @@ export const BarberiaPerfil: React.FC = () => {
               className="flex-1 bg-[#181818] border border-[#2a2a2a] rounded-xl px-3 py-2 text-white"
             />
             <button
-              onClick={handleAddPhoto}
+              onClick={()=>void handleAddPhoto()}
               className="px-4 py-2 rounded-xl bg-[var(--gold-primary)] text-black font-bold hover:bg-[var(--gold-hover)]"
             >
               Añadir Foto
             </button>
+            </div>}
           </div>
         ) : (
           <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-300">
@@ -200,7 +222,7 @@ export const BarberiaPerfil: React.FC = () => {
             <div key={i} className="relative group rounded-xl overflow-hidden border border-neutral-800 aspect-square bg-neutral-900">
               <img src={img} alt={`Foto ${i + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
               <button
-                onClick={() => handleRemovePhoto(i)}
+                onClick={() => void handleRemovePhoto(i)}
                 className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/70 text-red-400 hover:bg-red-500 hover:text-white transition-colors"
                 title="Eliminar foto"
               >
