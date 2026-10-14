@@ -1,6 +1,7 @@
 import Redis from 'ioredis';
 import { configFromEnv } from './config.js';
 import { createDb } from './db.js';
+import { processWhatsAppJobs } from './whatsapp-dispatch.js';
 const config=configFromEnv(process.env);
 if(!config.databaseUrl || !config.redisUrl) throw new Error('Worker requires DATABASE_URL and REDIS_URL');
 const db=createDb(config);
@@ -28,6 +29,7 @@ try {
   while(running) {
     try {
       await deliverBatch();
+      if(config.whatsappSendEnabled)await processWhatsAppJobs({db,config});
       if(++ticks%600===0){
         // 30-day retention; bounded deletion avoids excessive database work.
         await db.query("WITH expired AS (SELECT id FROM public.outbox_events WHERE processed_at<now()-interval '30 days' ORDER BY processed_at LIMIT 500) DELETE FROM public.outbox_events e USING expired x WHERE e.id=x.id");
