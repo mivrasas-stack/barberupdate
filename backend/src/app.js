@@ -13,6 +13,7 @@ import { registerPaymentsRoutes } from './payments.js';
 import { registerClosureRoutes } from './closures.js';
 import { registerCustomerLinkRoutes } from './customer-links.js';
 import { registerBarberInviteRoutes } from './barber-invites.js';
+import { registerMediaProfileRoutes } from './media-profile.js';
 
 export async function buildApp(env = process.env) {
   const config = configFromEnv(env);
@@ -52,6 +53,7 @@ export async function buildApp(env = process.env) {
   await registerClosureRoutes(app, { config, db, security });
   await registerCustomerLinkRoutes(app, { config, db, security });
   await registerBarberInviteRoutes(app, { config, db, security });
+  await registerMediaProfileRoutes(app, { config, db, security });
   app.addHook('onClose', async () => {
     await db?.close();
     security.redis?.disconnect();
