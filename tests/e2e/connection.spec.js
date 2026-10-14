@@ -159,6 +159,9 @@ test('Propietario real: inventario ajustado desde la boutique original',async({p
  await page.getByRole('button',{name:/Ajustar Inventario/i}).first().click();
  const modal=page.locator('.fixed.inset-0').last();
  await expect(modal.getByText('Ajustar Stock: Pomada Chromium')).toBeVisible();
+ await modal.locator('input[type=number]').fill('-2');
+ await modal.getByRole('button',{name:/Entrada \/ Compra/i}).click();
+ await expect(page.getByText(/Introduce una cantidad entera/i).first()).toBeVisible();
  await modal.locator('input[type=number]').fill('2');
  await modal.getByRole('button',{name:/Entrada \/ Compra/i}).click();
  await expect(modal).toBeHidden({timeout:18000});
