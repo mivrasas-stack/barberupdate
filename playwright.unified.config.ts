@@ -8,14 +8,14 @@ export default defineConfig({
  expect:{timeout:12000},
  reporter:'list',
  use:{
-  baseURL:'http://localhost:3000',
+  baseURL:'http://127.0.0.1:3001',
   ...devices['Desktop Chrome'],
   screenshot:'only-on-failure',
   trace:'retain-on-failure'
  },
  webServer:{
-  command:'node node_modules/vite/bin/vite.js --host localhost --port 3000 --strictPort',
-  url:'http://localhost:3000/',
+  command:'node node_modules/vite/bin/vite.js --host 127.0.0.1 --port 3001 --strictPort',
+  url:'http://127.0.0.1:3001/',
   reuseExistingServer:true,
   timeout:30000
  }

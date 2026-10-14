@@ -3,14 +3,15 @@ import {test,expect} from '@playwright/test';
 test('Landing, Directorio y Profesionales navegan sin cambiar de host',async({page})=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto('/');
+ const appOrigin=new URL(page.url()).origin;
  await expect(page).toHaveTitle('BarberParadise');
  await expect(page.getByRole('heading',{name:/NO HACEMOS CORTES/i})).toBeVisible();
  await expect(page.locator('.hero-bg')).toHaveCSS('background-image',/hero.webp/);
  await page.getByRole('link',{name:'PROFESIONALES'}).click();
- await expect(page).toHaveURL('http://localhost:3000/profesionales');
+ await expect(page).toHaveURL(new URL('/profesionales',appOrigin).href);
  await expect(page.getByRole('heading',{name:/TU TALENTO.*TU MARCA/i})).toBeVisible();
  await page.getByRole('link',{name:'BARBER PARADISE'}).first().click();
- await expect(page).toHaveURL('http://localhost:3000/');
+ await expect(page).toHaveURL(new URL('/',appOrigin).href);
  await page.getByRole('link',{name:'DIRECTORIO'}).click();
  await expect(page.getByRole('heading',{name:/BARBERÍAS.*VERIFICADAS/i})).toBeVisible();
  expect(errors).toEqual([]);
@@ -18,8 +19,9 @@ test('Landing, Directorio y Profesionales navegan sin cambiar de host',async({pa
 test('Reservar abre login real, muestra foto original y regresa a landing',async({page})=>{
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto('/');
+ const appOrigin=new URL(page.url()).origin;
  await page.locator('.hero-buttons a[href="/login"]').click();
- await expect(page).toHaveURL('http://localhost:3000/login');
+ await expect(page).toHaveURL(new URL('/login',appOrigin).href);
  await expect(page.getByTestId('barber-paradise-login')).toBeVisible();
  await expect(page.getByRole('heading',{name:/BIENVENIDO.*DE VUELTA/i})).toBeVisible();
  await expect(page.getByLabel('Correo electrónico')).toBeVisible();
@@ -30,7 +32,7 @@ test('Reservar abre login real, muestra foto original y regresa a landing',async
  await expect.poll(()=>img.evaluate(x=>x.complete&&x.naturalWidth>0)).toBe(true);
  await expect(page.getByText('Cuentas de Desarrollo')).toHaveCount(0);
  await page.getByRole('link',{name:/VOLVER A LA PÁGINA WEB/i}).click();
- await expect(page).toHaveURL('http://localhost:3000/');
+ await expect(page).toHaveURL(new URL('/',appOrigin).href);
  expect(errors).toEqual([]);
 });
 test('Planes mantienen parámetros y registro visual de tres pasos',async({page})=>{
@@ -61,10 +63,11 @@ test('Enlaces antiguos con hash permanecen compatibles',async({page})=>{
 test('Móvil: navegación e imagen sin desbordamiento',async({page})=>{
  await page.setViewportSize({width:390,height:844});
  await page.goto('/');
+ const appOrigin=new URL(page.url()).origin;
  await expect(page.getByRole('heading',{name:/CREAMOS IDENTIDAD/i})).toBeVisible();
  await page.getByRole('button',{name:'Abrir menú'}).click();
  await page.getByRole('link',{name:'Directorio',exact:true}).click();
- await expect(page).toHaveURL('http://localhost:3000/directorio');
+ await expect(page).toHaveURL(new URL('/directorio',appOrigin).href);
  await page.goto('/login');
  await expect(page.getByTestId('barber-paradise-login')).toBeVisible();
  const image=page.locator('img[src="/images/barber-paradise-atmosphere.webp"]');

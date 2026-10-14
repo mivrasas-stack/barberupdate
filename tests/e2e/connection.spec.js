@@ -10,13 +10,15 @@ const {createClient}=requireBackend('@supabase/supabase-js');
 const pg=requireBackend('pg');
 const base='http://127.0.0.1:8188/api/v1';
 const dedicated='wrfwhftzaflwhkvkzrjm';
+const productPhoto="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Crect width='32' height='32' fill='%23d4af37'/%3E%3C/svg%3E";
 if(!(process.env.SUPABASE_URL||'').includes(dedicated))
  throw Error('Playwright must use dedicated BarberOS Supabase project only');
 if(!process.env.ADMIN_DATABASE_URL||!process.env.SUPABASE_SERVICE_ROLE_KEY)
  throw Error('Playwright fixture needs ignored backend environment files');
 
-const state={owner:null,customer:null,ownerId:null,customerId:null,
- tenantId:null,slug:null,serviceId:null,barberId:null,productId:null};
+const state={owner:null,customer:null,barberCandidate:null,rejectedCandidate:null,isolatedOwner:null,
+ ownerId:null,customerId:null,barberCandidateId:null,rejectedCandidateId:null,isolatedOwnerId:null,
+ tenantId:null,isolatedTenantId:null,slug:null,serviceId:null,barberId:null,productId:null};
 const admin=createClient(process.env.SUPABASE_URL,process.env.SUPABASE_SERVICE_ROLE_KEY,
  {auth:{persistSession:false,autoRefreshToken:false}});
 const anon=createClient(process.env.SUPABASE_URL,process.env.SUPABASE_PUBLISHABLE_KEY,
@@ -32,24 +34,36 @@ async function seedUser(){
  if(signed.error)throw signed.error;
  return {email,password,id:added.data.user.id,jwt:signed.data.session.access_token};
 }
-async function api(jwt,method,path,payload){
+async function apiResponse(jwt,method,path,payload){
  const r=await fetch(base+path,{method,headers:{
    Authorization:'Bearer '+jwt,...(payload?{'Content-Type':'application/json'}:{})
  },body:payload?JSON.stringify(payload):undefined,signal:AbortSignal.timeout(15000)});
  const data=await r.json().catch(()=>null);
- if(!r.ok)throw Error('Fixture '+method+' '+path+' returned '+r.status+
-   ' '+String(data?.error||''));
- return data;
+ return {status:r.status,ok:r.ok,data};
+}
+async function api(jwt,method,path,payload){
+ const result=await apiResponse(jwt,method,path,payload);
+ if(!result.ok)throw Error('Fixture '+method+' '+path+' returned '+result.status+
+   ' '+String(result.data?.error||''));
+ return result.data;
 }
 test.beforeAll(async()=>{
  state.owner=await seedUser();state.ownerId=state.owner.id;
  state.customer=await seedUser();state.customerId=state.customer.id;
+ state.barberCandidate=await seedUser();state.barberCandidateId=state.barberCandidate.id;
+ state.rejectedCandidate=await seedUser();state.rejectedCandidateId=state.rejectedCandidate.id;
+ state.isolatedOwner=await seedUser();state.isolatedOwnerId=state.isolatedOwner.id;
  const slug='barberos-itest-'+randomBytes(8).toString('hex');
  state.slug=slug;
  const shop=await api(state.owner.jwt,'POST','/tenants',{
    name:'Barbería E2E del navegador',slug,currency:'COP',timeZone:'America/Bogota'
  });
  state.tenantId=shop.id;
+ const isolated=await api(state.isolatedOwner.jwt,'POST','/tenants',{
+   name:'Barbería E2E aislada',slug:'barberos-itest-'+randomBytes(8).toString('hex'),
+   currency:'COP',timeZone:'America/Bogota'
+ });
+ state.isolatedTenantId=isolated.id;
  const tid='/tenants/'+shop.id;
  const barber=await api(state.owner.jwt,'POST',tid+'/barbers',{
    name:'Barbero Chromium',slug:'barbero-chromium'
@@ -65,7 +79,7 @@ test.beforeAll(async()=>{
  state.serviceId=service.id;
  const product=await api(state.owner.jwt,'POST',tid+'/products',{
    name:'Pomada Chromium',sku:'PW-'+randomBytes(4).toString('hex'),
-   description:'Producto solo de prueba',photoUrl:'',category:'beauty',
+   description:'Producto solo de prueba',photoUrl:productPhoto,category:'beauty',
    priceMinor:12000,costMinor:4500,stock:5,minStock:1,waitingRoomVisible:true
  });
  state.productId=product.id;
@@ -73,9 +87,10 @@ test.beforeAll(async()=>{
 test.afterAll(async()=>{
  try{
   if(state.tenantId)await cleanupTestTenant(pool,state.tenantId);
+  if(state.isolatedTenantId)await cleanupTestTenant(pool,state.isolatedTenantId);
  }finally{
-  if(state.ownerId)await admin.auth.admin.deleteUser(state.ownerId);
-  if(state.customerId)await admin.auth.admin.deleteUser(state.customerId);
+  for(const id of [state.ownerId,state.customerId,state.barberCandidateId,
+    state.rejectedCandidateId,state.isolatedOwnerId])if(id)await admin.auth.admin.deleteUser(id);
   await pool.end();
  }
 });
@@ -112,6 +127,9 @@ test('Propietario real: login, protección de roles, catálogo y operaciones vis
  await page.goto('/login#/barberia/'+state.slug+'/boutique');
  await expect(page.getByRole('heading',{name:/Inventario de Barbería/i})).toBeVisible();
  await expect(page.getByText('Pomada Chromium').first()).toBeVisible();
+ const productImage=page.getByRole('img',{name:'Pomada Chromium'}).first();
+ await expect(productImage).toHaveAttribute('src',productPhoto);
+ expect(await productImage.evaluate(img=>img.complete&&img.naturalWidth>0)).toBe(true);
  await page.goto('/login#/barberia/'+state.slug+'/agenda');
  await expect(page.getByRole('heading',{name:/Agenda Global/i})).toBeVisible();
  await page.goto('/login#/admin/inicio');
@@ -146,6 +164,76 @@ test('Propietario real: inventario ajustado desde la boutique original',async({p
    return Number(items.find(x=>x.id===state.productId)?.stock);
  },{timeout:15000}).toBe(7);
  expect(errors).toEqual([]);
+});
+test('Barbero asociado: solicitud, aprobación, rechazo y aislamiento de tenant',async({browser})=>{
+ const ownerContext=await browser.newContext();
+ const ownerPage=await ownerContext.newPage();
+ await login(ownerPage,state.owner);
+ await ownerPage.goto('/login#/barberia/'+state.slug+'/perfil');
+ await expect(ownerPage.getByRole('heading',{name:/Vinculaci.n de barberos por QR/i})).toBeVisible();
+ await ownerPage.getByRole('button',{name:/Generar invitaci.n para barberos/i}).click();
+ const inviteField=ownerPage.getByLabel(/Enlace de invitaci.n/i);
+ await expect(inviteField).not.toHaveValue('');
+ const inviteUrl=new URL(await inviteField.inputValue());
+ expect(inviteUrl.origin).toBe(new URL(ownerPage.url()).origin);
+ expect(inviteUrl.pathname).toMatch(/^\/unirse-barbero\/[a-f0-9]{64}$/);
+ await expect(ownerPage.getByRole('img',{name:/QR de invitaci.n para barberos/i})).toHaveAttribute('src',/^data:image\/png;base64,/);
+
+ const submitRequest=async(identity,fullName)=>{
+  const context=await browser.newContext();
+  const page=await context.newPage();
+  await page.goto(inviteUrl.href);
+  await expect(page.getByRole('heading',{name:/Barbería E2E del navegador/i})).toBeVisible();
+  await page.getByRole('button',{name:/Ya tengo cuenta/i}).click();
+  await page.getByLabel(/Nombre completo/i).fill(fullName);
+  await page.getByLabel(/Correo/i).fill(identity.email);
+  await page.getByLabel(/Contrase.a/i).fill(identity.password);
+  await page.getByRole('button',{name:/Solicitar vinculaci.n/i}).click();
+  await expect(page.getByRole('status')).toContainText(/Solicitud enviada/i,{timeout:20000});
+  await context.close();
+ };
+ const approvedName='Barbero Asociado Playwright';
+ const rejectedName='Barbero Rechazado Playwright';
+ await submitRequest(state.barberCandidate,approvedName);
+ await submitRequest(state.rejectedCandidate,rejectedName);
+
+ await ownerPage.getByRole('button',{name:/Actualizar solicitudes/i}).click();
+ const approvedRow=ownerPage.getByText(approvedName,{exact:true}).locator('..');
+ const rejectedRow=ownerPage.getByText(rejectedName,{exact:true}).locator('..');
+ await expect(approvedRow.getByRole('button',{name:'Aprobar'})).toBeVisible();
+ await expect(rejectedRow.getByRole('button',{name:'Rechazar'})).toBeVisible();
+ await approvedRow.getByRole('button',{name:'Aprobar'}).click();
+ await rejectedRow.getByRole('button',{name:'Rechazar'}).click();
+ await expect.poll(async()=>{
+  const requests=await api(state.owner.jwt,'GET','/tenants/'+state.tenantId+'/barber-requests');
+  return requests.find(x=>x.full_name===approvedName)?.status;
+ },{timeout:15000}).toBe('approved');
+ await expect.poll(async()=>{
+  const requests=await api(state.owner.jwt,'GET','/tenants/'+state.tenantId+'/barber-requests');
+  return requests.find(x=>x.full_name===rejectedName)?.status;
+ },{timeout:15000}).toBe('rejected');
+
+ const joinedTenants=await api(state.barberCandidate.jwt,'GET','/tenants');
+ expect(joinedTenants).toEqual([expect.objectContaining({id:state.tenantId,role:'barber'})]);
+ expect(await api(state.rejectedCandidate.jwt,'GET','/tenants')).toEqual([]);
+ const barbers=await api(state.barberCandidate.jwt,'GET','/tenants/'+state.tenantId+'/barbers');
+ expect(barbers).toEqual(expect.arrayContaining([
+  expect.objectContaining({user_id:state.barberCandidateId,name:approvedName})
+ ]));
+ expect((await apiResponse(state.barberCandidate.jwt,'GET',
+  '/tenants/'+state.isolatedTenantId+'/products')).status).toBe(403);
+ expect((await apiResponse(state.barberCandidate.jwt,'GET',
+  '/tenants/'+state.tenantId+'/barber-requests')).status).toBe(403);
+
+ const barberContext=await browser.newContext();
+ const barberPage=await barberContext.newPage();
+ await login(barberPage,state.barberCandidate);
+ await expect(barberPage).toHaveURL(/#\/barbero\/barber-[a-f0-9-]+\/inicio/,{timeout:20000});
+ await expect(barberPage.locator('main').first()).toBeVisible();
+ await barberPage.goto('/login#/barberia/'+state.slug+'/perfil');
+ await expect(barberPage.getByRole('button',{name:/Iniciar sesión/i}).first()).toBeVisible();
+ await barberContext.close();
+ await ownerContext.close();
 });
 test('Cliente real: reserva efectiva y pedido con código desde la interfaz',async({page})=>{
  const errors=catchErrors(page);
@@ -232,7 +320,7 @@ test('QR real: dueño imprime, cliente se vincula y ve su barbería al reservar'
  }
  const source=new zxing.RGBLuminanceSource(luminance,png.width,png.height);
  const decoded=new zxing.QRCodeReader().decode(new zxing.BinaryBitmap(new zxing.HybridBinarizer(source)));
- expect(decoded.getText()).toBe('http://127.0.0.1:3199/vincular/'+issued.link_code);
+ expect(decoded.getText()).toBe(new URL('/vincular/'+issued.link_code,ownerPage.url()).href);
  await expect(ownerPage.getByText(issued.link_code,{exact:true})).toBeVisible();
  await owned.close();
 
@@ -241,11 +329,12 @@ test('QR real: dueño imprime, cliente se vincula y ve su barbería al reservar'
  await joinPage.goto('/vincular/'+issued.link_code);
  await expect(joinPage.getByRole('heading',{name:'Barbería E2E del navegador'})).toBeVisible();
  await joinPage.getByRole('button',{name:/Ya tengo cuenta/i}).click();
- await joinPage.getByLabel('Nombre y apellidos completos').fill('Cliente vinculacion navegador');
- await joinPage.getByLabel('Teléfono de contacto').fill('+57 300 555 1111');
  await joinPage.getByLabel('Correo electrónico').fill(state.customer.email);
  await joinPage.getByLabel('Contraseña').fill(state.customer.password);
- await joinPage.getByRole('button',{name:/Ingresar y vincular/i}).click();
+ await joinPage.getByRole('button',{name:/Ingresar y continuar/i}).click();
+ await joinPage.getByLabel('Nombre y apellidos completos').fill('Cliente vinculacion navegador');
+ await joinPage.getByLabel('Teléfono de contacto').fill('+57 300 555 1111');
+ await joinPage.getByRole('button',{name:/Confirmar vinculaci/i}).click();
  await expect(joinPage.getByTestId('linked-businesses')).toBeVisible({timeout:20000});
  await expect(joinPage.getByTestId('linked-businesses').getByText('Barbería E2E del navegador')).toBeVisible();
  const links=await api(state.customer.jwt,'GET','/me/links');
