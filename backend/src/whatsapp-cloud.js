@@ -7,6 +7,7 @@ const phoneIdPattern=/^[0-9]{5,25}$/;
 
 export function normalizeWhatsAppPhone(phone){
   if(typeof phone!=='string')throw new TypeError('Invalid WhatsApp phone number');
+  if(/[\r\n\0]/.test(phone))throw new TypeError('Invalid multiline WhatsApp phone number');
   const number=phone.trim().replace(/[\s()\-.]/g,'');
   if(!/^\+?[1-9][0-9]{7,14}$/.test(number))throw new TypeError('WhatsApp requires an international phone number');
   return number.replace(/^\+/,'');
