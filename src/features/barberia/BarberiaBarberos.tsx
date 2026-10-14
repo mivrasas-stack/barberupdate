@@ -3,7 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { Barber } from '../../types';
 import { barberStore } from '../../services/store';
 import { ImageUpload } from '../../components/common/ImageUpload';
-import { isLiveBackend, updateBarberProfile, refreshLiveData } from '../../services/liveBackend';
+import { isLiveBackend, backendRequest, updateBarberProfile, refreshLiveData } from '../../services/liveBackend';
 import { formatCurrency } from '../../utils/formatters';
 import { 
   Scissors, 
@@ -68,6 +68,20 @@ export const BarberiaBarberos: React.FC = () => {
 
     addToast(`Condiciones de trabajo actualizadas para ${detailBarber.name}`, 'success');
     setDetailBarber(null);
+  };
+
+  const configureBarberWhatsapp = async (barber: Barber) => {
+    if (!currentShop || !isLiveBackend) return;
+    try {
+      const path='/tenants/'+currentShop.id+'/barbers/'+barber.id+'/whatsapp';
+      const saved=await backendRequest<{phone:string;optIn:boolean}>(path);
+      const provided=window.prompt('WhatsApp de '+barber.name+' (57 seguido del número). Deja vacío para desactivar los avisos:',saved.phone||'');
+      if(provided===null)return;
+      const phone=provided.trim();
+      if(phone && !window.confirm('¿Confirmas que '+barber.name+' autorizó recibir avisos automáticos de nuevas citas a este número?'))return;
+      await backendRequest(path,{method:'PATCH',body:JSON.stringify({phone:phone||null,optIn:Boolean(phone)})});
+      addToast(phone?'WhatsApp del barbero activado':'WhatsApp del barbero desactivado','success');
+    }catch(e){addToast(e instanceof Error?e.message:'No se pudo configurar WhatsApp','error');}
   };
 
   const handleAddPhoto = (urlToAdd?: string) => {
@@ -152,6 +166,10 @@ export const BarberiaBarberos: React.FC = () => {
                       {barber.specialties.join(' · ')}
                     </div>
                     <p className="text-xs text-neutral-400 mt-1 line-clamp-2">{barber.bio}</p>
+                    {isLiveBackend && <button type="button" onClick={()=>void configureBarberWhatsapp(barber)}
+                      className="mt-2 rounded-lg border border-emerald-800 px-3 py-1.5 text-xs text-emerald-300 hover:bg-emerald-950">
+                      Configurar WhatsApp de citas
+                    </button>}
                   </div>
                 </div>
 
