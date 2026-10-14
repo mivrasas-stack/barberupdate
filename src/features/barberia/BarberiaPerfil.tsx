@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { BarberInvites } from './BarberInvites';
 import { barberStore } from '../../services/store';
 import { Store, MapPin, Phone, Mail, Instagram, Clock, Image, Trash2, Plus, Star, Save } from 'lucide-react';
 
@@ -44,6 +45,7 @@ export const BarberiaPerfil: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <BarberInvites/>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#242424]">
         <div>
           <span className="text-xs font-semibold uppercase tracking-wider text-[var(--gold-primary)]">

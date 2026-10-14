@@ -52,11 +52,13 @@ import { ClienteFidelizacion } from './features/clientes/ClienteFidelizacion';
 import { ClienteHistorial } from './features/clientes/ClienteHistorial';
 import { ClienteQRScanner } from './features/clientes/ClienteQRScanner';
 import { PublicJoinView } from './features/clientes/PublicJoinView';
+import { BarberJoinPublic } from './features/barberia/BarberJoinPublic';
 import { ClientePerfil } from './features/clientes/ClientePerfil';
 
 const AppContent: React.FC = () => {
   const { activeRoute, currentUser, restoringSession } = useApp();
 
+  if (window.location.pathname.startsWith('/unirse-barbero/'))return <BarberJoinPublic/>;
   if (window.location.pathname.startsWith('/vincular/'))return <PublicJoinView/>;
   if (restoringSession) return <main role='status' className='min-h-screen bg-black text-white flex items-center justify-center'>Restaurando sesion...</main>;
 
@@ -168,7 +170,7 @@ const AppFrame: React.FC = () => {
     (activeRoute.startsWith('/barbero/') &&
       !['barber_employee', 'barber_independent', 'owner'].includes(currentUser.role))
   ));
-  const isLogin = window.location.pathname.startsWith('/vincular/') || activeRoute === '/login'
+  const isLogin = window.location.pathname.startsWith('/unirse-barbero/') || window.location.pathname.startsWith('/vincular/') || activeRoute === '/login'
     || (!currentUser && !activeRoute.startsWith('/vincular')) || deniedRealRoute;
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] flex flex-col font-sans">
