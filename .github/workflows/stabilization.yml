@@ -27,5 +27,7 @@ jobs:
         working-directory: backend
       - run: node --check src/media-profile.js
         working-directory: backend
-      - run: node --test test/media-profile.test.js test/media-profile-routes.test.js
+      - run: npm test
         working-directory: backend
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test tests/e2e/login-visual.spec.js --config=playwright.local3001.config.ts --reporter=line
