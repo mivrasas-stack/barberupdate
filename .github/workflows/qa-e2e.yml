@@ -33,6 +33,16 @@ jobs:
           cache: npm
       - name: Announce QA-only validation
         run: echo 'Checking configured QA secrets and isolated test environment; no WhatsApp delivery or production deployment'
+      - name: Verify SECRET_BASE is available without reading its value
+        env:
+          SECRET_BASE_EXISTS: ${{ secrets.SECRET_BASE != '' }}
+        shell: bash
+        run: |
+          if [ "$SECRET_BASE_EXISTS" = "true" ]; then
+            echo "SECRET_BASE is available to GitHub Actions."
+          else
+            echo "::warning::SECRET_BASE is not configured or is unavailable to this workflow."
+          fi
       - name: Check isolated QA prerequisites
         id: qa
         shell: bash
