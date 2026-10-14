@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { BarberInvites } from './BarberInvites';
+import {BarberiaWhatsapp} from './BarberiaWhatsapp';
 import { ImageUploader } from './ImageUploader';
 import {backendRequest,isLiveBackend,refreshLiveData} from '../../services/liveBackend';
 import { barberStore } from '../../services/store';
@@ -72,6 +73,7 @@ export const BarberiaPerfil: React.FC = () => {
   return (
     <div className="space-y-6">
       <BarberInvites/>
+      {isLiveBackend && <BarberiaWhatsapp tenant={shop.id} addToast={addToast}/>}
       {isLiveBackend && <div className="rounded-2xl bg-[#141414] border border-neutral-700 p-4 space-y-3">
         <h2 className="font-semibold text-sm text-white">Imágenes de identidad comercial</h2>
         <div className="flex flex-wrap gap-5">
