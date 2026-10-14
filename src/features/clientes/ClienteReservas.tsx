@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { barberStore } from '../../services/store';
-import {isLiveBackend,addBooking,refreshLiveData} from '../../services/liveBackend';
+import {isLiveBackend,addBooking,backendRequest,refreshLiveData} from '../../services/liveBackend';
 import {useCustomerLinks} from '../../services/useCustomerLinks';
 import { formatCurrency } from '../../utils/formatters';
 import {
@@ -44,6 +44,7 @@ export const ClienteReservas: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState(new Date(Date.now()+86400000).toISOString().slice(0,10));
   const [selectedTime, setSelectedTime] = useState('11:00');
   const [notes, setNotes] = useState('');
+  const [whatsappConsent,setWhatsappConsent]=useState(false);
   useEffect(()=>{
     if(!isLiveBackend||!linkedBusinesses.length)return;
     const first=linkedBusinesses[0];
@@ -83,6 +84,14 @@ export const ClienteReservas: React.FC = () => {
           serviceId:selectedService.id,date:selectedDate,startTime:selectedTime,
           customerName:customerProfile?.full_name||currentUser?.name||currentUser?.email||'Cliente',
           customerPhone:phone,notes});
+        if(whatsappConsent){
+          try{
+            await backendRequest('/me/whatsapp/consent',{method:'POST',body:JSON.stringify({tenantId,phone,consent:true})});
+            addToast('Autorización de avisos por WhatsApp registrada','success');
+          }catch(err){
+            addToast('La reserva se guardó, pero no se habilitaron los avisos de WhatsApp. Usa un número con indicativo de país.','info');
+          }
+        }
         await refreshLiveData();
         addToast('¡Reserva registrada en el backend!','success');
         setStep(6);
@@ -435,6 +444,11 @@ export const ClienteReservas: React.FC = () => {
             />
           </div>
 
+          {isLiveBackend && <label className="flex items-start gap-3 rounded-xl border border-neutral-700 p-4 text-xs text-neutral-300">
+            <input type="checkbox" checked={whatsappConsent} onChange={e=>setWhatsappConsent(e.target.checked)}
+              className="mt-0.5 accent-emerald-500" />
+            <span>Autorizo a esta barbería a enviarme por WhatsApp confirmaciones, recordatorios, cancelaciones y cambios de esta cita. Es opcional y puedo revocar mi autorización.</span>
+          </label>}
           <div className="flex justify-between pt-4 border-t border-neutral-800">
             <button onClick={() => setStep(selectedTargetType === 'independent' ? 2 : 3)} className="px-4 py-2 text-neutral-400 text-xs hover:text-white flex items-center gap-1">
               <ChevronLeft className="w-4 h-4" />
