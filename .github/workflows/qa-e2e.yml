@@ -25,6 +25,7 @@ jobs:
       VITE_API_BASE_URL: /api/v1
       CORS_ORIGINS: http://127.0.0.1:3001,http://localhost:3001
       PUBLIC_API_PORT: '8188'
+      RATE_LIMIT_PER_MINUTE: '900' # Only for synthetic E2E clients; production default remains 90
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
