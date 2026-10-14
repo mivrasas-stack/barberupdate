@@ -14,6 +14,14 @@ export const BarberiaBarberos: React.FC = () => {
   const shopId = currentShop?.id || 'shop-1';
   const barbers = state.barbers.filter(b => b.businessId === shopId);
 
+  const updatePortrait=async(barberId:string,url:string)=>{
+    try{
+      await backendRequest('/tenants/'+shopId+'/barbers/'+barberId+'/photo',{method:'PATCH',body:JSON.stringify({url})});
+      await refreshLiveData();
+      addToast('Fotografía del barbero actualizada','success');
+    }catch(e){addToast(e instanceof Error?e.message:'No se guardó el retrato','error');}
+  };
+
   const handleAddPhoto = async (photoUrl=newPhotoUrl) => {
     if(isLiveBackend){
       if(!selectedBarber||!photoUrl)return;
@@ -95,6 +103,7 @@ export const BarberiaBarberos: React.FC = () => {
                   </div>
                 </div>
 
+                {isLiveBackend && <div className="mb-3"><ImageUploader tenant={shopId} category="barber" label="Actualizar foto de perfil" onUploaded={url=>void updatePortrait(barber.id,url)}/></div>}
                 <div className="p-3 bg-[#181818] rounded-xl border border-neutral-800 space-y-2 text-xs">
                   <div className="flex items-center justify-between text-neutral-300">
                     <span className="text-neutral-500">Comisión por Servicio:</span>
