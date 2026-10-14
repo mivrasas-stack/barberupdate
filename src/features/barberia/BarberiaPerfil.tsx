@@ -18,6 +18,13 @@ export const BarberiaPerfil: React.FC = () => {
   const [formCity, setFormCity] = useState(shop.city);
   const [formPhone, setFormPhone] = useState(shop.phone);
 
+  const uploadBranding = async (kind:'logo'|'cover',url:string) => {
+    try{
+      await backendRequest('/tenants/'+shop.id+'/branding',{method:'PATCH',body:JSON.stringify({kind,url})});
+      await refreshLiveData();
+      addToast('Imagen comercial actualizada','success');
+    }catch(e){addToast(e instanceof Error?e.message:'No se pudo guardar la imagen','error');}
+  };
   const handleAddPhoto = async (photoUrl=photoInput) => {
     if(isLiveBackend){
       if(!photoUrl)return;
@@ -65,6 +72,13 @@ export const BarberiaPerfil: React.FC = () => {
   return (
     <div className="space-y-6">
       <BarberInvites/>
+      {isLiveBackend && <div className="rounded-2xl bg-[#141414] border border-neutral-700 p-4 space-y-3">
+        <h2 className="font-semibold text-sm text-white">Imágenes de identidad comercial</h2>
+        <div className="flex flex-wrap gap-5">
+          <div><p className="text-xs text-neutral-400 mb-2">Logotipo</p><ImageUploader tenant={shop.id} category="shop" label="Subir logotipo" onUploaded={url=>void uploadBranding('logo',url)}/></div>
+          <div><p className="text-xs text-neutral-400 mb-2">Portada</p><ImageUploader tenant={shop.id} category="shop" label="Subir portada" onUploaded={url=>void uploadBranding('cover',url)}/></div>
+        </div>
+      </div>}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#242424]">
         <div>
           <span className="text-xs font-semibold uppercase tracking-wider text-[var(--gold-primary)]">
