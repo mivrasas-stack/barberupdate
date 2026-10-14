@@ -6,6 +6,7 @@ test('Template names are exact',()=>assert.deepEqual(Object.values(TEMPLATES),
 test('Phones and local Bogota time',()=>{
  assert.equal(normalizePhone('+57 300 123 4567'),'573001234567');
  assert.equal(normalizePhone('abc'),null);
+ assert.equal(normalizePhone('3183101859'),'573183101859');
  assert.equal(localDateTime('2026-10-23T20:00:00Z','America/Bogota').date,'23/10/2026');
 });
 test('Templates use only expected body parameters',()=>{
