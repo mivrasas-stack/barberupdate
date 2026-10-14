@@ -4,7 +4,7 @@ import { barberStore } from '../../services/store';
 import { ImageUploader } from './ImageUploader';
 import { formatCurrency } from '../../utils/formatters';
 import { Product, ProductCategory } from '../../types';
-import {isLiveBackend, addProduct, adjustStock, setProductVisibility, refreshLiveData} from '../../services/liveBackend';
+import {isLiveBackend, addProduct, adjustStock, setProductVisibility, refreshLiveData, backendRequest} from '../../services/liveBackend';
 import {
   ShoppingBag,
   Sparkles,
@@ -87,6 +87,14 @@ export const BarberiaBoutique: React.FC = () => {
     setIsNewProductModalOpen(false);
     setNewProdName('');
     setNewProdDesc('');
+  };
+
+  const updateProductPhoto=async(id:string,url:string)=>{
+    try{
+      await backendRequest('/tenants/'+shopId+'/products/'+id+'/photo',{method:'PATCH',body:JSON.stringify({url})});
+      await refreshLiveData();
+      addToast('Imagen del producto actualizada','success');
+    }catch(e){addToast(e instanceof Error?e.message:'No se guardó la imagen','error');}
   };
 
   const handleAdjustStock = async (isAddition: boolean) => {
@@ -263,6 +271,7 @@ export const BarberiaBoutique: React.FC = () => {
                   </div>
                 </div>
 
+                {isLiveBackend && <div className="mb-3"><ImageUploader tenant={shopId} category="products" label="Reemplazar imagen" onUploaded={url=>void updateProductPhoto(prod.id,url)}/></div>}
                 <div className="p-3 bg-[#181818] rounded-xl border border-neutral-800 space-y-1.5 text-xs">
                   <div className="flex items-center justify-between">
                     <span className="text-neutral-400">Precio Venta:</span>
