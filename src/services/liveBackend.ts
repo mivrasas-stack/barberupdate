@@ -46,7 +46,10 @@ async function authCall(path:string,payload:object){
     body:JSON.stringify(payload)
   });
   const data=await result.json().catch(()=>({}));
-  if(!result.ok)throw Error(data.msg||data.error_description||data.message||'No se pudo iniciar sesión.');
+  if(!result.ok){
+    if(result.status===429)throw Error(data?.code==='over_email_send_rate_limit'?'Se alcanzó el límite de correos de confirmación. Intenta más tarde o contacta al administrador.':'Demasiados intentos de autenticación. Espera unos minutos antes de reintentar.');
+    throw Error(data.msg||data.error_description||data.message||data.error||'No se pudo iniciar sesión.');
+  }
   return data;
 }
 function receiveToken(data:any){
