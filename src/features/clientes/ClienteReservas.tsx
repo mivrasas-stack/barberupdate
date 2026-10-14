@@ -44,6 +44,7 @@ export const ClienteReservas: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState(new Date(Date.now()+86400000).toISOString().slice(0,10));
   const [selectedTime, setSelectedTime] = useState('11:00');
   const [notes, setNotes] = useState('');
+  const [whatsappOptIn,setWhatsappOptIn] = useState(false);
   useEffect(()=>{
     if(!isLiveBackend||!linkedBusinesses.length)return;
     const first=linkedBusinesses[0];
@@ -82,7 +83,7 @@ export const ClienteReservas: React.FC = () => {
         await addBooking(tenantId,{barberId:selectedBarber.id,
           serviceId:selectedService.id,date:selectedDate,startTime:selectedTime,
           customerName:customerProfile?.full_name||currentUser?.name||currentUser?.email||'Cliente',
-          customerPhone:phone,notes});
+          customerPhone:phone,whatsappOptIn,notes});
         await refreshLiveData();
         addToast('¡Reserva registrada en el backend!','success');
         setStep(6);
@@ -435,6 +436,7 @@ export const ClienteReservas: React.FC = () => {
             />
           </div>
 
+          {isLiveBackend && <label className="flex items-start gap-2 text-xs text-neutral-300"><input type="checkbox" checked={whatsappOptIn} onChange={e=>setWhatsappOptIn(e.target.checked)} className="mt-0.5"/><span>Acepto recibir por WhatsApp la confirmación, avisos de inasistencia y un recordatorio de mi cita una hora antes. Puedo reservar sin aceptar.</span></label>}
           <div className="flex justify-between pt-4 border-t border-neutral-800">
             <button onClick={() => setStep(selectedTargetType === 'independent' ? 2 : 3)} className="px-4 py-2 text-neutral-400 text-xs hover:text-white flex items-center gap-1">
               <ChevronLeft className="w-4 h-4" />
