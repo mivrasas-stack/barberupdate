@@ -99,6 +99,8 @@ export const BarberiaBoutique: React.FC = () => {
 
   const handleAdjustStock = async (isAddition: boolean) => {
     if (!adjustingProduct) return;
+    if(!Number.isInteger(adjustQuantity)||adjustQuantity<1||adjustQuantity>100000){addToast('Introduce una cantidad entera de 1 a 100.000 unidades','error');return;}
+    if(!adjustReason.trim()){addToast('Indica el motivo del movimiento de inventario','error');return;}
     if(isLiveBackend){
       try{
         const delta=isAddition?adjustQuantity:-adjustQuantity;
