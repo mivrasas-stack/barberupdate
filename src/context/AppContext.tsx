@@ -75,7 +75,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     return isLiveBackend && hasSession() ? getCachedUser() : null;
   });
-  const [restoringSession, setRestoringSession] = useState(false);
+  const [restoringSession, setRestoringSession] = useState(isLiveBackend && hasSession());
   const [activeRoute, setActiveRoute] = useState<string>(() => {
     return window.location.hash ? window.location.hash.slice(1) : '/login';
   });
