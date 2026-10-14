@@ -105,19 +105,19 @@ function dayParts(raw:string,zone='America/Bogota'){
 export function mapShop(r:Db,userId:string):Barbershop{
   return {
     id:txt(r,'id'),slug:txt(r,'slug'),name:txt(r,'name'),ownerId:userId,
-    tagline:'',logo:'',coverImage:'',phone:'',email:'',address:'',city:'',
+    tagline:txt(r,'tagline'),logo:txt(r,'logo_url'),coverImage:txt(r,'cover_url'),phone:txt(r,'phone'),email:txt(r,'email'),address:txt(r,'address'),city:txt(r,'city'),
     planId:'',subscriptionStatus:'trial',subscriptionRenewsAt:'',rating:0,reviewsCount:0,
-    openingHours:{days:'',open:'',close:''},socialLinks:{},portfolio:[],
+    openingHours:{days:'',open:'',close:''},socialLinks:{},portfolio:Array.isArray(r.portfolio)?r.portfolio as string[]:[], 
     publicCode:txt(r,'slug'),businessKind:txt(r,'business_kind','barbershop') as Barbershop['businessKind'],createdAt:txt(r,'created_at',new Date().toISOString())
   };
 }
 export function mapBarber(r:Db,tenant:string):Barber{
   return {
     id:txt(r,'id'),businessId:tenant,slug:txt(r,'slug'),
-    name:txt(r,'name'),photo:'',phone:'',email:'',specialties:[],
+    name:txt(r,'name'),photo:txt(r,'photo_url'),phone:'',email:'',specialties:[],
     bio:txt(r,'bio'),commissionRate:num(r,'commission_rate'),
     status:txt(r,'status','active')==='active'?'active':'inactive',
-    rating:0,reviewsCount:0,portfolio:[],workDays:[],workHours:{start:'09:00',end:'18:00'},
+    rating:0,reviewsCount:0,portfolio:Array.isArray(r.portfolio)?r.portfolio as string[]:[],workDays:[],workHours:{start:'09:00',end:'18:00'},
     isIndependent:false,publicCode:txt(r,'slug')
   };
 }
