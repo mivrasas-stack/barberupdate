@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { barberStore } from '../../services/store';
+import { ImageUploader } from '../barberia/ImageUploader';
+import { backendRequest, isLiveBackend, refreshLiveData } from '../../services/liveBackend';
 import { Scissors, Star, QrCode, Image, Trash2, Plus, Copy, Printer } from 'lucide-react';
 
 export const BarberoPerfil: React.FC = () => {
@@ -8,7 +10,19 @@ export const BarberoPerfil: React.FC = () => {
   const barber = currentBarber || state.barbers.find(b => b.isIndependent) || state.barbers[0];
   const [newPhoto, setNewPhoto] = useState('');
 
-  const handleAddPhoto = () => {
+  const handleAddPhoto = async (photoUrl=newPhoto) => {
+    if(isLiveBackend){
+      if(!barber || !photoUrl)return;
+      try{
+        await backendRequest('/tenants/'+barber.businessId+'/barbers/'+barber.id+'/gallery',{
+          method:'PATCH',body:JSON.stringify({photos:[...barber.portfolio,photoUrl]})
+        });
+        await refreshLiveData();
+        setNewPhoto('');
+        addToast('Foto guardada en tu portafolio','success');
+      }catch(e){addToast(e instanceof Error?e.message:'Error al guardar fotografía','error');}
+      return;
+    }
     if (!newPhoto) return;
     const res = barberStore.addPortfolioPhoto('barber', barber.id, newPhoto);
     if (!res.success) {
@@ -19,9 +33,31 @@ export const BarberoPerfil: React.FC = () => {
     setNewPhoto('');
   };
 
-  const handleRemovePhoto = (idx: number) => {
+  const handleRemovePhoto = async (idx: number) => {
+    if(isLiveBackend){
+      if(!barber)return;
+      try{
+        await backendRequest('/tenants/'+barber.businessId+'/barbers/'+barber.id+'/gallery',{
+          method:'PATCH',body:JSON.stringify({photos:barber.portfolio.filter((_,i)=>i!==idx)})
+        });
+        await refreshLiveData();
+        addToast('Foto eliminada del portafolio','success');
+      }catch(e){addToast(e instanceof Error?e.message:'Error al eliminar foto','error');}
+      return;
+    }
     barberStore.removePortfolioPhoto('barber', barber.id, idx);
     addToast('Fotografía removida', 'info');
+  };
+
+  const updatePortrait=async (url:string)=>{
+    if(!barber)return;
+    try{
+      await backendRequest('/tenants/'+barber.businessId+'/barbers/'+barber.id+'/photo',{
+        method:'PATCH',body:JSON.stringify({url})
+      });
+      await refreshLiveData();
+      addToast('Tu foto de perfil está guardada','success');
+    }catch(e){addToast(e instanceof Error?e.message:'Error al guardar tu foto','error');}
   };
 
   return (
@@ -38,10 +74,12 @@ export const BarberoPerfil: React.FC = () => {
         </div>
       </div>
 
+      {isLiveBackend && barber && <div className="bg-[#141414] border border-neutral-700 p-4 rounded-xl"><p className="text-sm text-neutral-300 mb-2">Fotografía profesional</p><ImageUploader tenant={barber.businessId} category="barber" label="Actualizar mi foto" onUploaded={url=>void updatePortrait(url)}/></div>}
+
       {/* Profile Card */}
       <div className="bg-[#141414] border border-[#262626] rounded-2xl p-6 shadow-xl flex flex-col sm:flex-row items-center gap-6">
         <img
-          src={barber.photo}
+          src={barber.photo || '/images/placeholder.svg'} onError={e=>{if(!e.currentTarget.src.endsWith('/images/placeholder.svg'))e.currentTarget.src='/images/placeholder.svg';}}
           alt={barber.name}
           className="w-24 h-24 rounded-2xl object-cover border-2 border-[var(--gold-primary)] shadow-xl"
         />
@@ -83,7 +121,9 @@ export const BarberoPerfil: React.FC = () => {
         </div>
 
         {barber.portfolio.length < 10 ? (
-          <div className="flex gap-2 text-xs">
+          <div className="space-y-2 text-xs">
+            {isLiveBackend && <ImageUploader tenant={barber.businessId} category="barber" onUploaded={url=>void handleAddPhoto(url)} />}
+            {!isLiveBackend && <div className="flex gap-2">
             <input
               type="url"
               value={newPhoto}
@@ -92,11 +132,12 @@ export const BarberoPerfil: React.FC = () => {
               className="flex-1 bg-[#181818] border border-[#2a2a2a] rounded-xl px-3 py-2 text-white"
             />
             <button
-              onClick={handleAddPhoto}
+              onClick={()=>void handleAddPhoto()}
               className="px-4 py-2 rounded-xl bg-[var(--gold-primary)] text-black font-bold hover:bg-[var(--gold-hover)]"
             >
               Añadir Foto
             </button>
+            </div>}
           </div>
         ) : (
           <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-300">
@@ -108,9 +149,9 @@ export const BarberoPerfil: React.FC = () => {
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           {barber.portfolio.map((img, i) => (
             <div key={i} className="relative group rounded-xl overflow-hidden aspect-square border border-neutral-800 bg-neutral-900">
-              <img src={img} alt={`Trabajo ${i + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+              <img src={img || '/images/placeholder.svg'} onError={e=>{if(!e.currentTarget.src.endsWith('/images/placeholder.svg'))e.currentTarget.src='/images/placeholder.svg';}} alt={`Trabajo ${i + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
               <button
-                onClick={() => handleRemovePhoto(i)}
+                onClick={() => void handleRemovePhoto(i)}
                 className="absolute top-1.5 right-1.5 p-1 rounded-md bg-black/70 text-red-400 hover:bg-red-500 hover:text-white"
                 title="Eliminar foto"
               >
