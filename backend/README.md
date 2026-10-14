@@ -147,7 +147,7 @@ PowerShell desde backend/:
 
 - Requiere Docker con imagen local postgres:17-alpine y la conexion admin exclusiva de BarberOS en .env.admin.local.
 - pg_dump del esquema public via TLS -> stream binario directo -> pg_restore en Postgres temporal con --network none, sin puertos publicados y eliminacion automatica.
-- Verifica 22 tablas y RLS, 3 planes, triggers y politicas; no copia datos en disco, no crea backup durable ni modifica cloud.
+- Verifica 24 tablas y RLS, 3 planes, 16 triggers y 48 politicas en la versión actual; no copia datos en disco, no crea backup durable ni modifica cloud.
 - No demuestra restauracion de Auth, Storage, certificados, roles cloud ni continuidad de servicio; consultar docs/operations-recovery.md.
 
 ## IP de visitantes anonimos
