@@ -14,13 +14,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
-      SUPABASE_URL: ${{ secrets.QA_SUPABASE_URL }}
-      SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_URL: https://wrfwhftzaflwhkvkzrjm.supabase.co
+      SUPABASE_PUBLISHABLE_KEY: sb_publishable_erynODEgAENb4ZR7HfkxrA_Lm70A8PE
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
       DATABASE_URL: ${{ secrets.QA_DATABASE_URL }}
       ADMIN_DATABASE_URL: ${{ secrets.QA_ADMIN_DATABASE_URL }}
-      VITE_SUPABASE_URL: ${{ secrets.QA_SUPABASE_URL }}
-      VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      VITE_SUPABASE_URL: https://wrfwhftzaflwhkvkzrjm.supabase.co
+      VITE_SUPABASE_PUBLISHABLE_KEY: sb_publishable_erynODEgAENb4ZR7HfkxrA_Lm70A8PE
       VITE_BACKEND_MODE: live
       VITE_API_BASE_URL: /api/v1
       CORS_ORIGINS: http://127.0.0.1:3001,http://localhost:3001
