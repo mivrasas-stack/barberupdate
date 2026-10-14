@@ -51,6 +51,10 @@ test('Meta rejects are not silently retried or exposed to logs',async()=>{
     sendWhatsAppTemplate({accessToken:'dummy',phoneNumberId:'1234567890',message:msg,fetcher:async()=>({ok:false,status:400})}),
     err=>err.retryable===false
   );
+  await assert.rejects(
+    sendWhatsAppTemplate({accessToken:'dummy',phoneNumberId:'1234567890',message:msg,fetcher:async()=>({ok:false,status:503})}),
+    err=>err.ambiguous===true&&err.retryable===false
+  );
 });
 
 test('webhook HMAC must match the exact raw request body',()=>{
