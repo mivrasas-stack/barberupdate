@@ -85,7 +85,7 @@ jobs:
           done
           echo "::error::Backend never became ready; collecting error codes only."
           docker compose -f infra/compose.yaml ps
-          docker compose -f infra/compose.yaml exec -T api1 node --input-type=module -e 'import pg from "pg"; const p=new pg.Pool({connectionString:process.env.DATABASE_URL,connectionTimeoutMillis:3000}); try { await p.query("SELECT 1"); console.log("PostgreSQL connection: OK"); } catch(e) { console.error("PostgreSQL connection failed, code:",e.code || e.name); } finally { await p.end(); }' || true
+          docker compose -f infra/compose.yaml exec -T api1 node --input-type=module -e 'import pg from "pg"; const p=new pg.Pool({connectionString:process.env.DATABASE_URL,connectionTimeoutMillis:3000}); try { await p.query("SELECT 1"); console.log("PostgreSQL connection: OK"); } catch(e) { console.error("PostgreSQL diagnostic:",e.code || (/password|authentication|SASL|SCRAM/i.test(e.message)?"AUTHENTICATION":/SSL|TLS|certificate/i.test(e.message)?"TLS":/timeout|connect|socket/i.test(e.message)?"NETWORK":/invalid|protocol|parse|URL/i.test(e.message)?"URL_FORMAT":"UNCLASSIFIED")); } finally { await p.end(); }' || true
           exit 1
       - if: steps.qa.outputs.ready == 'true'
         run: npx playwright install --with-deps chromium
