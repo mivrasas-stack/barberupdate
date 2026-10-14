@@ -3,7 +3,7 @@ services:
   redis:
     image: redis:7.4-alpine
     restart: unless-stopped
-    command: ["sh","-ec","exec redis-server --appendonly yes --appendfsync everysec --maxmemory 256mb --maxmemory-policy noeviction --requirepass \"$REDIS_PASSWORD\""]
+    command: ["sh","-ec","exec redis-server --appendonly yes --appendfsync everysec --maxmemory 256mb --maxmemory-policy noeviction --requirepass \"$$REDIS_PASSWORD\""]
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD}
     volumes: [redis_data:/data]

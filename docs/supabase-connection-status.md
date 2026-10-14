@@ -5,7 +5,8 @@
 - API URL: https://wrfwhftzaflwhkvkzrjm.supabase.co
 - Migraciones 001–006 aplicadas; esquema multi-tenant, RLS, Storage y módulos.
 - Repo `https://github.com/mivrasas-stack/barberupdate`, rama `main`, commit inicial `16577ae`.
-- `backend/.env` local (ignorado por Git): API URL y publishable key configuradas.
+- `backend/.env` local (ignorado por Git): API URL, publishable key y contraseña fuerte de Redis configuradas.
+- Redis 7.4 arrancado con Docker Compose, volumen persistente y healthcheck saludable; autenticación obligatoria probada. El puerto 6379 no está publicado en el host.
 - Frontend `src/`, `index.html`, `package.json`, `vite.config.ts`: contenido original sin cambios.
 - `barberos_backend` es un rol SQL restringido de acceso NOLOGIN hasta configurar contraseña de forma segura.
 
@@ -18,7 +19,7 @@ Desde el Dashboard:
 4. En la laptop, editar SOLO `C:\MIVRA PROYECTS\UPDATEBARBER\backend\.env`.
 5. Añadir `DATABASE_URL=` con la URI, con contraseña correctamente codificada (URL-encoded).
 6. Para firmar subidas de imágenes, copiar una SECRET KEY del proyecto y completar `SUPABASE_SERVICE_ROLE_KEY` SOLO en .env local (nunca en src/ ni Git).
-7. Crear una contraseña aleatoria para `REDIS_PASSWORD` en backend/.env.
+7. `REDIS_PASSWORD` ya fue generado y guardado automáticamente en backend/.env; no copiar la contraseña a Git ni al chat.
 8. Usar `docker compose --env-file backend/.env -f infra/compose.yaml up -d --build` desde UPDATEBARBER.
 9. Verificar: http://127.0.0.1:8188/api/v1/health/live y .../health/ready (debe devolver "ready").
 10. No habilitar Internet público hasta TLS, pruebas Auth/Storage, copias y monitoreo.
