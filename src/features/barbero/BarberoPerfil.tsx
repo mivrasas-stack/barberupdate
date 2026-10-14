@@ -1,26 +1,58 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { barberStore } from '../../services/store';
-import { Scissors, Star, QrCode, Image, Trash2, Plus, Copy, Printer } from 'lucide-react';
+import { ImageUpload } from '../../components/common/ImageUpload';
+import { isLiveBackend, updateBarberProfile, refreshLiveData } from '../../services/liveBackend';
+import { Scissors, Star, QrCode, Image, Trash2, Plus, Copy, Printer, Edit2 } from 'lucide-react';
 
 export const BarberoPerfil: React.FC = () => {
   const { currentBarber, state, addToast } = useApp();
   const barber = currentBarber || state.barbers.find(b => b.isIndependent) || state.barbers[0];
   const [newPhoto, setNewPhoto] = useState('');
+  const [editingAvatar, setEditingAvatar] = useState(false);
 
-  const handleAddPhoto = () => {
-    if (!newPhoto) return;
-    const res = barberStore.addPortfolioPhoto('barber', barber.id, newPhoto);
+  const handleUpdateAvatar = (url: string) => {
+    if (!url) return;
+    barberStore.updateBarber(barber.id, { photo: url });
+    if (isLiveBackend && barber.businessId) {
+      updateBarberProfile(barber.businessId, barber.id, { photoUrl: url })
+        .then(() => refreshLiveData())
+        .catch(e => console.error('Error actualizando foto de perfil del barbero:', e));
+    }
+    setEditingAvatar(false);
+    addToast('Fotografía de perfil actualizada', 'success');
+  };
+
+  const handleAddPhoto = (urlToAdd?: string) => {
+    const photoUrl = (urlToAdd || newPhoto).trim();
+    if (!photoUrl) return;
+    const res = barberStore.addPortfolioPhoto('barber', barber.id, photoUrl);
     if (!res.success) {
       addToast(res.error || 'Error al agregar foto', 'error');
       return;
     }
+
+    if (isLiveBackend && barber.businessId) {
+      const updatedPortfolio = [...barber.portfolio, photoUrl];
+      updateBarberProfile(barber.businessId, barber.id, { portfolio: updatedPortfolio })
+        .then(() => refreshLiveData())
+        .catch(e => console.error('Error sincronizando portafolio barbero:', e));
+    }
+
     addToast('Fotografía agregada a tu portafolio personal', 'success');
     setNewPhoto('');
   };
 
   const handleRemovePhoto = (idx: number) => {
     barberStore.removePortfolioPhoto('barber', barber.id, idx);
+
+    if (isLiveBackend && barber.businessId) {
+      const updatedPortfolio = barber.portfolio.filter((_, i) => i !== idx);
+      updateBarberProfile(barber.businessId, barber.id, { portfolio: updatedPortfolio })
+        .then(() => refreshLiveData())
+        .catch(e => console.error('Error sincronizando portafolio barbero:', e));
+    }
+
     addToast('Fotografía removida', 'info');
   };
 
@@ -40,11 +72,20 @@ export const BarberoPerfil: React.FC = () => {
 
       {/* Profile Card */}
       <div className="bg-[#141414] border border-[#262626] rounded-2xl p-6 shadow-xl flex flex-col sm:flex-row items-center gap-6">
-        <img
-          src={barber.photo}
-          alt={barber.name}
-          className="w-24 h-24 rounded-2xl object-cover border-2 border-[var(--gold-primary)] shadow-xl"
-        />
+        <div className="relative group">
+          <img
+            src={barber.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80'}
+            alt={barber.name}
+            className="w-24 h-24 rounded-2xl object-cover border-2 border-[var(--gold-primary)] shadow-xl"
+          />
+          <button
+            onClick={() => setEditingAvatar(!editingAvatar)}
+            className="absolute -bottom-2 -right-2 p-1.5 rounded-xl bg-[var(--gold-primary)] text-black font-bold shadow-lg hover:bg-[var(--gold-hover)] cursor-pointer"
+            title="Cambiar fotografía de perfil"
+          >
+            <Edit2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
         <div className="text-center sm:text-left flex-1">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
@@ -67,6 +108,28 @@ export const BarberoPerfil: React.FC = () => {
             <span>·</span>
             <span className="text-[var(--gold-primary)] font-bold">Código QR: {barber.publicCode}</span>
           </div>
+
+          {editingAvatar && (
+            <div className="mt-4 p-4 rounded-2xl bg-[#181818] border border-neutral-800">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-neutral-300 font-semibold text-xs">Actualizar foto de perfil</span>
+                <button
+                  type="button"
+                  onClick={() => setEditingAvatar(false)}
+                  className="text-[10px] text-neutral-500 hover:text-neutral-300"
+                >
+                  Cerrar
+                </button>
+              </div>
+              <ImageUpload
+                value={barber.photo}
+                onChange={handleUpdateAvatar}
+                kind="avatar"
+                tenantId={barber.businessId}
+                aspectRatio="square"
+              />
+            </div>
+          )}
         </div>
       </div>
 
@@ -83,20 +146,17 @@ export const BarberoPerfil: React.FC = () => {
         </div>
 
         {barber.portfolio.length < 10 ? (
-          <div className="flex gap-2 text-xs">
-            <input
-              type="url"
+          <div className="p-4 bg-[#181818] rounded-2xl border border-neutral-800 space-y-2">
+            <span className="text-neutral-300 font-semibold block mb-1 text-xs">Agregar fotografía a mi portafolio:</span>
+            <ImageUpload
               value={newPhoto}
-              onChange={e => setNewPhoto(e.target.value)}
-              placeholder="Ingresa la URL de tu imagen de trabajo..."
-              className="flex-1 bg-[#181818] border border-[#2a2a2a] rounded-xl px-3 py-2 text-white"
+              onChange={(url) => {
+                if (url) handleAddPhoto(url);
+              }}
+              kind="portfolio"
+              tenantId={barber.businessId}
+              aspectRatio="square"
             />
-            <button
-              onClick={handleAddPhoto}
-              className="px-4 py-2 rounded-xl bg-[var(--gold-primary)] text-black font-bold hover:bg-[var(--gold-hover)]"
-            >
-              Añadir Foto
-            </button>
           </div>
         ) : (
           <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs text-amber-300">

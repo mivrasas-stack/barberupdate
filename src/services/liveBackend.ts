@@ -59,7 +59,10 @@ export async function signIn(email:string,password:string){
 }
 // Login-only actions: never expose privileged Supabase credentials to the browser.
 export async function registerWithEmail(email:string,password:string){
-  await authCall('signup',{email,password});
+  const data = await authCall('signup',{email,password});
+  if(data?.access_token && data?.refresh_token){
+    receiveToken(data);
+  }
 }
 export async function requestPasswordReset(email:string){
   await authCall('recover',{email});
@@ -96,6 +99,24 @@ export async function backendRequest<T>(path:string,options:RequestInit={},key?:
   return body as T;
 }
 function slugFor(text:string){return text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'barberia';}
+function safeRandomUUID():string{
+  if(typeof crypto!=='undefined'&&typeof crypto.randomUUID==='function'){
+    return crypto.randomUUID();
+  }
+  if(typeof crypto!=='undefined'&&typeof crypto.getRandomValues==='function'){
+    const bytes=new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    bytes[6]=(bytes[6]&0x0f)|0x40;
+    bytes[8]=(bytes[8]&0x3f)|0x80;
+    const hex=Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');
+    return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{
+    const r=(Math.random()*16)|0;
+    const v=c==='x'?r:(r&0x3)|0x8;
+    return v.toString(16);
+  });
+}
 function dayParts(raw:string,zone='America/Bogota'){
   const d=new Date(raw);
   const pieces=new Intl.DateTimeFormat('en-CA',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).formatToParts(d);
@@ -103,21 +124,25 @@ function dayParts(raw:string,zone='America/Bogota'){
   return {date:pick('year')+'-'+pick('month')+'-'+pick('day'),time:pick('hour')+':'+pick('minute')};
 }
 export function mapShop(r:Db,userId:string):Barbershop{
+  const portfolioRaw=val(r,'portfolio');
+  const portfolio=Array.isArray(portfolioRaw)?portfolioRaw.map(x=>String(x)):[];
   return {
     id:txt(r,'id'),slug:txt(r,'slug'),name:txt(r,'name'),ownerId:userId,
-    tagline:'',logo:'',coverImage:'',phone:'',email:'',address:'',city:'',
+    tagline:txt(r,'tagline',''),logo:txt(r,'logo_url',''),coverImage:txt(r,'cover_url',''),phone:'',email:'',address:'',city:'',
     planId:'',subscriptionStatus:'trial',subscriptionRenewsAt:'',rating:0,reviewsCount:0,
-    openingHours:{days:'',open:'',close:''},socialLinks:{},portfolio:[],
+    openingHours:{days:'',open:'',close:''},socialLinks:{},portfolio,
     publicCode:txt(r,'slug'),businessKind:txt(r,'business_kind','barbershop') as Barbershop['businessKind'],createdAt:txt(r,'created_at',new Date().toISOString())
   };
 }
 export function mapBarber(r:Db,tenant:string):Barber{
+  const portfolioRaw=val(r,'portfolio');
+  const portfolio=Array.isArray(portfolioRaw)?portfolioRaw.map(x=>String(x)):[];
   return {
     id:txt(r,'id'),businessId:tenant,slug:txt(r,'slug'),
-    name:txt(r,'name'),photo:'',phone:'',email:'',specialties:[],
+    name:txt(r,'name'),photo:txt(r,'photo_url',''),phone:'',email:'',specialties:[],
     bio:txt(r,'bio'),commissionRate:num(r,'commission_rate'),
     status:txt(r,'status','active')==='active'?'active':'inactive',
-    rating:0,reviewsCount:0,portfolio:[],workDays:[],workHours:{start:'09:00',end:'18:00'},
+    rating:0,reviewsCount:0,portfolio,workDays:[],workHours:{start:'09:00',end:'18:00'},
     isIndependent:false,publicCode:txt(r,'slug')
   };
 }
@@ -274,6 +299,77 @@ export async function adjustStock(tenant:string,productId:string,delta:number,re
  return mapProduct(await backendRequest<Db>('/tenants/'+tenant+'/products/'+productId+'/stock',
    {method:'POST',body:JSON.stringify({delta,reason})}),tenant);
 }
+export async function updateProductDetails(tenant:string,productId:string,data:{
+  name?:string;sku?:string;price?:number;description?:string;photo?:string;
+  category?:Product['category'];cost?:number;minStock?:number;isVisibleInWaitingRoom?:boolean;
+}){
+  const payload:Db={};
+  if(data.name!==undefined)payload.name=data.name;
+  if(data.sku!==undefined)payload.sku=data.sku;
+  if(data.price!==undefined)payload.priceMinor=Math.round(data.price);
+  if(data.description!==undefined)payload.description=data.description;
+  if(data.photo!==undefined)payload.photoUrl=data.photo;
+  if(data.category!==undefined)payload.category=data.category;
+  if(data.cost!==undefined)payload.costMinor=Math.round(data.cost);
+  if(data.minStock!==undefined)payload.minStock=data.minStock;
+  if(data.isVisibleInWaitingRoom!==undefined)payload.waitingRoomVisible=data.isVisibleInWaitingRoom;
+  const r=await backendRequest<Db>('/tenants/'+tenant+'/products/'+productId,{
+    method:'PATCH',body:JSON.stringify(payload)
+  });
+  return mapProduct(r,tenant);
+}
+export async function updateShopProfile(tenant:string,data:{
+  name?:string;tagline?:string;logoUrl?:string;coverUrl?:string;portfolio?:string[];
+}){
+  const r=await backendRequest<Db>('/tenants/'+tenant+'/profile',{
+    method:'PATCH',body:JSON.stringify(data)
+  });
+  return mapShop(r,'');
+}
+export async function updateBarberProfile(tenant:string,barberId:string,data:{
+  name?:string;bio?:string;photoUrl?:string;portfolio?:string[];
+}){
+  const r=await backendRequest<Db>('/tenants/'+tenant+'/barbers/'+barberId,{
+    method:'PATCH',body:JSON.stringify(data)
+  });
+  return mapBarber(r,tenant);
+}
+export async function updateCustomerProfile(data:{
+  fullName?:string;phone?:string;avatarUrl?:string;
+}){
+  return backendRequest<{user_id:string;full_name:string;phone:string;avatar_url:string}>('/me/profile',{
+    method:'PATCH',body:JSON.stringify(data)
+  });
+}
+export async function getAvailabilitySlots(
+  tenant: string,
+  barberId: string,
+  serviceId: string,
+  date: string,
+  zone = 'America/Bogota'
+): Promise<string[]> {
+  if (!isLiveBackend || !tenant || !barberId || !serviceId || !date) return [];
+  try {
+    const res = await fetch(
+      apiOrigin +
+        '/public/tenants/' +
+        encodeURIComponent(tenant) +
+        '/availability?barberId=' +
+        encodeURIComponent(barberId) +
+        '&serviceId=' +
+        encodeURIComponent(serviceId) +
+        '&date=' +
+        encodeURIComponent(date)
+    );
+    if (!res.ok) return [];
+    const body = (await res.json()) as { slots?: { starts_at: string }[] };
+    if (!Array.isArray(body?.slots)) return [];
+    return body.slots.map((s) => dayParts(s.starts_at, zone).time);
+  } catch {
+    return [];
+  }
+}
+
 export async function addBooking(tenant:string,data:{barberId:string;serviceId:string;date:string;startTime:string;customerName:string;customerPhone:string;notes?:string},zone='America/Bogota'){
  // Obtain a server-computed instant instead of constructing a misleading UTC timestamp in the browser.
  const slots=await fetch(apiOrigin+'/public/tenants/'+encodeURIComponent(tenant)+
@@ -282,7 +378,7 @@ export async function addBooking(tenant:string,data:{barberId:string;serviceId:s
    .then(async res=>{const body=await res.json();if(!res.ok)throw Error(body.error||'No se pudo consultar disponibilidad');return body as {slots:{starts_at:string}[]};});
  const selected=slots.slots.find(s=>dayParts(s.starts_at,zone).time===data.startTime);
  if(!selected)throw Error('El horario seleccionado ya no está disponible. Actualiza la agenda.');
- const idempotencyKey='b'+crypto.randomUUID().replace(/-/g,'');
+ const idempotencyKey='b'+safeRandomUUID().replace(/-/g,'');
  return backendRequest<Db>('/tenants/'+tenant+'/bookings',{method:'POST',
    body:JSON.stringify({barberId:data.barberId,serviceId:data.serviceId,
      startsAt:selected.starts_at,customerName:data.customerName,customerPhone:data.customerPhone,
@@ -293,7 +389,7 @@ export async function updateBooking(tenant:string,id:string,status:string){
   {method:'PATCH',body:JSON.stringify({status})});
 }
 export async function addOrder(tenant:string,name:string,items:{productId:string;quantity:number}[]){
- const key='o'+crypto.randomUUID().replace(/-/g,'');
+ const key='o'+safeRandomUUID().replace(/-/g,'');
  return backendRequest<Db>('/tenants/'+tenant+'/orders',
    {method:'POST',body:JSON.stringify({customerName:name,items})},key);
 }
@@ -332,7 +428,7 @@ export async function recordTransaction(tenant:string,data:{
 export async function registerOwnedShop(name:string){
   const clean=name.trim();
   if(clean.length<2||clean.length>120)throw Error('El nombre de la barbería debe tener entre 2 y 120 caracteres.');
-  const slug=toSlug(clean)+'-'+crypto.randomUUID().slice(0,8);
+  const slug=toSlug(clean)+'-'+safeRandomUUID().slice(0,8);
   return backendRequest<Db>('/tenants',{method:'POST',body:JSON.stringify({
     name:clean,slug,currency:'COP',timeZone:'America/Bogota'
   })});
@@ -364,14 +460,19 @@ export async function setProductVisibility(tenant:string,productId:string,visibl
 
 export type CustomerLink={
  tenant_id:string;slug:string;name:string;business_kind:'barbershop'|'independent';
- barber_id:string|null;barber_name:string|null;barber_slug:string|null;linked_at:string
+ barber_id:string|null;barber_name:string|null;barber_slug:string|null;link_scope?:'both'|'barber'|'shop';linked_at:string
 };
 export type PublicBusinessLink={
  tenant_id:string;slug:string;name:string;business_kind:'barbershop'|'independent';
- link_code:string;barber_id:string|null;barber_name:string|null
+ link_code:string;barber_id:string|null;barber_name:string|null;barber_slug?:string|null;
+ link_type?:'barber'|'shop'
 };
-export const getBusinessLinkCode=(tenant:string)=>
- backendRequest<{tenant_id:string;link_code:string;name:string}>('/tenants/'+encodeURIComponent(tenant)+'/link-code');
+export const getBusinessLinkCode=(tenant:string,barberId?:string)=>
+ backendRequest<{
+   tenant_id:string;link_code:string;name:string;slug:string;business_kind:'barbershop'|'independent';
+   barber_id?:string;barber_name?:string;barber_slug?:string;barber_link_code?:string;
+   shop_link_code?:string;link_type?:string
+ }>('/tenants/'+encodeURIComponent(tenant)+'/link-code'+(barberId?'?barberId='+encodeURIComponent(barberId):''));
 export async function resolveBusinessLink(code:string):Promise<PublicBusinessLink>{
  const response=await fetch(apiOrigin+'/public/links/'+encodeURIComponent(code.trim()),{cache:'no-store'});
  const data=await response.json().catch(()=>null);
@@ -379,9 +480,24 @@ export async function resolveBusinessLink(code:string):Promise<PublicBusinessLin
  return data as PublicBusinessLink;
 }
 export const listCustomerLinks=()=>backendRequest<{items:CustomerLink[];profile:{full_name:string;phone:string}|null}>('/me/links');
-export async function linkCustomer(code:string,fullName:string,phone:string){
- const result=await backendRequest<{tenantId:string;name:string;kind:string}>('/me/links',{method:'POST',
- body:JSON.stringify({code,fullName,phone})});
+export async function linkCustomer(code:string,fullName:string,phone:string,linkScope?:'both'|'barber'|'shop'){
+ const result=await backendRequest<{tenantId:string;name:string;kind:string;barberId?:string|null;barberName?:string|null;linkScope?:string}>('/me/links',{method:'POST',
+ body:JSON.stringify({code,fullName,phone,linkScope})});
  window.dispatchEvent(new Event('barberos-links-updated'));
  return result;
 }
+
+export type TenantCustomer = {
+  id: string;
+  name: string;
+  phone: string;
+  linked_at: string | null;
+  is_linked: boolean;
+  preferred_barber_name: string | null;
+  total_appointments: number;
+  completed_appointments: number;
+  total_spent_minor: number;
+  last_visit_at: string | null;
+};
+export const listTenantCustomers = (tenant: string) =>
+  backendRequest<{ items: TenantCustomer[] }>('/tenants/' + encodeURIComponent(tenant) + '/customers');

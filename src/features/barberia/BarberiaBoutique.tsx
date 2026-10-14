@@ -3,7 +3,8 @@ import { useApp } from '../../context/AppContext';
 import { barberStore } from '../../services/store';
 import { formatCurrency } from '../../utils/formatters';
 import { Product, ProductCategory } from '../../types';
-import {isLiveBackend, addProduct, adjustStock, setProductVisibility, refreshLiveData} from '../../services/liveBackend';
+import {isLiveBackend, addProduct, adjustStock, setProductVisibility, updateProductDetails, refreshLiveData} from '../../services/liveBackend';
+import { ImageUpload } from '../../components/common/ImageUpload';
 import {
   ShoppingBag,
   Sparkles,
@@ -27,14 +28,31 @@ export const BarberiaBoutique: React.FC = () => {
 
   // Modals
   const [isNewProductModalOpen, setIsNewProductModalOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [adjustingProduct, setAdjustingProduct] = useState<Product | null>(null);
   const [adjustQuantity, setAdjustQuantity] = useState(1);
   const [adjustReason, setAdjustReason] = useState('Reposición de proveedor');
 
+  const handleUpdateProductPhoto = async (prod: Product, newPhotoUrl: string) => {
+    prod.photo = newPhotoUrl;
+    if (isLiveBackend) {
+      try {
+        await updateProductDetails(shopId, prod.id, { photo: newPhotoUrl });
+        await refreshLiveData();
+        addToast('Imagen de producto actualizada en backend', 'success');
+      } catch (e) {
+        addToast(e instanceof Error ? e.message : 'Error al actualizar imagen', 'error');
+      }
+    } else {
+      addToast('Imagen de producto actualizada', 'success');
+    }
+    setEditingProduct(null);
+  };
+
   // Form states for New Product
   const [newProdName, setNewProdName] = useState('');
   const [newProdDesc, setNewProdDesc] = useState('');
-  const [newProdPhoto, setNewProdPhoto] = useState('https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=200&auto=format&fit=crop&q=80');
+  const [newProdPhoto, setNewProdPhoto] = useState('');
   const [newProdPrice, setNewProdPrice] = useState(50000);
   const [newProdCost, setNewProdCost] = useState(25000);
   const [newProdStock, setNewProdStock] = useState(10);
@@ -146,7 +164,7 @@ export const BarberiaBoutique: React.FC = () => {
 
           <button
             onClick={() => setIsNewProductModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--gold-primary)] text-black text-xs font-bold hover:bg-[var(--gold-hover)] transition-all shadow-md"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-2xl apple-button-gold text-black text-xs font-extrabold shadow-md active:scale-95"
           >
             <Plus className="w-4 h-4" />
             <span>Nuevo Producto</span>
@@ -158,13 +176,13 @@ export const BarberiaBoutique: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <button
           onClick={() => setActiveCategory('beauty')}
-          className={`flex items-center gap-3 p-3.5 rounded-2xl border text-left transition-all ${
+          className={`flex items-center gap-3 p-4 rounded-3xl border text-left transition-all cursor-pointer ${
             activeCategory === 'beauty'
-              ? 'border-[var(--gold-primary)] bg-[var(--gold-primary)]/10 shadow-lg shadow-[var(--gold-primary)]/5'
-              : 'border-[#262626] bg-[#141414] hover:border-neutral-700'
+              ? 'border-[var(--gold-primary)] bg-[var(--gold-primary)]/15 shadow-xl shadow-[var(--gold-primary)]/10'
+              : 'liquid-glass-card hover:border-white/20'
           }`}
         >
-          <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 shrink-0">
+          <div className="w-10 h-10 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 shrink-0 shadow-inner">
             <Sparkles className="w-5 h-5" />
           </div>
           <div>
@@ -176,13 +194,13 @@ export const BarberiaBoutique: React.FC = () => {
 
         <button
           onClick={() => setActiveCategory('food_drinks')}
-          className={`flex items-center gap-3 p-3.5 rounded-2xl border text-left transition-all ${
+          className={`flex items-center gap-3 p-4 rounded-3xl border text-left transition-all cursor-pointer ${
             activeCategory === 'food_drinks'
-              ? 'border-[var(--gold-primary)] bg-[var(--gold-primary)]/10 shadow-lg shadow-[var(--gold-primary)]/5'
-              : 'border-[#262626] bg-[#141414] hover:border-neutral-700'
+              ? 'border-[var(--gold-primary)] bg-[var(--gold-primary)]/15 shadow-xl shadow-[var(--gold-primary)]/10'
+              : 'liquid-glass-card hover:border-white/20'
           }`}
         >
-          <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0">
+          <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 shrink-0 shadow-inner">
             <Coffee className="w-5 h-5" />
           </div>
           <div>
@@ -194,13 +212,13 @@ export const BarberiaBoutique: React.FC = () => {
 
         <button
           onClick={() => setActiveCategory('barbershop_merch')}
-          className={`flex items-center gap-3 p-3.5 rounded-2xl border text-left transition-all ${
+          className={`flex items-center gap-3 p-4 rounded-3xl border text-left transition-all cursor-pointer ${
             activeCategory === 'barbershop_merch'
-              ? 'border-[var(--gold-primary)] bg-[var(--gold-primary)]/10 shadow-lg shadow-[var(--gold-primary)]/5'
-              : 'border-[#262626] bg-[#141414] hover:border-neutral-700'
+              ? 'border-[var(--gold-primary)] bg-[var(--gold-primary)]/15 shadow-xl shadow-[var(--gold-primary)]/10'
+              : 'liquid-glass-card hover:border-white/20'
           }`}
         >
-          <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
+          <div className="w-10 h-10 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0 shadow-inner">
             <Shirt className="w-5 h-5" />
           </div>
           <div>
@@ -213,13 +231,13 @@ export const BarberiaBoutique: React.FC = () => {
 
       {/* Search Bar */}
       <div className="relative">
-        <Search className="w-4 h-4 text-neutral-500 absolute left-3 top-1/2 -translate-y-1/2" />
+        <Search className="w-4 h-4 text-neutral-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
         <input
           type="text"
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder={`Buscar productos en ${activeCategory === 'beauty' ? 'Belleza' : activeCategory === 'food_drinks' ? 'Bebidas y Comidas' : 'Merch'}...`}
-          className="w-full bg-[#141414] border border-[#262626] rounded-xl pl-9 pr-4 py-2.5 text-xs text-white focus:outline-none focus:border-[var(--gold-primary)] transition-colors"
+          className="w-full liquid-glass rounded-2xl pl-10 pr-4 py-3 text-xs text-white focus:outline-none focus:border-[var(--gold-primary)] transition-all shadow-inner"
         />
       </div>
 
@@ -232,17 +250,27 @@ export const BarberiaBoutique: React.FC = () => {
           return (
             <div
               key={prod.id}
-              className={`bg-[#141414] border rounded-2xl p-4 flex flex-col justify-between transition-all ${
-                isLowStock ? 'border-amber-500/40 bg-amber-500/5' : 'border-[#262626]'
+              className={`rounded-3xl p-4 flex flex-col justify-between transition-all ${
+                isLowStock ? 'liquid-glass border-amber-500/50 shadow-[0_0_25px_rgba(245,158,11,0.15)]' : 'liquid-glass-card'
               }`}
             >
               <div>
                 <div className="flex items-start gap-3 mb-3">
-                  <img
-                    src={prod.photo}
-                    alt={prod.name}
-                    className="w-16 h-16 rounded-xl object-cover border border-neutral-700 shrink-0"
-                  />
+                  <div className="relative group/img shrink-0">
+                    <img
+                      src={prod.photo}
+                      alt={prod.name}
+                      className="w-16 h-16 rounded-xl object-cover border border-neutral-700 shrink-0"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setEditingProduct(prod)}
+                      className="absolute inset-0 bg-black/60 opacity-0 group-hover/img:opacity-100 rounded-xl flex items-center justify-center text-[10px] text-white font-bold transition-opacity cursor-pointer"
+                      title="Cambiar fotografía del producto"
+                    >
+                      Editar
+                    </button>
+                  </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-mono text-neutral-500">{prod.sku}</span>
@@ -460,6 +488,19 @@ export const BarberiaBoutique: React.FC = () => {
                 </div>
               </div>
 
+              {/* Image Upload for New Product */}
+              <div>
+                <ImageUpload
+                  label="Fotografía del Producto"
+                  recommendedDimensions="800 x 800 px"
+                  value={newProdPhoto}
+                  onChange={setNewProdPhoto}
+                  kind="product"
+                  tenantId={shopId}
+                  aspectRatio="square"
+                />
+              </div>
+
               <div className="pt-3 border-t border-[#262626] flex justify-end gap-2">
                 <button
                   type="button"
@@ -476,6 +517,37 @@ export const BarberiaBoutique: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Editar Imagen de Producto Existente */}
+      {editingProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="relative w-full max-w-md bg-[#141414] border border-[#262626] rounded-2xl shadow-2xl p-6">
+            <div className="flex items-center justify-between pb-3 border-b border-[#262626]">
+              <h3 className="text-base font-bold text-white">Actualizar Imagen: {editingProduct.name}</h3>
+              <button
+                onClick={() => setEditingProduct(null)}
+                className="p-1 text-neutral-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="py-4 space-y-4">
+              <ImageUpload
+                label="Nueva fotografía del producto"
+                recommendedDimensions="800 x 800 px"
+                value={editingProduct.photo}
+                onChange={(url) => {
+                  if (url) handleUpdateProductPhoto(editingProduct, url);
+                }}
+                kind="product"
+                tenantId={shopId}
+                aspectRatio="square"
+              />
+            </div>
           </div>
         </div>
       )}

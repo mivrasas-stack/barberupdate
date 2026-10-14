@@ -36,7 +36,7 @@ export async function registerRoutes(app,{config,db,security}) {
       )).rows;
     });
     routes.get('/api/v1/tenants',async req=>{
-      const result=await db.query('SELECT t.id,t.name,t.slug,t.currency,t.time_zone,t.status,t.business_kind,m.role FROM public.tenants t JOIN public.tenant_members m ON m.tenant_id=t.id WHERE m.user_id=$1 ORDER BY t.created_at DESC LIMIT 100',[req.actor.id]);
+      const result=await db.query('SELECT t.id,t.name,t.slug,t.currency,t.time_zone,t.status,t.business_kind,t.logo_url,t.cover_url,t.portfolio,m.role FROM public.tenants t JOIN public.tenant_members m ON m.tenant_id=t.id WHERE m.user_id=$1 ORDER BY t.created_at DESC LIMIT 100',[req.actor.id]);
       return result.rows;
     });
     routes.post('/api/v1/tenants',async (req,reply)=>{
@@ -67,7 +67,7 @@ export async function registerRoutes(app,{config,db,security}) {
     routes.get('/api/v1/tenants/:tenantId/barbers',async req=>{
       const tenant=parseOrThrow(id,req.params.tenantId);
       await requireTenant(db,tenant,req.actor.id);
-      return (await db.query('SELECT id,tenant_id,slug,name,bio,status,commission_rate,user_id,created_at FROM public.barbers WHERE tenant_id=$1 ORDER BY name LIMIT 200',[tenant])).rows;
+      return (await db.query('SELECT id,tenant_id,slug,name,bio,photo_url,portfolio,status,commission_rate,user_id,created_at FROM public.barbers WHERE tenant_id=$1 ORDER BY name LIMIT 200',[tenant])).rows;
     });
     routes.post('/api/v1/tenants/:tenantId/barbers',async (req,reply)=>{
       const tenant=parseOrThrow(id,req.params.tenantId);
@@ -77,8 +77,22 @@ export async function registerRoutes(app,{config,db,security}) {
         const member=await db.query("SELECT 1 FROM public.tenant_members WHERE tenant_id=$1 AND user_id=$2 AND role='barber'",[tenant,x.userId]);
         if(!member.rowCount) failure(400,'El barbero debe ser miembro de la empresa con rol barber');
       }
-      const row=await db.query('INSERT INTO public.barbers(tenant_id,name,slug,user_id,bio,commission_rate) VALUES($1,$2,$3,$4,$5,$6) RETURNING *',[tenant,x.name,x.slug,x.userId||null,x.bio,x.commissionRate]);
-      return reply.code(201).send(row.rows[0]);
+      const barber=await db.transaction(async tx=>{
+        const row=await tx.query('INSERT INTO public.barbers(tenant_id,name,slug,user_id,bio,commission_rate) VALUES($1,$2,$3,$4,$5,$6) RETURNING *',[tenant,x.name,x.slug,x.userId||null,x.bio,x.commissionRate]);
+        const created=row.rows[0];
+        await tx.query(`INSERT INTO public.barber_work_intervals(tenant_id,barber_id,weekday,start_minute,end_minute)
+          VALUES
+            ($1,$2,0,540,1140),
+            ($1,$2,1,540,1140),
+            ($1,$2,2,540,1140),
+            ($1,$2,3,540,1140),
+            ($1,$2,4,540,1140),
+            ($1,$2,5,540,1140),
+            ($1,$2,6,540,1140)
+          ON CONFLICT (tenant_id,barber_id,weekday,start_minute) DO NOTHING`,[tenant,created.id]);
+        return created;
+      });
+      return reply.code(201).send(barber);
     });
     routes.get('/api/v1/tenants/:tenantId/services',async req=>{
       const tenant=parseOrThrow(id,req.params.tenantId);
@@ -217,15 +231,121 @@ export async function registerRoutes(app,{config,db,security}) {
       });
       return reply.code(201).send(row);
     });
+    routes.patch('/api/v1/tenants/:tenantId/profile',async req=>{
+      const tenant=parseOrThrow(id,req.params.tenantId);
+      await requireTenant(db,tenant,req.actor.id,owners);
+      const x=parseOrThrow(z.object({
+        name:word(120).optional(),
+        tagline:z.string().max(250).optional(),
+        logoUrl:z.string().max(2048).optional(),
+        coverUrl:z.string().max(2048).optional(),
+        portfolio:z.array(z.string().max(2048)).max(10).optional()
+      }).strict(),req.body);
+      const updates=[];
+      const values=[tenant];
+      let idx=2;
+      if(x.name!==undefined){updates.push(`name=$${idx++}`);values.push(x.name);}
+      if(x.logoUrl!==undefined){updates.push(`logo_url=$${idx++}`);values.push(x.logoUrl);}
+      if(x.coverUrl!==undefined){updates.push(`cover_url=$${idx++}`);values.push(x.coverUrl);}
+      if(x.portfolio!==undefined){updates.push(`portfolio=$${idx++}`);values.push(x.portfolio);}
+      if(!updates.length) failure(400,'Nada para actualizar');
+      const q=`UPDATE public.tenants SET ${updates.join(',')} WHERE id=$1 RETURNING id,name,slug,currency,time_zone,status,business_kind,logo_url,cover_url,portfolio`;
+      const res=await db.query(q,values);
+      return res.rows[0];
+    });
+
+    routes.patch('/api/v1/tenants/:tenantId/barbers/:barberId',async req=>{
+      const tenant=parseOrThrow(id,req.params.tenantId);
+      const barber=parseOrThrow(id,req.params.barberId);
+      const role=await requireTenant(db,tenant,req.actor.id);
+      if(role==='barber'){
+        const check=await db.query('SELECT 1 FROM public.barbers WHERE id=$1 AND tenant_id=$2 AND user_id=$3',[barber,tenant,req.actor.id]);
+        if(!check.rowCount) failure(403,'Solo puedes actualizar tu propio perfil');
+      }
+      const x=parseOrThrow(z.object({
+        name:word(120).optional(),
+        bio:z.string().max(2000).optional(),
+        photoUrl:z.string().max(2048).optional(),
+        portfolio:z.array(z.string().max(2048)).max(10).optional()
+      }).strict(),req.body);
+      const updates=[];
+      const values=[tenant,barber];
+      let idx=3;
+      if(x.name!==undefined&&role!=='barber'){updates.push(`name=$${idx++}`);values.push(x.name);}
+      if(x.bio!==undefined){updates.push(`bio=$${idx++}`);values.push(x.bio);}
+      if(x.photoUrl!==undefined){updates.push(`photo_url=$${idx++}`);values.push(x.photoUrl);}
+      if(x.portfolio!==undefined){updates.push(`portfolio=$${idx++}`);values.push(x.portfolio);}
+      if(!updates.length) failure(400,'Nada para actualizar');
+      const q=`UPDATE public.barbers SET ${updates.join(',')} WHERE tenant_id=$1 AND id=$2 RETURNING id,tenant_id,slug,name,bio,photo_url,portfolio,status,commission_rate,user_id,created_at`;
+      const res=await db.query(q,values);
+      if(!res.rowCount) failure(404,'Barbero no encontrado');
+      return res.rows[0];
+    });
+
+    routes.patch('/api/v1/tenants/:tenantId/products/:productId',async req=>{
+      const tenant=parseOrThrow(id,req.params.tenantId);
+      const product=parseOrThrow(id,req.params.productId);
+      await requireTenant(db,tenant,req.actor.id,owners);
+      const x=parseOrThrow(z.object({
+        name:word(120).optional(),
+        sku:word(80).optional(),
+        priceMinor:z.number().int().min(0).optional(),
+        description:z.string().max(2000).optional(),
+        photoUrl:z.string().max(2048).optional(),
+        category:z.enum(['beauty','food_drinks','barbershop_merch']).optional(),
+        costMinor:z.number().int().min(0).optional(),
+        minStock:z.number().int().min(0).optional(),
+        waitingRoomVisible:z.boolean().optional()
+      }).strict(),req.body);
+      const updates=['updated_at=now()'];
+      const values=[tenant,product];
+      let idx=3;
+      if(x.name!==undefined){updates.push(`name=$${idx++}`);values.push(x.name);}
+      if(x.sku!==undefined){updates.push(`sku=$${idx++}`);values.push(x.sku);}
+      if(x.priceMinor!==undefined){updates.push(`price_minor=$${idx++}`);values.push(x.priceMinor);}
+      if(x.description!==undefined){updates.push(`description=$${idx++}`);values.push(x.description);}
+      if(x.photoUrl!==undefined){updates.push(`photo_url=$${idx++}`);values.push(x.photoUrl);}
+      if(x.category!==undefined){updates.push(`category=$${idx++}`);values.push(x.category);}
+      if(x.costMinor!==undefined){updates.push(`cost_minor=$${idx++}`);values.push(x.costMinor);}
+      if(x.minStock!==undefined){updates.push(`min_stock=$${idx++}`);values.push(x.minStock);}
+      if(x.waitingRoomVisible!==undefined){updates.push(`waiting_room_visible=$${idx++}`);values.push(x.waitingRoomVisible);}
+      const q=`UPDATE public.products SET ${updates.join(',')} WHERE tenant_id=$1 AND id=$2 RETURNING *`;
+      const res=await db.query(q,values);
+      if(!res.rowCount) failure(404,'Producto no encontrado');
+      return res.rows[0];
+    });
+
     routes.post('/api/v1/tenants/:tenantId/media/signed-upload',async (req,reply)=>{
-      const tenant=parseOrThrow(id,req.params.tenantId);await requireTenant(db,tenant,req.actor.id,owners);
+      const tenant=parseOrThrow(id,req.params.tenantId);
+      const role=await requireTenant(db,tenant,req.actor.id);
       if(!service) failure(503,'Storage no configurado');
-      const x=parseOrThrow(z.object({mimeType:z.enum(['image/jpeg','image/png','image/webp']),kind:z.enum(['logo','cover','portfolio','service','product'])}).strict(),req.body);
+      const x=parseOrThrow(z.object({
+        mimeType:z.enum(['image/jpeg','image/png','image/webp']),
+        kind:z.enum(['logo','cover','portfolio','service','product','avatar'])
+      }).strict(),req.body);
+
+      if(role==='barber'&&!['portfolio','avatar'].includes(x.kind)){
+        failure(403,'Un barbero solo puede cargar imágenes para su portafolio o foto personal');
+      }
+
       const ext={'image/jpeg':'jpg','image/png':'png','image/webp':'webp'}[x.mimeType];
       const path=tenant+'/'+x.kind+'/'+uuid()+'.'+ext;
       const signed=await service.storage.from(config.mediaBucket).createSignedUploadUrl(path);
-      if(signed.error) failure(503,'No se pudo firmar la carga');
+      if(signed.error) failure(503,'No se pudo firmar la carga: '+(signed.error.message||''));
       await db.query('INSERT INTO public.media_assets(tenant_id,owner_user_id,storage_bucket,storage_path,mime_type,kind) VALUES($1,$2,$3,$4,$5,$6)',[tenant,req.actor.id,config.mediaBucket,path,x.mimeType,x.kind]);
+      return reply.code(201).send({bucket:config.mediaBucket,path,signedUrl:signed.data.signedUrl,token:signed.data.token});
+    });
+
+    routes.post('/api/v1/me/avatar/signed-upload',async (req,reply)=>{
+      if(!service) failure(503,'Storage no configurado');
+      const x=parseOrThrow(z.object({
+        mimeType:z.enum(['image/jpeg','image/png','image/webp'])
+      }).strict(),req.body);
+      const ext={'image/jpeg':'jpg','image/png':'png','image/webp':'webp'}[x.mimeType];
+      const path='customers/'+req.actor.id+'/avatar/'+uuid()+'.'+ext;
+      const signed=await service.storage.from(config.mediaBucket).createSignedUploadUrl(path);
+      if(signed.error) failure(503,'No se pudo firmar la carga: '+(signed.error.message||''));
+      await db.query('INSERT INTO public.media_assets(tenant_id,owner_user_id,storage_bucket,storage_path,mime_type,kind) VALUES(NULL,$1,$2,$3,$4,$5)',[req.actor.id,config.mediaBucket,path,x.mimeType,'avatar']);
       return reply.code(201).send({bucket:config.mediaBucket,path,signedUrl:signed.data.signedUrl,token:signed.data.token});
     });
   });

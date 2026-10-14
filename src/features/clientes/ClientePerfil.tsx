@@ -1,11 +1,32 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { User, Phone, Mail, Award, Calendar, Scissors, ShieldCheck } from 'lucide-react';
+import { User, Phone, Mail, Award, Calendar, Scissors, ShieldCheck, Camera, Edit2 } from 'lucide-react';
+import { ImageUpload } from '../../components/common/ImageUpload';
+import { isLiveBackend, updateCustomerProfile } from '../../services/liveBackend';
 
 export const ClientePerfil: React.FC = () => {
-  const { currentUser, state } = useApp();
+  const { currentUser, state, setCurrentUser, addToast } = useApp();
   const customerId = currentUser?.id || 'usr-client-1';
   const loyalty = state.loyalty[customerId] || state.loyalty['usr-client-1'] || { points: 420 };
+  const [editingAvatar, setEditingAvatar] = useState(false);
+
+  const handleUpdateAvatar = async (url: string) => {
+    if (!url || !currentUser) return;
+    const updated = { ...currentUser, avatar: url };
+    setCurrentUser(updated);
+
+    if (isLiveBackend) {
+      try {
+        await updateCustomerProfile({ avatarUrl: url });
+        addToast('Foto de perfil actualizada en el backend', 'success');
+      } catch (e) {
+        console.error('Error actualizando avatar de cliente:', e);
+      }
+    } else {
+      addToast('Foto de perfil actualizada', 'success');
+    }
+    setEditingAvatar(false);
+  };
 
   return (
     <div className="space-y-6 max-w-2xl mx-auto">
@@ -16,21 +37,53 @@ export const ClientePerfil: React.FC = () => {
         <h1 className="text-2xl font-extrabold text-white tracking-tight">Mi Perfil de Cliente</h1>
       </div>
 
-      <div className="bg-[#141414] border border-[#262626] rounded-2xl p-6 shadow-xl flex items-center gap-4">
-        <img
-          src={currentUser?.avatar || 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=100&auto=format&fit=crop&q=80'}
-          alt={currentUser?.name || 'Cliente'}
-          className="w-16 h-16 rounded-2xl object-cover border-2 border-[var(--gold-primary)]"
-        />
-        <div>
-          <h2 className="text-lg font-bold text-white">{currentUser?.name || 'Camilo Andrés Torres'}</h2>
-          <p className="text-xs text-neutral-400">{currentUser?.email || 'camilo.torres@gmail.com'}</p>
-          <div className="mt-1 flex items-center gap-2 text-xs font-mono text-neutral-300">
-            <span>{currentUser?.phone || '+57 311 222 3344'}</span>
-            <span>·</span>
-            <span className="text-[var(--gold-primary)] font-bold">{loyalty.points} pts acumulados</span>
+      <div className="bg-[#141414] border border-[#262626] rounded-2xl p-6 shadow-xl space-y-4">
+        <div className="flex items-center gap-4">
+          <div className="relative group">
+            <img
+              src={currentUser?.avatar || 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=100&auto=format&fit=crop&q=80'}
+              alt={currentUser?.name || 'Cliente'}
+              className="w-16 h-16 rounded-2xl object-cover border-2 border-[var(--gold-primary)]"
+            />
+            <button
+              onClick={() => setEditingAvatar(!editingAvatar)}
+              className="absolute -bottom-1 -right-1 p-1 rounded-lg bg-[var(--gold-primary)] text-black font-bold shadow-md hover:bg-[var(--gold-hover)] cursor-pointer"
+              title="Cambiar foto de perfil"
+            >
+              <Edit2 className="w-3 h-3" />
+            </button>
+          </div>
+          <div className="flex-1">
+            <h2 className="text-lg font-bold text-white">{currentUser?.name || 'Camilo Andrés Torres'}</h2>
+            <p className="text-xs text-neutral-400">{currentUser?.email || 'camilo.torres@gmail.com'}</p>
+            <div className="mt-1 flex items-center gap-2 text-xs font-mono text-neutral-300">
+              <span>{currentUser?.phone || '+57 311 222 3344'}</span>
+              <span>·</span>
+              <span className="text-[var(--gold-primary)] font-bold">{loyalty.points} pts acumulados</span>
+            </div>
           </div>
         </div>
+
+        {editingAvatar && (
+          <div className="p-4 rounded-xl bg-[#181818] border border-neutral-800">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-neutral-300 font-semibold text-xs">Subir nueva foto de perfil</span>
+              <button
+                type="button"
+                onClick={() => setEditingAvatar(false)}
+                className="text-[10px] text-neutral-500 hover:text-neutral-300"
+              >
+                Cerrar
+              </button>
+            </div>
+            <ImageUpload
+              value={currentUser?.avatar || ''}
+              onChange={handleUpdateAvatar}
+              kind="avatar"
+              aspectRatio="square"
+            />
+          </div>
+        )}
       </div>
 
       <div className="bg-[#141414] border border-[#262626] rounded-2xl p-5 space-y-3 text-xs">
