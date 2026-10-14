@@ -164,7 +164,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await signIn(email,password);
     try{
       let data=await loadAccount();
-      if(requestedRole==='owner'&&data.shops.length===0){
+      // In real mode, authorize by the server-resolved role, never the login UI hint.
+      if(data.user.role==='owner'&&data.shops.length===0){
         const shopName=window.prompt('Tu cuenta no tiene una barbería. Escribe el nombre para crearla:');
         if(shopName?.trim()){
           await registerOwnedShop(shopName);
