@@ -155,7 +155,38 @@ test('Live RBAC and concurrency: owner, manager, barber and competing sales',
       'SELECT stock FROM public.products WHERE tenant_id=$1 AND id=$2',
       [tenantId,another.data.id]);
     assert.equal(stockNow.rows[0].stock,2,'Idempotency should debit stock once');
-    console.log('PASS: owner/manager/barber permissions, cross-role privacy, parallel booking 201/409, parallel orders 201/409, same-key replay 200/201');
+    // Bounded real booking workload (10 separate slots, five workers).
+    // Intentionally stays well below Supabase Free and Redis rate-limit quotas.
+    const targetSlots=slots.slots.filter((_,i)=>i>=2&&i%2===0).slice(0,10);
+    assert.equal(targetSlots.length,10,'Need ten independent slots');
+    const samples=[];
+    const outcomes=[];
+    let cursor=0;
+    async function boundedWriter(){
+      while(cursor<targetSlots.length){
+        const index=cursor++;
+        const started=performance.now();
+        const result=await request(owner.token,'POST',prefix+'/bookings',
+          {...booking,startsAt:targetSlots[index].starts_at},
+          'batch-'+key());
+        samples.push(performance.now()-started);
+        outcomes.push(result.status);
+      }
+    }
+    await Promise.all(Array.from({length:5},()=>boundedWriter()));
+    assert.ok(outcomes.every(status=>status===201),
+      'Independent bookings must succeed, statuses='+outcomes.join(','));
+    const sorted=samples.sort((a,b)=>a-b);
+    const p95=sorted[Math.ceil(sorted.length*0.95)-1];
+    const persisted=await db.query(
+      "SELECT count(*)::int AS n FROM public.appointments WHERE tenant_id=$1 AND barber_id=$2 AND status IN ('pending','confirmed')",
+      [tenantId,ownBarber.data.id]);
+    assert.equal(persisted.rows[0].n,11,'All independent appointments persisted exactly once');
+    console.log('BOUNDED_BOOKING_LOAD='+JSON.stringify({
+      writes:outcomes.length,concurrency:5,successful:outcomes.filter(s=>s===201).length,
+      p95Ms:Math.round(p95),scope:'isolated tenant, Supabase Free, not a production SLA'
+    }));
+    console.log('PASS: roles, privacy, competing reservations, inventory, idempotency and bounded real booking load');
   }finally{
     let failed=null;
     if(tenantId){

@@ -107,3 +107,12 @@ No conectar el frontend todavía. No declarar 100% de backend productivo.
 - Monitor real: 3/3 endpoints HTTP 200, estado healthy. Carga local anterior no equivale a alta disponibilidad ante caida del host.
 - Supabase Advisor: 0 hallazgos de seguridad; 9 indices sin uso identificados como informativos, no eliminados sin analisis.
 - Recuperacion y backups pendientes de ensayo real; procedimiento detallado en docs/operations-recovery.md.
+
+## Ejecucion controlada de fase 5/6 (Redis, reservas y preflight)
+
+- Se detuvo SOLO Redis de Docker en el stack BarberOS. Durante el fallo, 6/6 consultas readiness fueron rechazadas (0 HTTP 200). Se restauro el servicio en finally y la API recupero HTTP 200. Solo el contenedor BarberOS Redis se detuvo.
+- Test real con tenant aislado: diez reservas nuevas en distintos horarios, cinco workers concurrentes, 10 HTTP 201. Latencia p95 observada 2001 ms. No representa carga sostenida ni 1000 sesiones; buscar optimizacion.
+- Se anadio test de monitor de preparacion de produccion: 3/3 casos aprobados. Con .env actual, preflight devuelve ready=false y exit code 1 de manera intencional.
+- infra/caddy/Caddyfile.production.example validado en contenedor Caddy temporal con --network none, sin abrir puertos ni cambiar Caddy local. TLS real NO desplegado.
+- Fase 6 permanece sin terminar: restauracion real de backup, servidor 24/7, dominio, HTTPS, alertas, seguridad e integracion con frontend no aprobados.
+- Checklist de pendientes y procedimiento seguro: docs/production-launch-checklist.md.
