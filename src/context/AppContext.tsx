@@ -176,7 +176,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         transactions:data.transactions,orders:data.orders,plans:data.plans,cashClosings:data.cashClosings});
       setCurrentUser(data.user);
       if(data.user.role==='owner')navigate(data.shops[0]?'/barberia/'+data.shops[0].slug+'/inicio':'/clientes/inicio');
-      else if(data.user.role==='barber_employee')navigate('/barbero/'+(data.barbers[0]?.slug||'barbero')+'/inicio');
+      else if(data.user.role==='superadmin')navigate('/admin/inicio');
+      else if(data.user.role==='barber_employee'||data.user.role==='barber_independent')
+        navigate('/barbero/'+(data.barbers.find(b=>b.id===data.user.barberId)?.slug||data.barbers[0]?.slug||'barbero')+'/inicio');
       else navigate('/clientes/inicio');
       addToast('Sesión real iniciada correctamente', 'success');
     }catch(error){clearSession();throw error;}
@@ -192,7 +194,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         transactions:data.transactions,orders:data.orders,plans:data.plans,cashClosings:data.cashClosings});
       setCurrentUser(data.user);
       if(data.user.role==='owner'&&data.shops[0])navigate('/barberia/'+data.shops[0].slug+'/inicio');
-      else if(data.user.role==='barber_employee')navigate('/barbero/'+(data.barbers[0]?.slug||'barbero')+'/inicio');
+      else if(data.user.role==='superadmin')navigate('/admin/inicio');
+      else if(data.user.role==='barber_employee'||data.user.role==='barber_independent')
+        navigate('/barbero/'+(data.barbers.find(b=>b.id===data.user.barberId)?.slug||data.barbers[0]?.slug||'barbero')+'/inicio');
       else navigate('/clientes/inicio');
     }).catch(()=>{if(alive){clearSession();setCurrentUser(null);}});
     return ()=>{alive=false;};

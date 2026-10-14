@@ -72,3 +72,21 @@ test('Móvil: navegación e imagen sin desbordamiento',async({page})=>{
  const over=await page.evaluate(()=>document.documentElement.scrollWidth>document.documentElement.clientWidth+1);
  expect(over).toBe(false);
 });
+
+test('Modo real no muestra perfiles ficticios ni recupera un almacén de demostración',async({page})=>{
+ await page.addInitScript(()=>{
+   if(!sessionStorage.getItem('qa-old-demo-written')){
+     localStorage.setItem('barberos_state_v2',JSON.stringify({users:[{id:'fake-superadmin',role:'superadmin'}]}));
+     sessionStorage.setItem('qa-old-demo-written','yes');
+   }
+ });
+ await page.goto('/login');
+ await expect(page.getByTestId('barber-paradise-login')).toBeVisible();
+ await expect(page.getByText('Cuentas de Desarrollo')).toHaveCount(0);
+ await expect(page.getByText('Cambiar Usuario Demo')).toHaveCount(0);
+ await expect(page.getByText('Restablecer Datos Demo')).toHaveCount(0);
+ await expect(page.getByText('Reiniciar Demo')).toHaveCount(0);
+ expect(await page.evaluate(()=>localStorage.getItem('barberos_state_v2'))).toBeNull();
+ await page.goto('/login#/admin/inicio');
+ await expect(page.getByTestId('barber-paradise-login')).toBeVisible();
+});

@@ -79,6 +79,15 @@ const getInitialState = (): BarberOSState => {
   };
 };
 
+// The live app must not display seeded identities, fabricated revenue or mock bookings,
+// including during the first paint before an authenticated API response arrives.
+const getLiveEmptyState = (): BarberOSState => ({
+  ...getInitialState(),
+  users: [], barbershops: [], barbers: [], services: [], products: [],
+  appointments: [], transactions: [], cashClosings: [], orders: [], reviews: [],
+  loyalty: {}, plans: [],
+});
+
 class Store {
   private state: BarberOSState;
   private listeners: Set<() => void> = new Set();
@@ -88,7 +97,11 @@ class Store {
   }
 
   private loadFromStorage(): BarberOSState {
-    if(import.meta.env.VITE_BACKEND_MODE==='live')return getInitialState();
+    if(import.meta.env.VITE_BACKEND_MODE==='live'){
+      // This key was used only for synthetic demo records; never carry it into live.
+      localStorage.removeItem(STORAGE_KEY);
+      return getLiveEmptyState();
+    }
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
@@ -130,7 +143,7 @@ class Store {
   // Keep the user's existing visual theme without changing any UI component.
   public hydrateFromBackend(data: Partial<BarberOSState>): void {
     this.state = {
-      ...getInitialState(),
+      ...getLiveEmptyState(),
       palettes: this.state.palettes,
       activePaletteId: this.state.activePaletteId,
       currency: this.state.currency,
@@ -146,6 +159,10 @@ class Store {
   }
 
   public resetToFactory(): void {
+    if(import.meta.env.VITE_BACKEND_MODE==='live'){
+      this.clearRemoteSession();
+      return;
+    }
     this.state = getInitialState();
     localStorage.removeItem(STORAGE_KEY);
     this.persist();

@@ -163,10 +163,12 @@ export function mapPlan(r:Db):SubscriptionPlan{
    features:arr(val(r,'features')).map(x=>String(x)),isPopular:false,
    isActive:val(r,'is_active')!==false,order:num(r,'sort_order')};
 }
-export function tokenUser(id:string,email:string,tenants:Db[]):User{
+export function tokenUser(id:string,email:string,tenants:Db[],platformRole?:string|null):User{
  const t=tenants[0];
  const role=txt(t||{},'role');
- const userRole:UserRole=role==='owner'||role==='manager'?'owner':role==='barber'?'barber_employee':'client';
+ const userRole:UserRole=platformRole==='superadmin'?'superadmin':
+    role==='owner'&&txt(t||{},'business_kind')==='independent'?'barber_independent':
+    role==='owner'||role==='manager'?'owner':role==='barber'?'barber_employee':'client';
  return {id,name:email.split('@')[0],email,phone:'',role:userRole,avatar:'',
    businessId:t?.id as string|undefined,createdAt:new Date().toISOString(),
    lastLogin:new Date().toISOString(),status:'active'};
@@ -177,10 +179,10 @@ export async function loadAccount():Promise<{
   orders:Order[];plans:SubscriptionPlan[];cashClosings:CashClosing[]
 }>{
  const [me,tenants]=await Promise.all([
-   backendRequest<{id:string;email:string}>('/me'),
+   backendRequest<{id:string;email:string;platformRole:string|null}>('/me'),
    backendRequest<Db[]>('/tenants')
  ]);
- const user=tokenUser(me.id,me.email,tenants);
+ const user=tokenUser(me.id,me.email,tenants,me.platformRole);
  let shopRows=tenants.map(t=>mapShop(t,me.id));
  const tenant=tenants[0]?.id as string|undefined;
  let barbers:Barber[]=[],services:Service[]=[],products:Product[]=[],appointments:Appointment[]=[],transactions:Transaction[]=[],orders:Order[]=[],cashClosings:CashClosing[]=[];
@@ -191,7 +193,8 @@ export async function loadAccount():Promise<{
      backendRequest<Db[]>(prefix+'/services'),
      backendRequest<Db[]>(prefix+'/products')
    ]);
-   barbers=bs.map(b=>mapBarber(b,tenant));
+   barbers=bs.map(b=>({...mapBarber(b,tenant),isIndependent:user.role==='barber_independent'}));
+   if(user.role==='barber_independent')user.barberId=txt(bs.find(b=>txt(b,'user_id')===me.id)||{},'id')||undefined;
    if(user.role==='barber_employee')user.barberId=txt(bs.find(b=>txt(b,'user_id')===me.id)||{},'id')||undefined;
    services=ss.map(s=>mapService(s,tenant));
    products=ps.map(x=>mapProduct(x,tenant));
@@ -208,6 +211,10 @@ export async function loadAccount():Promise<{
      transactions=tx.map(x=>mapTransaction(x,tenant));orders=ord.map(x=>mapOrder(x,tenant));
      cashClosings=closes.map(x=>mapCashClose(x,tenant));
    }
+ }else if(user.role==='superadmin'){
+   // A platform admin can inspect the directory through a dedicated authenticated API.
+   const global=await backendRequest<Db[]>('/platform/tenants');
+   shopRows=global.map(t=>mapShop(t,''));
  }else{
    // Customers have no tenant membership: use public active shops and catalog.
    const publicTenants=await backendRequest<Db[]>('/public/tenants');
@@ -231,7 +238,7 @@ export async function loadAccount():Promise<{
  const plans=await backendRequest<Db[]>('/public/plans').catch(()=>[] as Db[]);
  return {user,shops:shopRows,barbers,services,products,appointments,transactions,orders,plans:plans.map(mapPlan),cashClosings};
 }
-function userRolePrivileged(role:UserRole){return role==='owner'||role==='superadmin';}
+function userRolePrivileged(role:UserRole){return role==='owner'||role==='superadmin'||role==='barber_independent';}
 export async function addService(tenant:string,data:{name:string;description:string;price:number;durationMinutes:number;category:string}){
  const r=await backendRequest<Db>('/tenants/'+tenant+'/services',{method:'POST',body:JSON.stringify({
    name:data.name,description:data.description,priceMinor:Math.round(data.price),

@@ -172,7 +172,7 @@ const AppFrame: React.FC = () => {
       <div className="flex-1">
         <AppContent />
       </div>
-      {!isLogin && <RoleSwitcherBar />}
+      {!isLogin && !isLiveBackend && <RoleSwitcherBar />}
       <PaletteValidatorModal />
       <ToastContainer />
     </div>

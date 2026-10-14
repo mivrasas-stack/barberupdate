@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { barberStore } from '../../services/store';
+import {isLiveBackend} from '../../services/liveBackend';
 import { formatCurrency } from '../../utils/formatters';
 import {
   Globe,
@@ -23,6 +24,7 @@ export const AdminCommercialEditor: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'hero' | 'benefits' | 'faqs'>('hero');
 
   const handleSave = () => {
+    if(isLiveBackend){addToast('La publicación comercial todavía requiere conectar el editor al backend. No se aplicaron cambios.', 'error');return;}
     barberStore.updateCommercialConfig(draft);
     addToast('Página comercial publicada con éxito en el entorno de demostración', 'success');
   };
@@ -84,10 +86,11 @@ export const AdminCommercialEditor: React.FC = () => {
 
           <button
             onClick={handleSave}
+            disabled={isLiveBackend}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--gold-primary)] text-black text-xs font-bold hover:bg-[var(--gold-hover)] transition-all shadow-lg shadow-[var(--gold-primary)]/10"
           >
             <Save className="w-4 h-4" />
-            <span>Publicar Cambios</span>
+            <span>{isLiveBackend?'Publicación no disponible':'Publicar Cambios'}</span>
           </button>
         </div>
       </div>
@@ -249,7 +252,7 @@ export const AdminCommercialEditor: React.FC = () => {
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               Previsualización en tiempo real ({previewDevice === 'desktop' ? '1440px Escritorio' : '390px Móvil'})
             </span>
-            <span className="text-[10px] text-neutral-500 font-mono">Modo Demo Interactivo</span>
+            <span className="text-[10px] text-neutral-500 font-mono">Vista previa sin publicar</span>
           </div>
 
           <div

@@ -23,9 +23,20 @@ export async function registerRoutes(app,{config,db,security}) {
       await authenticated(req); await limited(req);
       if(!db) failure(503,'Base de datos no configurada');
     });
-    routes.get('/api/v1/me',async req=>({id:req.actor.id,email:req.actor.email}));
+    // Platform privileges are verified server-side; never inferred from client roles or JWT metadata.
+    routes.get('/api/v1/me',async req=>{
+      const granted=await db.query('SELECT 1 FROM public.platform_admins WHERE user_id=$1',[req.actor.id]);
+      return {id:req.actor.id,email:req.actor.email,platformRole:granted.rowCount?'superadmin':null};
+    });
+    routes.get('/api/v1/platform/tenants',async req=>{
+      const granted=await db.query('SELECT 1 FROM public.platform_admins WHERE user_id=$1',[req.actor.id]);
+      if(!granted.rowCount)failure(403,'Solo administradores globales');
+      return (await db.query(
+        'SELECT id,name,slug,currency,time_zone,status,business_kind FROM public.tenants ORDER BY created_at DESC LIMIT 100'
+      )).rows;
+    });
     routes.get('/api/v1/tenants',async req=>{
-      const result=await db.query('SELECT t.id,t.name,t.slug,t.currency,t.time_zone,t.status,m.role FROM public.tenants t JOIN public.tenant_members m ON m.tenant_id=t.id WHERE m.user_id=$1 ORDER BY t.created_at DESC LIMIT 100',[req.actor.id]);
+      const result=await db.query('SELECT t.id,t.name,t.slug,t.currency,t.time_zone,t.status,t.business_kind,m.role FROM public.tenants t JOIN public.tenant_members m ON m.tenant_id=t.id WHERE m.user_id=$1 ORDER BY t.created_at DESC LIMIT 100',[req.actor.id]);
       return result.rows;
     });
     routes.post('/api/v1/tenants',async (req,reply)=>{

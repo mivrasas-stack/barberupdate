@@ -34,7 +34,10 @@ test('BarberOS E2E: Auth, schedule, bookings, orders, cleanup',
     assert.ifError(newUser.error);uid=newUser.data.user.id;
     const signin=await anon.auth.signInWithPassword({email,password});
     assert.ifError(signin.error);token=signin.data.session.access_token;
-    check(await call('GET','/api/v1/me'),200,'Auth');
+    const ownIdentity=await call('GET','/api/v1/me');
+    check(ownIdentity,200,'Auth');
+    assert.equal(ownIdentity.data.platformRole,null,'Ordinary tenant owners are never superadmins');
+    check(await call('GET','/api/v1/platform/tenants'),403,'Only global administrators can access platform tenants');
     const tenant=await call('POST','/api/v1/tenants',{
       name:'Barberos E2E',slug:'barberos-itest-'+randomBytes(8).toString('hex'),
       currency:'COP',timeZone:'America/Bogota'});
