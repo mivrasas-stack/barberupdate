@@ -135,7 +135,7 @@ export async function registerRoutes(app,{config,db,security}) {
       return reply.code(booking.repeated?200:201).send(booking.row);
     });
     routes.get('/api/v1/me/bookings',async req=>{
-      return (await db.query('SELECT id,tenant_id,barber_id,service_id,starts_at,ends_at,status,price_minor,created_at FROM public.appointments WHERE customer_user_id=$1 ORDER BY starts_at DESC LIMIT 100',[req.actor.id])).rows;
+      return (await db.query('SELECT id,tenant_id,barber_id,service_id,customer_user_id,starts_at,ends_at,status,price_minor,created_at FROM public.appointments WHERE customer_user_id=$1 ORDER BY starts_at DESC LIMIT 100',[req.actor.id])).rows;
     });
     routes.get('/api/v1/tenants/:tenantId/appointments',async req=>{
       const tenant=parseOrThrow(id,req.params.tenantId);
@@ -231,7 +231,7 @@ export async function registerRoutes(app,{config,db,security}) {
   });
   app.get('/api/v1/public/tenants',async req=>{
     await limited(req);if(!db)failure(503,'Base de datos no configurada');
-    return (await db.query("SELECT id,name,slug,currency,time_zone FROM public.tenants WHERE status='active' ORDER BY name LIMIT 100")).rows;
+    return (await db.query("SELECT id,name,slug,currency,time_zone,business_kind FROM public.tenants WHERE status='active' ORDER BY name LIMIT 100")).rows;
   });
   app.get('/api/v1/public/tenants/:tenantId/products',async req=>{
     await limited(req);if(!db)failure(503,'Base de datos no configurada');

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import {useCustomerLinks} from '../../services/useCustomerLinks';
 import { barberStore } from '../../services/store';
 import {isLiveBackend,addOrder,refreshLiveData,mapOrder} from '../../services/liveBackend';
 import { formatCurrency } from '../../utils/formatters';
@@ -24,7 +25,9 @@ export const ClienteSalaEspera: React.FC = () => {
   const [cart, setCart] = useState<{ product: Product; quantity: number }[]>([]);
   const [lastGeneratedOrder, setLastGeneratedOrder] = useState<Order | null>(null);
 
-  const shopId = currentShop?.id || 'shop-1';
+  const {items:linkedBusinesses}=useCustomerLinks(currentUser?.id);
+  const bookedTenant=state.appointments.find(appointment=>appointment.customerId===currentUser?.id)?.businessId;
+  const shopId=bookedTenant||linkedBusinesses[0]?.tenant_id||currentShop?.id||'';
 
   // Products visible in waiting room
   const availableProducts = state.products.filter(

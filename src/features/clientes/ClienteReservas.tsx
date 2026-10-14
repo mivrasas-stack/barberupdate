@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { barberStore } from '../../services/store';
 import {isLiveBackend,addBooking,refreshLiveData} from '../../services/liveBackend';
+import {useCustomerLinks} from '../../services/useCustomerLinks';
 import { formatCurrency } from '../../utils/formatters';
 import {
   Calendar,
@@ -21,12 +22,20 @@ import { Barbershop, Barber, Service } from '../../types';
 
 export const ClienteReservas: React.FC = () => {
   const { state, currentUser, currency, navigate, addToast } = useApp();
+  const {items:linkedBusinesses,profile:customerProfile}=useCustomerLinks(currentUser?.id);
+  const linkedIds=new Set(linkedBusinesses.map(link=>link.tenant_id));
+  const shopsToShow=state.barbershops.filter(s=>!isLiveBackend||s.businessKind!=='independent')
+    .sort((a,b)=>Number(linkedIds.has(b.id))-Number(linkedIds.has(a.id)));
+  const independentToShow=state.barbers.filter(b=>b.isIndependent)
+    .sort((a,b)=>Number(linkedIds.has(b.businessId||''))-Number(linkedIds.has(a.businessId||'')));
 
   const [step, setStep] = useState<1 | 2 | 3 | 4 | 5 | 6>(1);
 
   // Selections
   const [selectedTargetType, setSelectedTargetType] = useState<'shop' | 'independent'>('shop');
-  const [selectedShop, setSelectedShop] = useState<Barbershop>(state.barbershops[0]);
+  const [selectedShop, setSelectedShop] = useState<Barbershop>(() =>
+    shopsToShow.find(shop=>state.services.some(service=>service.businessId===shop.id)
+      &&state.barbers.some(barber=>barber.businessId===shop.id))||shopsToShow[0]);
   const [selectedIndependentBarber, setSelectedIndependentBarber] = useState<Barber>(
     state.barbers.find(b => b.isIndependent) || state.barbers[0]
   );
@@ -35,16 +44,27 @@ export const ClienteReservas: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState(new Date(Date.now()+86400000).toISOString().slice(0,10));
   const [selectedTime, setSelectedTime] = useState('11:00');
   const [notes, setNotes] = useState('');
+  useEffect(()=>{
+    if(!isLiveBackend||!linkedBusinesses.length)return;
+    const first=linkedBusinesses[0];
+    if(first.business_kind==='independent'){
+      const barber=state.barbers.find(b=>b.businessId===first.tenant_id&&b.isIndependent);
+      if(barber){setSelectedTargetType('independent');setSelectedIndependentBarber(barber)}
+    }else{
+      const shop=state.barbershops.find(s=>s.id===first.tenant_id);
+      if(shop){setSelectedTargetType('shop');setSelectedShop(shop)}
+    }
+  },[linkedBusinesses.map(x=>x.tenant_id).join(','),state.barbers,state.barbershops]);
 
   // Available barbers for this shop/service
   const availableBarbers = selectedTargetType === 'shop'
-    ? state.barbers.filter(b => b.businessId === selectedShop.id)
+    ? state.barbers.filter(b => b.businessId === selectedShop?.id)
     : [selectedIndependentBarber];
 
   // Available services
   const availableServices = selectedTargetType === 'shop'
-    ? state.services.filter(s => s.businessId === selectedShop.id)
-    : state.services.filter(s => s.barberId === selectedIndependentBarber.id || s.barberIds.includes(selectedIndependentBarber.id));
+    ? state.services.filter(s => s.businessId === selectedShop?.id)
+    : state.services.filter(s => s.businessId === selectedIndependentBarber?.businessId || s.barberId === selectedIndependentBarber?.id || s.barberIds.includes(selectedIndependentBarber?.id||''));
 
   // Time slots for the chosen day
   const timeSlots = [
@@ -54,15 +74,14 @@ export const ClienteReservas: React.FC = () => {
   const handleConfirmReservation = async () => {
     if (!selectedService || !selectedBarber) return;
     if(isLiveBackend){
-      if(selectedTargetType!=='shop'||!selectedShop?.id){
-        addToast('Selecciona una barbería publicada en BarberOS.','error');return;
-      }
-      const phone=currentUser?.phone?.trim()||window.prompt('Ingresa tu teléfono para confirmar la reserva:')?.trim();
+      const tenantId=selectedTargetType==='shop'?selectedShop?.id:selectedIndependentBarber?.businessId;
+      if(!tenantId){addToast('Selecciona un negocio o profesional disponible.','error');return;}
+      const phone=customerProfile?.phone||currentUser?.phone?.trim()||window.prompt('Ingresa tu teléfono para confirmar la reserva:')?.trim();
       if(!phone){addToast('Necesitamos tu teléfono para la reserva.','error');return;}
       try{
-        await addBooking(selectedShop.id,{barberId:selectedBarber.id,
+        await addBooking(tenantId,{barberId:selectedBarber.id,
           serviceId:selectedService.id,date:selectedDate,startTime:selectedTime,
-          customerName:currentUser?.name||currentUser?.email||'Cliente',
+          customerName:customerProfile?.full_name||currentUser?.name||currentUser?.email||'Cliente',
           customerPhone:phone,notes});
         await refreshLiveData();
         addToast('¡Reserva registrada en el backend!','success');
@@ -167,8 +186,8 @@ export const ClienteReservas: React.FC = () => {
 
           {selectedTargetType === 'shop' ? (
             <div className="space-y-3">
-              {state.barbershops.map(shop => {
-                const isSelected = selectedShop.id === shop.id;
+              {shopsToShow.map(shop => {
+                const isSelected = selectedShop?.id === shop.id;
                 return (
                   <button
                     key={shop.id}
@@ -201,8 +220,8 @@ export const ClienteReservas: React.FC = () => {
             </div>
           ) : (
             <div className="space-y-3">
-              {state.barbers.filter(b => b.isIndependent).map(ind => {
-                const isSelected = selectedIndependentBarber.id === ind.id;
+              {independentToShow.map(ind => {
+                const isSelected = selectedIndependentBarber?.id === ind.id;
                 return (
                   <button
                     key={ind.id}

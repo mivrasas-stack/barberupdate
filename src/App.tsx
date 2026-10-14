@@ -51,10 +51,13 @@ import { ClienteSalaEspera } from './features/clientes/ClienteSalaEspera';
 import { ClienteFidelizacion } from './features/clientes/ClienteFidelizacion';
 import { ClienteHistorial } from './features/clientes/ClienteHistorial';
 import { ClienteQRScanner } from './features/clientes/ClienteQRScanner';
+import { PublicJoinView } from './features/clientes/PublicJoinView';
 import { ClientePerfil } from './features/clientes/ClientePerfil';
 
 const AppContent: React.FC = () => {
   const { activeRoute, currentUser } = useApp();
+
+  if (window.location.pathname.startsWith('/vincular/'))return <PublicJoinView/>;
 
   // If on login route or not logged in
   if (activeRoute === '/login' || (!currentUser && !activeRoute.startsWith('/vincular'))) {
@@ -164,7 +167,7 @@ const AppFrame: React.FC = () => {
     (activeRoute.startsWith('/barbero/') &&
       !['barber_employee', 'barber_independent', 'owner'].includes(currentUser.role))
   ));
-  const isLogin = activeRoute === '/login'
+  const isLogin = window.location.pathname.startsWith('/vincular/') || activeRoute === '/login'
     || (!currentUser && !activeRoute.startsWith('/vincular')) || deniedRealRoute;
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] flex flex-col font-sans">

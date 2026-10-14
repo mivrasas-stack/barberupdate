@@ -94,7 +94,7 @@ export function mapShop(r:Db,userId:string):Barbershop{
     tagline:'',logo:'',coverImage:'',phone:'',email:'',address:'',city:'',
     planId:'',subscriptionStatus:'trial',subscriptionRenewsAt:'',rating:0,reviewsCount:0,
     openingHours:{days:'',open:'',close:''},socialLinks:{},portfolio:[],
-    publicCode:txt(r,'slug'),createdAt:txt(r,'created_at',new Date().toISOString())
+    publicCode:txt(r,'slug'),businessKind:txt(r,'business_kind','barbershop') as Barbershop['businessKind'],createdAt:txt(r,'created_at',new Date().toISOString())
   };
 }
 export function mapBarber(r:Db,tenant:string):Barber{
@@ -225,7 +225,7 @@ export async function loadAccount():Promise<{
        backendRequest<{barbers:Db[];services:Db[]}>('/public/tenants/'+slug+'/catalog'),
        backendRequest<Db[]>('/public/tenants/'+id+'/products')
      ]);
-     return {id,barbers:catalog.barbers.map(b=>mapBarber(b,id)),
+     return {id,barbers:catalog.barbers.map(b=>({...mapBarber(b,id),isIndependent:txt(t,'business_kind')==='independent'})),
        services:catalog.services.map(s=>mapService(s,id)),
        products:p.map(x=>mapProduct(x,id))};
    }));
@@ -346,4 +346,28 @@ export async function closeCash(tenant:string,closing:CashClosing){
 export async function setProductVisibility(tenant:string,productId:string,visible:boolean){
  return mapProduct(await backendRequest<Db>('/tenants/'+tenant+'/products/'+productId+'/visibility',
   {method:'PATCH',body:JSON.stringify({visible})}),tenant);
+}
+
+export type CustomerLink={
+ tenant_id:string;slug:string;name:string;business_kind:'barbershop'|'independent';
+ barber_id:string|null;barber_name:string|null;barber_slug:string|null;linked_at:string
+};
+export type PublicBusinessLink={
+ tenant_id:string;slug:string;name:string;business_kind:'barbershop'|'independent';
+ link_code:string;barber_id:string|null;barber_name:string|null
+};
+export const getBusinessLinkCode=(tenant:string)=>
+ backendRequest<{tenant_id:string;link_code:string;name:string}>('/tenants/'+encodeURIComponent(tenant)+'/link-code');
+export async function resolveBusinessLink(code:string):Promise<PublicBusinessLink>{
+ const response=await fetch(apiOrigin+'/public/links/'+encodeURIComponent(code.trim()),{cache:'no-store'});
+ const data=await response.json().catch(()=>null);
+ if(!response.ok)throw Error(data?.error||'El QR no corresponde a un negocio activo');
+ return data as PublicBusinessLink;
+}
+export const listCustomerLinks=()=>backendRequest<{items:CustomerLink[];profile:{full_name:string;phone:string}|null}>('/me/links');
+export async function linkCustomer(code:string,fullName:string,phone:string){
+ const result=await backendRequest<{tenantId:string;name:string;kind:string}>('/me/links',{method:'POST',
+ body:JSON.stringify({code,fullName,phone})});
+ window.dispatchEvent(new Event('barberos-links-updated'));
+ return result;
 }

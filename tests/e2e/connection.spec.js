@@ -1,6 +1,8 @@
 import {test,expect} from '@playwright/test';
 import {randomBytes,randomUUID} from 'node:crypto';
 import {createRequire} from 'node:module';
+import pngjs from 'pngjs';
+import zxing from '@zxing/library';
 import {cleanupTestTenant} from '../../backend/test/tenant-cleanup.js';
 
 const requireBackend=createRequire(new URL('../../backend/package.json',import.meta.url));
@@ -150,6 +152,8 @@ test('Cliente real: reserva efectiva y pedido con código desde la interfaz',asy
  await login(page,state.customer);
  await page.goto('/login#/clientes/citas/nueva');
  await expect(page.getByText('Barbería E2E del navegador').first()).toBeVisible();
+ // Select the intended shop explicitly; other real businesses may exist in the public directory.
+ await page.getByRole('button',{name:/Barbería E2E del navegador/i}).click();
  await page.getByRole('button',{name:/Continuar a Servicios/i}).click();
  await page.getByRole('button',{name:/Corte Chromium/i}).click();
  await page.getByRole('button',{name:'Continuar',exact:true}).click();
@@ -204,4 +208,49 @@ test('No autenticado no obtiene privilegios ni ve accesos de desarrollo',async({
  await expect(page.getByRole('button',{name:'Owner',exact:true})).toHaveCount(0);
  await page.goto('/login#/barberia/empresa-protegida/inicio');
  await expect(page.getByRole('button',{name:/Iniciar sesión/i}).first()).toBeVisible();
+});
+
+// Persistent QR workflow browser acceptance test; user/tenant fixtures are
+// created by this file's existing beforeAll and removed by its afterAll.
+test('QR real: dueño imprime, cliente se vincula y ve su barbería al reservar',async({browser})=>{
+ const owned=await browser.newContext();
+ const ownerPage=await owned.newPage();
+ await login(ownerPage,state.owner);
+ await ownerPage.goto('/login#/barberia/'+state.slug+'/qr');
+ const qr=ownerPage.getByTestId('real-business-qr');
+ await expect(qr).toBeVisible({timeout:16000});
+ expect(await qr.getAttribute('src')).toMatch(/^data:image\/png;base64,/);
+ const issued=await api(state.owner.jwt,'GET','/tenants/'+state.tenantId+'/link-code');
+ expect(issued.link_code).toMatch(/^[A-F0-9]{24}$/);
+ // Verify that the PNG contains an actual decodable QR with the expected landing URL.
+ const imageBytes=Buffer.from((await qr.getAttribute('src')).split(',')[1],'base64');
+ const png=pngjs.PNG.sync.read(imageBytes);
+ const luminance=new Uint8ClampedArray(png.width*png.height);
+ for(let i=0;i<luminance.length;i++){
+   const j=i*4;
+   luminance[i]=(png.data[j]*299+png.data[j+1]*587+png.data[j+2]*114)/1000;
+ }
+ const source=new zxing.RGBLuminanceSource(luminance,png.width,png.height);
+ const decoded=new zxing.QRCodeReader().decode(new zxing.BinaryBitmap(new zxing.HybridBinarizer(source)));
+ expect(decoded.getText()).toBe('http://127.0.0.1:3199/vincular/'+issued.link_code);
+ await expect(ownerPage.getByText(issued.link_code,{exact:true})).toBeVisible();
+ await owned.close();
+
+ const client=await browser.newContext();
+ const joinPage=await client.newPage();
+ await joinPage.goto('/vincular/'+issued.link_code);
+ await expect(joinPage.getByRole('heading',{name:'Barbería E2E del navegador'})).toBeVisible();
+ await joinPage.getByRole('button',{name:/Ya tengo cuenta/i}).click();
+ await joinPage.getByLabel('Nombre y apellidos completos').fill('Cliente vinculacion navegador');
+ await joinPage.getByLabel('Teléfono de contacto').fill('+57 300 555 1111');
+ await joinPage.getByLabel('Correo electrónico').fill(state.customer.email);
+ await joinPage.getByLabel('Contraseña').fill(state.customer.password);
+ await joinPage.getByRole('button',{name:/Ingresar y vincular/i}).click();
+ await expect(joinPage.getByTestId('linked-businesses')).toBeVisible({timeout:20000});
+ await expect(joinPage.getByTestId('linked-businesses').getByText('Barbería E2E del navegador')).toBeVisible();
+ const links=await api(state.customer.jwt,'GET','/me/links');
+ expect(links.items.some(x=>x.tenant_id===state.tenantId)).toBe(true);
+ await joinPage.goto('/login#/clientes/citas/nueva');
+ await expect(joinPage.getByText('Barbería E2E del navegador').first()).toBeVisible({timeout:12000});
+ await client.close();
 });
