@@ -38,13 +38,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          missing=0
           for key in SUPABASE_URL SUPABASE_PUBLISHABLE_KEY SUPABASE_SERVICE_ROLE_KEY DATABASE_URL ADMIN_DATABASE_URL; do
             if test -z "${!key}"; then
-              echo "QA integration not configured: missing $key"
-              echo "::error::Configure $key in repository Actions secrets to run real QA."
-              exit 1
+              echo "::error::QA secret missing: $key"
+              missing=1
             fi
           done
+          if test "$missing" -ne 0; then
+            echo "Set the listed private secrets in repository Actions settings, then rerun QA."
+            exit 1
+          fi
           test "$SUPABASE_URL" = "https://wrfwhftzaflwhkvkzrjm.supabase.co" || { echo "Refusing: wrong Supabase QA project"; exit 1; }
           [[ "$DATABASE_URL" == *wrfwhftzaflwhkvkzrjm* ]] || { echo "Refusing: API database not QA project"; exit 1; }
           [[ "$ADMIN_DATABASE_URL" == *wrfwhftzaflwhkvkzrjm* ]] || { echo "Refusing: admin database not QA project"; exit 1; }
