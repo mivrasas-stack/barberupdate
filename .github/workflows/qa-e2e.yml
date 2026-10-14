@@ -32,7 +32,7 @@ jobs:
           node-version: '22'
           cache: npm
       - name: Announce QA-only validation
-        run: echo 'Verifying isolated test credentials; no WhatsApp messages or production deployment'
+        run: echo 'Checking configured QA secrets and isolated test environment; no WhatsApp delivery or production deployment'
       - name: Check isolated QA prerequisites
         id: qa
         shell: bash
