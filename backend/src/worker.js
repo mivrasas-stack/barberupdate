@@ -1,6 +1,7 @@
 import Redis from 'ioredis';
 import { configFromEnv } from './config.js';
 import { createDb } from './db.js';
+import { sendBookingConfirmation } from './whatsapp.js';
 const config=configFromEnv(process.env);
 if(!config.databaseUrl || !config.redisUrl) throw new Error('Worker requires DATABASE_URL and REDIS_URL');
 const db=createDb(config);
@@ -14,7 +15,18 @@ async function deliverBatch() {
     const {rows}=await tx.query("SELECT id,tenant_id,topic,payload,attempts FROM public.outbox_events WHERE processed_at IS NULL AND next_attempt_at<=now() AND attempts<12 ORDER BY next_attempt_at,id LIMIT 25 FOR UPDATE SKIP LOCKED");
     for(const event of rows) {
       try {
-        await redis.publish('barberos:events:'+event.tenant_id,JSON.stringify({eventId:event.id,topic:event.topic,payload:event.payload}));
+        if (event.topic === 'whatsapp.booking_confirmation') {
+          if (!config.whatsapp.enabled) {
+            await tx.query("UPDATE public.outbox_events SET next_attempt_at=now()+interval '5 minutes' WHERE id=$1",[event.id]);
+            continue;
+          }
+          const {rows} = await tx.query("SELECT a.customer_name,a.customer_phone,a.starts_at,a.status,t.name AS shop_name,t.time_zone FROM public.appointments a JOIN public.tenants t ON t.id=a.tenant_id WHERE a.id=$1 AND a.tenant_id=$2",[event.payload?.appointmentId,event.tenant_id]);
+          if (rows[0] && ['pending','confirmed'].includes(rows[0].status)) {
+            await sendBookingConfirmation(config.whatsapp,rows[0]);
+          }
+        } else {
+          await redis.publish('barberos:events:'+event.tenant_id,JSON.stringify({eventId:event.id,topic:event.topic,payload:event.payload}));
+        }
         await tx.query('UPDATE public.outbox_events SET processed_at=now(),attempts=attempts+1 WHERE id=$1',[event.id]);
       } catch (err) {
         const backoff=Math.min(3600,Math.pow(2,Math.min(12,event.attempts))*5);
