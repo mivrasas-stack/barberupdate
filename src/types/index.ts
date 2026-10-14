@@ -50,6 +50,7 @@ export interface Barbershop {
   };
   portfolio: string[];
   publicCode: string;
+  businessKind?: 'barbershop' | 'independent';
   createdAt: string;
 }
 

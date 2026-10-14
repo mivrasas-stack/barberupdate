@@ -71,18 +71,26 @@ export const LoginView: React.FC = () => {
       className="min-h-screen w-full bg-[#080808] text-white lg:flex"
       style={{ fontFamily: "'Inter', 'Montserrat', system-ui, sans-serif" }}
     >
-      {/* Exact Barber Paradise photographic panel from the provided reference.
-          The brand inscription is already part of this photo. */}
+      {/* Left-side image from the original Barber Paradise /login, with live text overlay. */}
       <section
         aria-label="Barber Paradise, exclusividad y estilo"
         className="relative h-[35vh] min-h-[240px] w-full overflow-hidden bg-[#070707] lg:sticky lg:top-0 lg:h-screen lg:w-1/2 lg:min-h-[640px] lg:shrink-0"
       >
         <img
-          src="/images/barber-paradise-login.webp"
-          alt="Interior en blanco y negro de Barber Paradise, con sillón de barbero y paredes de ladrillo"
-          className="absolute inset-0 h-full w-full object-cover object-center"
+          src="/images/barber-paradise-atmosphere.webp"
+          alt="Barbería Barber Paradise, con sillones de barbero y paredes de ladrillo"
+          className="absolute inset-0 h-full w-full object-cover object-center grayscale brightness-[0.42]"
           draggable={false}
         />
+        <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-r from-black/65 via-black/25 to-black/10" />
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-4 text-center">
+          <strong className="text-[clamp(20px,2.2vw,39px)] font-extrabold tracking-[0.24em] text-white drop-shadow-lg">
+            BARBER PARADISE
+          </strong>
+          <span className="mt-5 text-[clamp(9px,0.9vw,15px)] tracking-[0.08em] text-gray-300">
+            EXCLUSIVIDAD Y ESTILO — SAAS MULTI-TENANT
+          </span>
+        </div>
       </section>
 
       <section className="flex min-h-[65vh] w-full items-start justify-center bg-[#090909] px-4 pb-10 pt-5 sm:px-8 lg:min-h-screen lg:w-1/2 lg:px-8 lg:pt-[39px]">
@@ -191,9 +199,9 @@ export const LoginView: React.FC = () => {
                 Volver a la página web
               </a>
             ) : (
-              <p className="mt-[24px] text-[12px] font-semibold uppercase tracking-[0.6px] text-[#585858]">
+              <a href="/" className="mt-[24px] block text-[12px] font-semibold uppercase tracking-[0.6px] text-[#585858] hover:text-[#b7b7b7]">
                 Volver a la página web
-              </p>
+              </a>
             )}
           </div>
         </div>

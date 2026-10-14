@@ -11,6 +11,8 @@ import { registerNotificationRoutes } from './notifications.js';
 import { registerReportRoutes } from './reports.js';
 import { registerPaymentsRoutes } from './payments.js';
 import { registerClosureRoutes } from './closures.js';
+import { registerCustomerLinkRoutes } from './customer-links.js';
+import { registerBarberInviteRoutes } from './barber-invites.js';
 
 export async function buildApp(env = process.env) {
   const config = configFromEnv(env);
@@ -48,6 +50,8 @@ export async function buildApp(env = process.env) {
   await registerReportRoutes(app, { config, db, security });
   await registerPaymentsRoutes(app, { config, db, security });
   await registerClosureRoutes(app, { config, db, security });
+  await registerCustomerLinkRoutes(app, { config, db, security });
+  await registerBarberInviteRoutes(app, { config, db, security });
   app.addHook('onClose', async () => {
     await db?.close();
     security.redis?.disconnect();

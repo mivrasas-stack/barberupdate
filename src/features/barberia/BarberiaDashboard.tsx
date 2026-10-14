@@ -20,7 +20,7 @@ import {
 export const BarberiaDashboard: React.FC = () => {
   const { currentShop, state, currency, navigate } = useApp();
   const [selectedBarberId, setSelectedBarberId] = useState<string>('all');
-  const [selectedDate, setSelectedDate] = useState<string>('2026-10-13'); // Today demo date
+  const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toLocaleDateString('en-CA',{timeZone:'America/Bogota'}));
 
   const shopId = currentShop?.id || 'shop-1';
   const barbers = state.barbers.filter(b => b.businessId === shopId);

@@ -4,7 +4,7 @@ test('Login coincide con el diseño dividido Barber Paradise en escritorio', asy
   await page.setViewportSize({width:1903,height:944});
   const errors=[];
   page.on('pageerror',e=>errors.push(e.message));
-  await page.goto('/#/login');
+  await page.goto('/login');
   const login=page.getByTestId('barber-paradise-login');
   await expect(login).toBeVisible();
   await expect(page.getByRole('heading',{name:/bienvenido\s+de vuelta/i})).toBeVisible();
@@ -30,10 +30,10 @@ test('Login coincide con el diseño dividido Barber Paradise en escritorio', asy
 
 test('Login móvil conserva fotografía y formulario sin cortes horizontales', async ({page}) => {
   await page.setViewportSize({width:390,height:844});
-  await page.goto('/#/login');
+  await page.goto('/login');
   await expect(page.getByTestId('barber-paradise-login')).toBeVisible();
   await expect(page.getByRole('button',{name:/iniciar sesión/i})).toBeVisible();
-  const photo=page.locator('img[src="/images/barber-paradise-login.webp"]');
+  const photo=page.locator('img[src="/images/barber-paradise-atmosphere.webp"]');
   await expect(photo).toBeVisible();
   expect(await photo.evaluate(img=>img.complete&&img.naturalWidth>0)).toBe(true);
   const horizontalOverflow=await page.evaluate(()=>

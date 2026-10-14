@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import {useCustomerLinks} from '../../services/useCustomerLinks';
+import {isLiveBackend} from '../../services/liveBackend';
 import {
   LayoutDashboard,
   Calendar,
@@ -21,12 +23,13 @@ import {
 export const ClienteInicio: React.FC = () => {
   const { state, currentUser, navigate } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
+  const {items:linkedBusinesses,loading:linkedLoading}=useCustomerLinks(currentUser?.id);
 
   const customerId = currentUser?.id || 'usr-client-1';
-  const loyalty = state.loyalty[customerId] || state.loyalty['usr-client-1'] || { points: 420 };
+  const loyalty = state.loyalty[customerId] || (!isLiveBackend ? state.loyalty['usr-client-1'] : undefined) || {points: isLiveBackend?0:420};
 
   // Next appointment
-  const customerAppointments = state.appointments.filter(a => a.customerId === customerId || a.customerName?.includes('Camilo'));
+  const customerAppointments = state.appointments.filter(a => a.customerId === customerId || (!isLiveBackend&&a.customerName?.includes('Camilo')));
   const nextAppointment = customerAppointments.find(a => a.status === 'confirmed' || a.status === 'pending' || a.status === 'waiting');
   const nextAppointmentBarber = nextAppointment ? state.barbers.find(b => b.id === nextAppointment.barberId) : null;
 
@@ -67,7 +70,7 @@ export const ClienteInicio: React.FC = () => {
       desc: 'Tu tarjeta virtual de lealtad estilo Apple Wallet. Acumula puntos con cada corte y canjea premios exclusivos.',
       icon: Award,
       gradient: 'from-purple-500 to-violet-600',
-      badge: `${loyalty.points || 420} puntos`,
+      badge: `${loyalty.points ?? 0} puntos`,
       badgeColor: 'text-purple-400 bg-purple-400/10 border-purple-400/20',
       path: '/clientes/fidelizacion',
     },
@@ -222,7 +225,7 @@ export const ClienteInicio: React.FC = () => {
             <div className="mt-4 p-4 rounded-2xl bg-black/40 border border-white/[0.08] backdrop-blur-md">
               <span className="text-[10px] uppercase tracking-wider text-neutral-400 block font-medium">Puntos Acumulados</span>
               <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-3xl font-black text-[var(--gold-primary)] font-mono">{loyalty.points || 420}</span>
+                <span className="text-3xl font-black text-[var(--gold-primary)] font-mono">{loyalty.points ?? 0}</span>
                 <span className="text-xs text-neutral-400 font-medium">/ 500 para corte gratis</span>
               </div>
 
@@ -230,11 +233,11 @@ export const ClienteInicio: React.FC = () => {
               <div className="w-full bg-neutral-800 h-2 rounded-full mt-2.5 overflow-hidden">
                 <div
                   className="bg-gradient-to-r from-amber-400 to-[var(--gold-primary)] h-full rounded-full transition-all duration-500"
-                  style={{ width: `${Math.min(100, ((loyalty.points || 420) / 500) * 100)}%` }}
+                  style={{ width: `${Math.min(100, ((loyalty.points ?? 0) / 500) * 100)}%` }}
                 />
               </div>
               <span className="text-[10px] text-neutral-400 block mt-1.5 text-right font-mono">
-                Faltan {Math.max(0, 500 - (loyalty.points || 420))} pts
+                Faltan {Math.max(0, 500 - (loyalty.points ?? 0))} pts
               </span>
             </div>
           </div>
@@ -245,6 +248,24 @@ export const ClienteInicio: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Verified, persistent affiliations — not inferred from appointments or mock data. */}
+      <section data-testid="linked-businesses" className="rounded-3xl border border-white/[0.08] bg-[#151515] p-5 sm:p-6">
+        <div className="flex justify-between items-center mb-4 gap-4">
+          <div><h2 className="text-lg font-extrabold text-white">Mis Barberías y Barberos Vinculados</h2>
+          <p className="text-xs text-neutral-400">Negocios que vinculaste escaneando su QR</p></div>
+          <button onClick={()=>navigate('/clientes/vincular')} className="text-xs rounded-xl px-3 py-2 bg-[var(--gold-primary)] text-black font-bold">+ Vincular QR</button>
+        </div>
+        {linkedLoading?<p className="text-xs text-neutral-400">Cargando vínculos...</p>:
+         linkedBusinesses.length===0?<p className="text-xs text-neutral-400">Todavía no tienes barberías o profesionales vinculados.</p>:
+         <div className="grid sm:grid-cols-2 gap-3">{linkedBusinesses.map(link=>
+          <button key={link.tenant_id} onClick={()=>navigate('/clientes/citas/nueva')}
+           className="p-4 rounded-2xl bg-[#1e1e1e] border border-neutral-700 text-left hover:border-[var(--gold-primary)]">
+           <span className="text-[10px] uppercase text-[var(--gold-primary)]">{link.business_kind==='independent'?'Barbero independiente':'Barbería'}</span>
+           <h3 className="text-white font-bold mt-1">{link.barber_name||link.name}</h3>
+           <span className="text-neutral-400 text-xs">Agendar cita →</span>
+          </button>)}</div>}
+      </section>
 
       {/* Modules Finder */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">

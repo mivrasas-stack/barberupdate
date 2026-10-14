@@ -23,9 +23,20 @@ export async function registerRoutes(app,{config,db,security}) {
       await authenticated(req); await limited(req);
       if(!db) failure(503,'Base de datos no configurada');
     });
-    routes.get('/api/v1/me',async req=>({id:req.actor.id,email:req.actor.email}));
+    // Platform privileges are verified server-side; never inferred from client roles or JWT metadata.
+    routes.get('/api/v1/me',async req=>{
+      const granted=await db.query('SELECT 1 FROM public.platform_admins WHERE user_id=$1',[req.actor.id]);
+      return {id:req.actor.id,email:req.actor.email,platformRole:granted.rowCount?'superadmin':null};
+    });
+    routes.get('/api/v1/platform/tenants',async req=>{
+      const granted=await db.query('SELECT 1 FROM public.platform_admins WHERE user_id=$1',[req.actor.id]);
+      if(!granted.rowCount)failure(403,'Solo administradores globales');
+      return (await db.query(
+        'SELECT id,name,slug,currency,time_zone,status,business_kind FROM public.tenants ORDER BY created_at DESC LIMIT 100'
+      )).rows;
+    });
     routes.get('/api/v1/tenants',async req=>{
-      const result=await db.query('SELECT t.id,t.name,t.slug,t.currency,t.time_zone,t.status,m.role FROM public.tenants t JOIN public.tenant_members m ON m.tenant_id=t.id WHERE m.user_id=$1 ORDER BY t.created_at DESC LIMIT 100',[req.actor.id]);
+      const result=await db.query('SELECT t.id,t.name,t.slug,t.currency,t.time_zone,t.status,t.business_kind,m.role FROM public.tenants t JOIN public.tenant_members m ON m.tenant_id=t.id WHERE m.user_id=$1 ORDER BY t.created_at DESC LIMIT 100',[req.actor.id]);
       return result.rows;
     });
     routes.post('/api/v1/tenants',async (req,reply)=>{
@@ -124,7 +135,7 @@ export async function registerRoutes(app,{config,db,security}) {
       return reply.code(booking.repeated?200:201).send(booking.row);
     });
     routes.get('/api/v1/me/bookings',async req=>{
-      return (await db.query('SELECT id,tenant_id,barber_id,service_id,starts_at,ends_at,status,price_minor,created_at FROM public.appointments WHERE customer_user_id=$1 ORDER BY starts_at DESC LIMIT 100',[req.actor.id])).rows;
+      return (await db.query('SELECT id,tenant_id,barber_id,service_id,customer_user_id,starts_at,ends_at,status,price_minor,created_at FROM public.appointments WHERE customer_user_id=$1 ORDER BY starts_at DESC LIMIT 100',[req.actor.id])).rows;
     });
     routes.get('/api/v1/tenants/:tenantId/appointments',async req=>{
       const tenant=parseOrThrow(id,req.params.tenantId);
@@ -220,7 +231,7 @@ export async function registerRoutes(app,{config,db,security}) {
   });
   app.get('/api/v1/public/tenants',async req=>{
     await limited(req);if(!db)failure(503,'Base de datos no configurada');
-    return (await db.query("SELECT id,name,slug,currency,time_zone FROM public.tenants WHERE status='active' ORDER BY name LIMIT 100")).rows;
+    return (await db.query("SELECT id,name,slug,currency,time_zone,business_kind FROM public.tenants WHERE status='active' ORDER BY name LIMIT 100")).rows;
   });
   app.get('/api/v1/public/tenants/:tenantId/products',async req=>{
     await limited(req);if(!db)failure(503,'Base de datos no configurada');

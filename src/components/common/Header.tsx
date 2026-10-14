@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
-import { Palette, ChevronDown, UserCheck, LogOut, DollarSign, RefreshCw, Scissors, ShieldAlert, Sparkles, User, ExternalLink } from 'lucide-react';
+import { Palette, ChevronDown, LogOut, Scissors, User } from 'lucide-react';
 import { CurrencyType, UserRole } from '../../types';
 
 export const Header: React.FC = () => {
@@ -13,8 +13,7 @@ export const Header: React.FC = () => {
     currency,
     setCurrency,
     setIsPaletteModalOpen,
-    resetDemoData,
-    currentShop,
+     currentShop,
     currentBarber,
   } = useApp();
 
@@ -152,34 +151,11 @@ export const Header: React.FC = () => {
           {isUserMenuOpen && (
             <div className="absolute right-0 mt-2 w-60 rounded-2xl bg-[#141417]/95 backdrop-blur-2xl border border-white/[0.1] shadow-[0_20px_50px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.15)] p-2 z-50 text-xs animate-apple-enter">
               <div className="px-3 py-2.5 border-b border-white/[0.08]">
-                <p className="font-bold text-white truncate">{currentUser?.name || 'Modo Demostración'}</p>
+                <p className="font-bold text-white truncate">{currentUser?.name || 'Sin sesión'}</p>
                 <p className="text-[11px] text-neutral-400 truncate mt-0.5">{currentUser?.email || 'Sin sesión iniciada'}</p>
                 <span className="inline-block mt-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#D9A323]/20 text-[#D9A323] border border-[#D9A323]/30">
                   {currentUser?.role ? capitalize(currentUser.role) : 'Público'}
                 </span>
-              </div>
-
-              <div className="py-1.5 space-y-0.5">
-                <button
-                  onClick={() => {
-                    setIsUserMenuOpen(false);
-                    navigate('/login');
-                  }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-left rounded-xl text-neutral-300 hover:bg-white/[0.08] hover:text-white transition-colors"
-                >
-                  <UserCheck className="w-3.5 h-3.5 text-[#D9A323]" />
-                  <span>Cambiar Usuario Demo</span>
-                </button>
-                <button
-                  onClick={() => {
-                    setIsUserMenuOpen(false);
-                    resetDemoData();
-                  }}
-                  className="w-full flex items-center gap-2.5 px-3 py-2 text-left rounded-xl text-neutral-300 hover:bg-white/[0.08] hover:text-white transition-colors"
-                >
-                  <RefreshCw className="w-3.5 h-3.5 text-blue-400" />
-                  <span>Restablecer Datos Demo</span>
-                </button>
               </div>
 
               <div className="pt-1.5 border-t border-white/[0.08]">

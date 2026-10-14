@@ -16,7 +16,7 @@ import {
   CommercialPageConfig,
 } from '../types';
 import { barberStore, BarberOSState } from '../services/store';
-import {isLiveBackend, signIn, signOut, clearSession, hasSession, loadAccount, backendRequest, registerOwnedShop} from '../services/liveBackend';
+import {isLiveBackend, signIn, signOut, clearSession, hasSession, loadAccount, backendRequest, registerOwnedShop, getCachedUser, setCachedUser} from '../services/liveBackend';
 
 export interface ToastItem {
   id: string;
@@ -41,6 +41,7 @@ interface AppContextType {
 
   // Navigation
   activeRoute: string;
+  restoringSession: boolean;
   navigate: (route: string) => void;
 
   // Store Entities (Reactive)
@@ -71,8 +72,13 @@ const AppContext = createContext<AppContextType | null>(null);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [storeState, setStoreState] = useState<BarberOSState>(barberStore.getState());
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [activeRoute, setActiveRoute] = useState<string>('/login');
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    return isLiveBackend && hasSession() ? getCachedUser() : null;
+  });
+  const [restoringSession, setRestoringSession] = useState(false);
+  const [activeRoute, setActiveRoute] = useState<string>(() => {
+    return window.location.hash ? window.location.hash.slice(1) : '/login';
+  });
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [isPaletteModalOpen, setIsPaletteModalOpen] = useState<boolean>(false);
 
@@ -164,7 +170,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await signIn(email,password);
     try{
       let data=await loadAccount();
-      if(requestedRole==='owner'&&data.shops.length===0){
+      // In real mode, authorize by the server-resolved role, never the login UI hint.
+      if(data.user.role==='owner'&&data.shops.length===0){
         const shopName=window.prompt('Tu cuenta no tiene una barbería. Escribe el nombre para crearla:');
         if(shopName?.trim()){
           await registerOwnedShop(shopName);
@@ -175,15 +182,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         services:data.services,products:data.products,appointments:data.appointments,
         transactions:data.transactions,orders:data.orders,plans:data.plans,cashClosings:data.cashClosings});
       setCurrentUser(data.user);
+      setCachedUser(data.user);
       if(data.user.role==='owner')navigate(data.shops[0]?'/barberia/'+data.shops[0].slug+'/inicio':'/clientes/inicio');
-      else if(data.user.role==='barber_employee')navigate('/barbero/'+(data.barbers[0]?.slug||'barbero')+'/inicio');
+      else if(data.user.role==='superadmin')navigate('/admin/inicio');
+      else if(data.user.role==='barber_employee'||data.user.role==='barber_independent')
+        navigate('/barbero/'+(data.barbers.find(b=>b.id===data.user.barberId)?.slug||data.barbers[0]?.slug||'barbero')+'/inicio');
       else navigate('/clientes/inicio');
       addToast('Sesión real iniciada correctamente', 'success');
-    }catch(error){clearSession();throw error;}
+    }catch(error){clearSession();setCachedUser(null);throw error;}
   };
 
   useEffect(()=>{
-    if(!isLiveBackend||!hasSession())return;
+    if(!isLiveBackend||!hasSession()){setRestoringSession(false);return;}
     let alive=true;
     loadAccount().then(data=>{
       if(!alive)return;
@@ -191,15 +201,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         services:data.services,products:data.products,appointments:data.appointments,
         transactions:data.transactions,orders:data.orders,plans:data.plans,cashClosings:data.cashClosings});
       setCurrentUser(data.user);
-      if(data.user.role==='owner'&&data.shops[0])navigate('/barberia/'+data.shops[0].slug+'/inicio');
-      else if(data.user.role==='barber_employee')navigate('/barbero/'+(data.barbers[0]?.slug||'barbero')+'/inicio');
-      else navigate('/clientes/inicio');
-    }).catch(()=>{if(alive){clearSession();setCurrentUser(null);}});
+      setCachedUser(data.user);
+      const currentHash = window.location.hash.slice(1);
+      if(!currentHash || currentHash === '/login'){
+        if(data.user.role==='owner'&&data.shops[0])navigate('/barberia/'+data.shops[0].slug+'/inicio');
+        else if(data.user.role==='superadmin')navigate('/admin/inicio');
+        else if(data.user.role==='barber_employee'||data.user.role==='barber_independent')
+          navigate('/barbero/'+(data.barbers.find(b=>b.id===data.user.barberId)?.slug||data.barbers[0]?.slug||'barbero')+'/inicio');
+        else navigate('/clientes/inicio');
+      }
+    }).catch(()=>{if(alive){clearSession();setCachedUser(null);setCurrentUser(null);}}).finally(()=>{if(alive)setRestoringSession(false);});
     return ()=>{alive=false;};
   },[]);
 
   const logout = () => {
     if(isLiveBackend){void signOut().catch(()=>clearSession());barberStore.clearRemoteSession();}
+    setCachedUser(null);
     setCurrentUser(null);
     navigate('/login');
     addToast('Sesión cerrada correctamente', 'info');
@@ -306,7 +323,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCurrentShopSlug,
         currentBarber,
         setCurrentBarberSlug,
-        activeRoute,
+        activeRoute, restoringSession,
         navigate,
         state: storeState,
         activePalette,

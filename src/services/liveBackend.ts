@@ -23,7 +23,21 @@ function storeSession(value:Session|null){
   if(value)sessionStorage.setItem(storageKey,JSON.stringify(value));
   else sessionStorage.removeItem(storageKey);
 }
-export function clearSession(){storeSession(null);}
+const userCacheKey='barberos_cached_user_v1';
+export function getCachedUser():User|null{
+  try{
+    const raw=sessionStorage.getItem(userCacheKey);
+    return raw?JSON.parse(raw) as User:null;
+  }catch{return null;}
+}
+export function setCachedUser(user:User|null){
+  if(user)sessionStorage.setItem(userCacheKey,JSON.stringify(user));
+  else sessionStorage.removeItem(userCacheKey);
+}
+export function clearSession(){
+  storeSession(null);
+  setCachedUser(null);
+}
 export function hasSession(){return !!session||!!sessionStorage.getItem(storageKey);}
 async function authCall(path:string,payload:object){
   if(!supabaseUrl||!supabasePublicKey)throw Error('Faltan variables públicas de Supabase para conectar BarberOS.');
@@ -94,7 +108,7 @@ export function mapShop(r:Db,userId:string):Barbershop{
     tagline:'',logo:'',coverImage:'',phone:'',email:'',address:'',city:'',
     planId:'',subscriptionStatus:'trial',subscriptionRenewsAt:'',rating:0,reviewsCount:0,
     openingHours:{days:'',open:'',close:''},socialLinks:{},portfolio:[],
-    publicCode:txt(r,'slug'),createdAt:txt(r,'created_at',new Date().toISOString())
+    publicCode:txt(r,'slug'),businessKind:txt(r,'business_kind','barbershop') as Barbershop['businessKind'],createdAt:txt(r,'created_at',new Date().toISOString())
   };
 }
 export function mapBarber(r:Db,tenant:string):Barber{
@@ -163,10 +177,12 @@ export function mapPlan(r:Db):SubscriptionPlan{
    features:arr(val(r,'features')).map(x=>String(x)),isPopular:false,
    isActive:val(r,'is_active')!==false,order:num(r,'sort_order')};
 }
-export function tokenUser(id:string,email:string,tenants:Db[]):User{
+export function tokenUser(id:string,email:string,tenants:Db[],platformRole?:string|null):User{
  const t=tenants[0];
  const role=txt(t||{},'role');
- const userRole:UserRole=role==='owner'||role==='manager'?'owner':role==='barber'?'barber_employee':'client';
+ const userRole:UserRole=platformRole==='superadmin'?'superadmin':
+    role==='owner'&&txt(t||{},'business_kind')==='independent'?'barber_independent':
+    role==='owner'||role==='manager'?'owner':role==='barber'?'barber_employee':'client';
  return {id,name:email.split('@')[0],email,phone:'',role:userRole,avatar:'',
    businessId:t?.id as string|undefined,createdAt:new Date().toISOString(),
    lastLogin:new Date().toISOString(),status:'active'};
@@ -177,10 +193,10 @@ export async function loadAccount():Promise<{
   orders:Order[];plans:SubscriptionPlan[];cashClosings:CashClosing[]
 }>{
  const [me,tenants]=await Promise.all([
-   backendRequest<{id:string;email:string}>('/me'),
+   backendRequest<{id:string;email:string;platformRole:string|null}>('/me'),
    backendRequest<Db[]>('/tenants')
  ]);
- const user=tokenUser(me.id,me.email,tenants);
+ const user=tokenUser(me.id,me.email,tenants,me.platformRole);
  let shopRows=tenants.map(t=>mapShop(t,me.id));
  const tenant=tenants[0]?.id as string|undefined;
  let barbers:Barber[]=[],services:Service[]=[],products:Product[]=[],appointments:Appointment[]=[],transactions:Transaction[]=[],orders:Order[]=[],cashClosings:CashClosing[]=[];
@@ -191,7 +207,8 @@ export async function loadAccount():Promise<{
      backendRequest<Db[]>(prefix+'/services'),
      backendRequest<Db[]>(prefix+'/products')
    ]);
-   barbers=bs.map(b=>mapBarber(b,tenant));
+   barbers=bs.map(b=>({...mapBarber(b,tenant),isIndependent:user.role==='barber_independent'}));
+   if(user.role==='barber_independent')user.barberId=txt(bs.find(b=>txt(b,'user_id')===me.id)||{},'id')||undefined;
    if(user.role==='barber_employee')user.barberId=txt(bs.find(b=>txt(b,'user_id')===me.id)||{},'id')||undefined;
    services=ss.map(s=>mapService(s,tenant));
    products=ps.map(x=>mapProduct(x,tenant));
@@ -208,6 +225,10 @@ export async function loadAccount():Promise<{
      transactions=tx.map(x=>mapTransaction(x,tenant));orders=ord.map(x=>mapOrder(x,tenant));
      cashClosings=closes.map(x=>mapCashClose(x,tenant));
    }
+ }else if(user.role==='superadmin'){
+   // A platform admin can inspect the directory through a dedicated authenticated API.
+   const global=await backendRequest<Db[]>('/platform/tenants');
+   shopRows=global.map(t=>mapShop(t,''));
  }else{
    // Customers have no tenant membership: use public active shops and catalog.
    const publicTenants=await backendRequest<Db[]>('/public/tenants');
@@ -218,7 +239,7 @@ export async function loadAccount():Promise<{
        backendRequest<{barbers:Db[];services:Db[]}>('/public/tenants/'+slug+'/catalog'),
        backendRequest<Db[]>('/public/tenants/'+id+'/products')
      ]);
-     return {id,barbers:catalog.barbers.map(b=>mapBarber(b,id)),
+     return {id,barbers:catalog.barbers.map(b=>({...mapBarber(b,id),isIndependent:txt(t,'business_kind')==='independent'})),
        services:catalog.services.map(s=>mapService(s,id)),
        products:p.map(x=>mapProduct(x,id))};
    }));
@@ -231,7 +252,7 @@ export async function loadAccount():Promise<{
  const plans=await backendRequest<Db[]>('/public/plans').catch(()=>[] as Db[]);
  return {user,shops:shopRows,barbers,services,products,appointments,transactions,orders,plans:plans.map(mapPlan),cashClosings};
 }
-function userRolePrivileged(role:UserRole){return role==='owner'||role==='superadmin';}
+function userRolePrivileged(role:UserRole){return role==='owner'||role==='superadmin'||role==='barber_independent';}
 export async function addService(tenant:string,data:{name:string;description:string;price:number;durationMinutes:number;category:string}){
  const r=await backendRequest<Db>('/tenants/'+tenant+'/services',{method:'POST',body:JSON.stringify({
    name:data.name,description:data.description,priceMinor:Math.round(data.price),
@@ -339,4 +360,28 @@ export async function closeCash(tenant:string,closing:CashClosing){
 export async function setProductVisibility(tenant:string,productId:string,visible:boolean){
  return mapProduct(await backendRequest<Db>('/tenants/'+tenant+'/products/'+productId+'/visibility',
   {method:'PATCH',body:JSON.stringify({visible})}),tenant);
+}
+
+export type CustomerLink={
+ tenant_id:string;slug:string;name:string;business_kind:'barbershop'|'independent';
+ barber_id:string|null;barber_name:string|null;barber_slug:string|null;linked_at:string
+};
+export type PublicBusinessLink={
+ tenant_id:string;slug:string;name:string;business_kind:'barbershop'|'independent';
+ link_code:string;barber_id:string|null;barber_name:string|null
+};
+export const getBusinessLinkCode=(tenant:string)=>
+ backendRequest<{tenant_id:string;link_code:string;name:string}>('/tenants/'+encodeURIComponent(tenant)+'/link-code');
+export async function resolveBusinessLink(code:string):Promise<PublicBusinessLink>{
+ const response=await fetch(apiOrigin+'/public/links/'+encodeURIComponent(code.trim()),{cache:'no-store'});
+ const data=await response.json().catch(()=>null);
+ if(!response.ok)throw Error(data?.error||'El QR no corresponde a un negocio activo');
+ return data as PublicBusinessLink;
+}
+export const listCustomerLinks=()=>backendRequest<{items:CustomerLink[];profile:{full_name:string;phone:string}|null}>('/me/links');
+export async function linkCustomer(code:string,fullName:string,phone:string){
+ const result=await backendRequest<{tenantId:string;name:string;kind:string}>('/me/links',{method:'POST',
+ body:JSON.stringify({code,fullName,phone})});
+ window.dispatchEvent(new Event('barberos-links-updated'));
+ return result;
 }
