@@ -69,7 +69,7 @@ Los planes y promesas comerciales reproducen lo que muestra el sitio original,
 pero **la contratación/activación comercial real todavía no se ha integrado**.
 El formulario de tres pasos no envía datos personales a un backend ni factura.
 El botón de acceso termina en el login existente de BarberOS en
-http://127.0.0.1:3199/#/login. Antes de publicar en Internet debe sustituirse
+http://localhost:3000/login. Antes de publicar en Internet debe sustituirse
 esa URL local por el dominio definitivo.
 
 Wompi sigue **desactivado**, reservado EXCLUSIVAMENTE para cobrar
@@ -80,3 +80,7 @@ No se afirma identidad píxel por píxel: son una réplica de componentes, texto
 fotografías, dimensiones y navegación observada de la web local; los recorridos
 de alta y contratación completos necesitarán configuración del negocio
 y un despliegue público cuando lo apruebe su propietario.
+
+## Integración principal en puerto 3000
+
+Desde la raíz de UPDATEBARBER, `npm run dev` publica la landing en http://localhost:3000 y el login real en http://localhost:3000/login. Las rutas de Directorio, Profesionales y registro comparten el mismo origen sin alterar las vistas internas. Ver docs/UNIFIED-ROUTING-3000.md. La instancia standalone en 9102 sigue siendo opcional.

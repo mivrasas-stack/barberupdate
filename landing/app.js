@@ -1,7 +1,7 @@
 import './styles.css';
 
 const app=document.getElementById('app');
-const SYSTEM_LOGIN='http://127.0.0.1:3199/#/login';
+const SYSTEM_LOGIN=window.location.port==='9102'?'http://localhost:3000/login':'/login';
 const route=location.pathname.replace(/\/+$/,'')||'/';
 const btn=(text,url,style='')=>`<a class="button ${style}" href="${url}">${text}</a>`;
 const nav=()=>`<header class="nav" id="main-nav"><div class="nav-inner">

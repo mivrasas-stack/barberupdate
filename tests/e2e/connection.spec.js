@@ -78,7 +78,7 @@ test.afterAll(async()=>{
  }
 });
 async function login(page,identity){
- await page.goto('/');
+ await page.goto('/login');
  await expect(page.getByRole('heading',{name:/BIENVENIDO.*DE VUELTA/i}).first()).toBeVisible();
  await page.locator('input[type=email]').fill(identity.email);
  await page.locator('input[type=password]').fill(identity.password);
@@ -95,7 +95,7 @@ test('Propietario real: login, protección de roles, catálogo y operaciones vis
  await login(page,state.owner);
  await expect(page).toHaveURL(new RegExp('/barberia/'+state.slug+'/inicio'),{timeout:20000});
  await expect(page.getByText('Barbería E2E del navegador').first()).toBeVisible();
- await page.goto('/#/barberia/'+state.slug+'/servicios');
+ await page.goto('/login#/barberia/'+state.slug+'/servicios');
  await expect(page.getByRole('heading',{name:/Servicios & Tarifas/i})).toBeVisible();
  await expect(page.getByText('Corte Chromium').first()).toBeVisible();
  await page.getByRole('button',{name:/Nuevo Servicio/i}).click();
@@ -107,12 +107,12 @@ test('Propietario real: login, protección de roles, catálogo y operaciones vis
  await expect(page.getByText('Servicio añadido con Playwright').first()).toBeVisible();
  const services=await api(state.owner.jwt,'GET','/tenants/'+state.tenantId+'/services');
  expect(services.some(s=>s.name==='Servicio añadido con Playwright'&&Number(s.price_minor)===37000)).toBe(true);
- await page.goto('/#/barberia/'+state.slug+'/boutique');
+ await page.goto('/login#/barberia/'+state.slug+'/boutique');
  await expect(page.getByRole('heading',{name:/Inventario de Barbería/i})).toBeVisible();
  await expect(page.getByText('Pomada Chromium').first()).toBeVisible();
- await page.goto('/#/barberia/'+state.slug+'/agenda');
+ await page.goto('/login#/barberia/'+state.slug+'/agenda');
  await expect(page.getByRole('heading',{name:/Agenda Global/i})).toBeVisible();
- await page.goto('/#/admin/inicio');
+ await page.goto('/login#/admin/inicio');
  await expect(page.getByRole('button',{name:/Iniciar sesión/i}).first()).toBeVisible();
  expect(errors).toEqual([]);
 });
@@ -120,17 +120,17 @@ test('Cliente real: login y catálogo del negocio sin acceso privado',async({pag
  const errors=catchErrors(page);
  await login(page,state.customer);
  await expect(page).toHaveURL(/\/clientes\/inicio/,{timeout:20000});
- await page.goto('/#/clientes/citas/nueva');
+ await page.goto('/login#/clientes/citas/nueva');
  await expect(page.getByRole('heading',{name:/Elige Barbería o Profesional/i})).toBeVisible();
  await expect(page.getByText('Barbería E2E del navegador').first()).toBeVisible();
- await page.goto('/#/barberia/'+state.slug+'/boutique');
+ await page.goto('/login#/barberia/'+state.slug+'/boutique');
  await expect(page.getByRole('button',{name:/Iniciar sesión/i}).first()).toBeVisible();
  expect(errors).toEqual([]);
 });
 test('Propietario real: inventario ajustado desde la boutique original',async({page})=>{
  const errors=catchErrors(page);
  await login(page,state.owner);
- await page.goto('/#/barberia/'+state.slug+'/boutique');
+ await page.goto('/login#/barberia/'+state.slug+'/boutique');
  await expect(page.getByText('Pomada Chromium').first()).toBeVisible();
  const card=page.locator('div').filter({has:page.getByText('Pomada Chromium',{exact:true})});
  await page.getByRole('button',{name:/Ajustar Inventario/i}).first().click();
@@ -148,7 +148,7 @@ test('Propietario real: inventario ajustado desde la boutique original',async({p
 test('Cliente real: reserva efectiva y pedido con código desde la interfaz',async({page})=>{
  const errors=catchErrors(page);
  await login(page,state.customer);
- await page.goto('/#/clientes/citas/nueva');
+ await page.goto('/login#/clientes/citas/nueva');
  await expect(page.getByText('Barbería E2E del navegador').first()).toBeVisible();
  await page.getByRole('button',{name:/Continuar a Servicios/i}).click();
  await page.getByRole('button',{name:/Corte Chromium/i}).click();
@@ -164,7 +164,7 @@ test('Cliente real: reserva efectiva y pedido con código desde la interfaz',asy
  await expect(page.getByText('¡Tu Cita Ha Sido Agendada con Éxito!')).toBeVisible({timeout:18000});
  const appointments=await api(state.customer.jwt,'GET','/me/bookings');
  expect(appointments.some(x=>x.tenant_id===state.tenantId&&x.barber_id===state.barberId)).toBe(true);
- await page.goto('/#/clientes/sala-espera');
+ await page.goto('/login#/clientes/sala-espera');
  await page.getByRole('button',{name:/Ceras & Cuidado de Barba/i}).click();
  await expect(page.getByText('Pomada Chromium').first()).toBeVisible();
  await page.getByRole('button',{name:/Agregar al Pedido/i}).first().click();
@@ -180,7 +180,7 @@ test('Propietario: todas las pantallas principales conservan el diseño sin exce
  const routes=['inicio','dashboard','agenda','contabilidad','barberos','clientes','boutique',
    'servicios','perfil','qr','resenas','reportes'];
  for(const route of routes){
-   await page.goto('/#/barberia/'+state.slug+'/'+route);
+   await page.goto('/login#/barberia/'+state.slug+'/'+route);
    await expect(page.locator('main').first()).toBeVisible({timeout:12000});
    await expect(page.getByRole('button',{name:/Iniciar sesión/i})).toHaveCount(0);
  }
@@ -191,17 +191,17 @@ test('Cliente: todos los módulos del portal abren sin errores de ejecución',as
  await login(page,state.customer);
  for(const route of ['inicio','dashboard','citas/nueva','sala-espera','fidelizacion',
    'historial','qr','perfil']){
-   await page.goto('/#/clientes/'+route);
+   await page.goto('/login#/clientes/'+route);
    await expect(page.locator('main').first()).toBeVisible({timeout:12000});
    await expect(page.getByRole('button',{name:/Iniciar sesión/i})).toHaveCount(0);
  }
  expect(errors).toEqual([]);
 });
 test('No autenticado no obtiene privilegios ni ve accesos de desarrollo',async({page})=>{
- await page.goto('/');
+ await page.goto('/login');
  await expect(page.getByRole('button',{name:/Iniciar sesión/i}).first()).toBeVisible();
  await expect(page.getByText('Cuentas de Desarrollo')).toHaveCount(0);
  await expect(page.getByRole('button',{name:'Owner',exact:true})).toHaveCount(0);
- await page.goto('/#/barberia/empresa-protegida/inicio');
+ await page.goto('/login#/barberia/empresa-protegida/inicio');
  await expect(page.getByRole('button',{name:/Iniciar sesión/i}).first()).toBeVisible();
 });

@@ -8,15 +8,15 @@ export default defineConfig({
  expect:{timeout:12000},
  reporter:[['list'],['json',{outputFile:'test-results/playwright-results.json'}]],
  use:{
-  baseURL:'http://127.0.0.1:3199',
+  baseURL:'http://localhost:3000',
   ...devices['Desktop Chrome'],
   screenshot:'only-on-failure',
   trace:'retain-on-failure',
   actionTimeout:15000
  },
  webServer:{
-  command:'npx vite --host 127.0.0.1 --port 3199 --strictPort',
-  url:'http://127.0.0.1:3199',
+  command:'npx vite --host localhost --port 3000 --strictPort',
+  url:'http://localhost:3000',
   reuseExistingServer:true,
   timeout:60000
  }
