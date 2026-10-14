@@ -9,6 +9,7 @@
  */
 
 import { barberStore } from './store';
+import {isLiveBackend,loadAccount,backendRequest,addBooking,updateBooking,addProduct,adjustStock,addOrder,addService,refreshLiveData,mapAppointment,mapOrder,mapPlan} from './liveBackend';
 import {
   Appointment,
   Barber,
@@ -24,7 +25,7 @@ import {
 } from '../types';
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
-export const USE_MOCK_ADAPTER = true;
+export const USE_MOCK_ADAPTER = !isLiveBackend;
 
 export interface IBarberOSApi {
   // Appointments
@@ -229,4 +230,77 @@ class HttpBarberOSAdapter implements IBarberOSApi {
   }
 }
 
-export const api: IBarberOSApi = USE_MOCK_ADAPTER ? new MockBarberOSAdapter() : new HttpBarberOSAdapter();
+
+/** Live adapter: never writes to the demonstration store as a substitute for an API call. */
+class ConnectedBarberOSAdapter implements IBarberOSApi {
+  async getAppointments(filters?:{businessId?:string;barberId?:string;date?:string}):Promise<Appointment[]>{
+    return (await loadAccount()).appointments.filter(a=>
+      (!filters?.businessId||a.businessId===filters.businessId)&&
+      (!filters?.barberId||a.barberId===filters.barberId)&&
+      (!filters?.date||a.date===filters.date));
+  }
+  async createAppointment(data:Omit<Appointment,'id'|'createdAt'>){
+    try{
+      const account=await loadAccount();
+      const tenant=data.businessId||account.shops[0]?.id;
+      if(!tenant)throw Error('Selecciona una barbería real.');
+      const raw=await addBooking(tenant,{barberId:data.barberId,serviceId:data.serviceId,
+        date:data.date,startTime:data.startTime,customerName:data.customerName,
+        customerPhone:data.customerPhone,notes:data.notes});
+      await refreshLiveData();
+      return {success:true,data:mapAppointment(raw,tenant,account.services)};
+    }catch(e){return {success:false,error:e instanceof Error?e.message:'Error creando reserva'};}
+  }
+  async updateAppointmentStatus(id:string,status:Appointment['status'],_paymentMethod?:Appointment['paymentMethod']){
+    const a=(await loadAccount()).appointments.find(a=>a.id===id);
+    if(!a?.businessId)throw Error('Reserva no disponible');
+    await updateBooking(a.businessId,id,status);
+    await refreshLiveData();
+  }
+  async registerWalkIn(_data:{customerName:string;customerPhone:string;barberId:string;serviceId:string;businessId?:string}):Promise<Appointment>{
+    throw Error('Las llegadas sin cita necesitan un turno válido en la API; no se crean registros falsos.');
+  }
+  async getProducts(businessId?:string){
+    return (await loadAccount()).products.filter(p=>!businessId||p.businessId===businessId);
+  }
+  async updateProductStock(productId:string,delta:number,reason:string){
+    const product=(await loadAccount()).products.find(p=>p.id===productId);
+    if(!product?.businessId)throw Error('Producto no disponible');
+    await adjustStock(product.businessId,productId,delta,reason);
+    await refreshLiveData();
+    return true;
+  }
+  async createOrder(businessId:string,_customerId:string,customerName:string,items:Order['items']):Promise<Order>{
+    const raw=await addOrder(businessId,customerName,items.map(x=>({productId:x.productId,quantity:x.quantity})));
+    await refreshLiveData();
+    return {...mapOrder(raw,businessId),items};
+  }
+  async getTransactions(businessId?:string){
+    return (await loadAccount()).transactions.filter(x=>!businessId||x.businessId===businessId);
+  }
+  async recordCashClosing(_closing:Omit<CashClosing,'id'|'status'>):Promise<CashClosing>{
+    throw Error('El cierre real debe confirmarse mediante la operación autorizada de caja.');
+  }
+  async addReview(review:Omit<Review,'id'|'date'>):Promise<Review>{
+    if(!review.businessId||!review.appointmentId)throw Error('La reseña requiere una cita y barbería reales.');
+    const result=await backendRequest<{id:string;created_at:string}>(
+      '/tenants/'+review.businessId+'/reviews',{method:'POST',body:JSON.stringify({
+        appointmentId:review.appointmentId,rating:review.rating,comment:review.comment
+      })});
+    await refreshLiveData();
+    return {...review,id:result.id,date:result.created_at};
+  }
+  async getBarbershops(){return (await loadAccount()).shops;}
+  async getBarbers(businessId?:string){
+    return (await loadAccount()).barbers.filter(b=>!businessId||b.businessId===businessId);
+  }
+  async getServices(businessId?:string){
+    return (await loadAccount()).services.filter(s=>!businessId||s.businessId===businessId);
+  }
+  async getPlans(){
+    return (await backendRequest<Record<string,unknown>[]>('/public/plans')).map(mapPlan);
+  }
+  async getUsers(){return [(await loadAccount()).user];}
+}
+
+export const api: IBarberOSApi = USE_MOCK_ADAPTER ? new MockBarberOSAdapter() : new ConnectedBarberOSAdapter();

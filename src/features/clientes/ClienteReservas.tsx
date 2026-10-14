@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { barberStore } from '../../services/store';
+import {isLiveBackend,addBooking,refreshLiveData} from '../../services/liveBackend';
 import { formatCurrency } from '../../utils/formatters';
 import {
   Calendar,
@@ -31,7 +32,7 @@ export const ClienteReservas: React.FC = () => {
   );
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [selectedBarber, setSelectedBarber] = useState<Barber | null>(null);
-  const [selectedDate, setSelectedDate] = useState('2026-10-14');
+  const [selectedDate, setSelectedDate] = useState(new Date(Date.now()+86400000).toISOString().slice(0,10));
   const [selectedTime, setSelectedTime] = useState('11:00');
   const [notes, setNotes] = useState('');
 
@@ -50,8 +51,25 @@ export const ClienteReservas: React.FC = () => {
     '09:00', '10:00', '11:00', '12:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00',
   ];
 
-  const handleConfirmReservation = () => {
+  const handleConfirmReservation = async () => {
     if (!selectedService || !selectedBarber) return;
+    if(isLiveBackend){
+      if(selectedTargetType!=='shop'||!selectedShop?.id){
+        addToast('Selecciona una barbería publicada en BarberOS.','error');return;
+      }
+      const phone=currentUser?.phone?.trim()||window.prompt('Ingresa tu teléfono para confirmar la reserva:')?.trim();
+      if(!phone){addToast('Necesitamos tu teléfono para la reserva.','error');return;}
+      try{
+        await addBooking(selectedShop.id,{barberId:selectedBarber.id,
+          serviceId:selectedService.id,date:selectedDate,startTime:selectedTime,
+          customerName:currentUser?.name||currentUser?.email||'Cliente',
+          customerPhone:phone,notes});
+        await refreshLiveData();
+        addToast('¡Reserva registrada en el backend!','success');
+        setStep(6);
+      }catch(error){addToast(error instanceof Error?error.message:'No se pudo reservar','error');}
+      return;
+    }
 
     const res = barberStore.createAppointment({
       businessId: selectedTargetType === 'shop' ? selectedShop.id : undefined,

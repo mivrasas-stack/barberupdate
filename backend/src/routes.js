@@ -56,7 +56,7 @@ export async function registerRoutes(app,{config,db,security}) {
     routes.get('/api/v1/tenants/:tenantId/barbers',async req=>{
       const tenant=parseOrThrow(id,req.params.tenantId);
       await requireTenant(db,tenant,req.actor.id);
-      return (await db.query('SELECT id,tenant_id,slug,name,bio,status,commission_rate,created_at FROM public.barbers WHERE tenant_id=$1 ORDER BY name LIMIT 200',[tenant])).rows;
+      return (await db.query('SELECT id,tenant_id,slug,name,bio,status,commission_rate,user_id,created_at FROM public.barbers WHERE tenant_id=$1 ORDER BY name LIMIT 200',[tenant])).rows;
     });
     routes.post('/api/v1/tenants/:tenantId/barbers',async (req,reply)=>{
       const tenant=parseOrThrow(id,req.params.tenantId);
@@ -80,6 +80,20 @@ export async function registerRoutes(app,{config,db,security}) {
       const x=parseOrThrow(z.object({name:word(120),description:z.string().max(2000).default(''),priceMinor:z.number().int().min(0).max(1000000000),durationMinutes:z.number().int().min(5).max(600),category:word(60)}).strict(),req.body);
       const row=await db.query('INSERT INTO public.services(tenant_id,name,description,price_minor,duration_minutes,category) VALUES($1,$2,$3,$4,$5,$6) RETURNING *',[tenant,x.name,x.description,x.priceMinor,x.durationMinutes,x.category]);
       return reply.code(201).send(row.rows[0]);
+    });
+    routes.patch('/api/v1/tenants/:tenantId/services/:serviceId',async req=>{
+      const tenant=parseOrThrow(id,req.params.tenantId),serviceId=parseOrThrow(id,req.params.serviceId);
+      await requireTenant(db,tenant,req.actor.id,owners);
+      const x=parseOrThrow(z.object({
+        name:word(120),description:z.string().max(2000).default(''),
+        priceMinor:z.number().int().min(0).max(1000000000),
+        durationMinutes:z.number().int().min(5).max(600),category:word(60)
+      }).strict(),req.body);
+      const changed=await db.query(
+        'UPDATE public.services SET name=$3,description=$4,price_minor=$5,duration_minutes=$6,category=$7 WHERE tenant_id=$1 AND id=$2 RETURNING *',
+        [tenant,serviceId,x.name,x.description,x.priceMinor,x.durationMinutes,x.category]);
+      if(!changed.rowCount)failure(404,'Servicio no encontrado');
+      return changed.rows[0];
     });
     routes.post('/api/v1/tenants/:tenantId/bookings',async (req,reply)=>{
       const tenant=parseOrThrow(id,req.params.tenantId);
@@ -141,8 +155,19 @@ export async function registerRoutes(app,{config,db,security}) {
     });
     routes.post('/api/v1/tenants/:tenantId/products',async (req,reply)=>{
       const tenant=parseOrThrow(id,req.params.tenantId);await requireTenant(db,tenant,req.actor.id,owners);
-      const x=parseOrThrow(z.object({name:word(120),sku:word(80),priceMinor:z.number().int().min(0),stock:z.number().int().min(0).default(0)}).strict(),req.body);
-      const row=await db.query('INSERT INTO public.products(tenant_id,name,sku,price_minor,stock) VALUES($1,$2,$3,$4,$5) RETURNING *',[tenant,x.name,x.sku,x.priceMinor,x.stock]);
+      const x=parseOrThrow(z.object({
+        name:word(120),sku:word(80),priceMinor:z.number().int().min(0),
+        stock:z.number().int().min(0).default(0),
+        description:z.string().max(2000).default(''),
+        photoUrl:z.string().max(2048).default(''),
+        category:z.enum(['beauty','food_drinks','barbershop_merch']).default('beauty'),
+        costMinor:z.number().int().min(0).default(0),
+        minStock:z.number().int().min(0).default(0),
+        waitingRoomVisible:z.boolean().default(true)
+      }).strict(),req.body);
+      const row=await db.query(
+        'INSERT INTO public.products(tenant_id,name,sku,price_minor,stock,description,photo_url,category,cost_minor,min_stock,waiting_room_visible) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *',
+        [tenant,x.name,x.sku,x.priceMinor,x.stock,x.description,x.photoUrl,x.category,x.costMinor,x.minStock,x.waitingRoomVisible]);
       return reply.code(201).send(row.rows[0]);
     });
     routes.post('/api/v1/tenants/:tenantId/products/:productId/stock',async req=>{
@@ -155,6 +180,15 @@ export async function registerRoutes(app,{config,db,security}) {
         await tx.query('INSERT INTO public.inventory_movements(tenant_id,product_id,delta,reason,user_id) VALUES($1,$2,$3,$4,$5)',[tenant,product,x.delta,x.reason,req.actor.id]);
         return row.rows[0];
       });
+    });
+    routes.patch('/api/v1/tenants/:tenantId/products/:productId/visibility',async req=>{
+      const tenant=parseOrThrow(id,req.params.tenantId),product=parseOrThrow(id,req.params.productId);
+      await requireTenant(db,tenant,req.actor.id,owners);
+      const x=parseOrThrow(z.object({visible:z.boolean()}).strict(),req.body);
+      const row=await db.query('UPDATE public.products SET waiting_room_visible=$3,updated_at=now() WHERE tenant_id=$1 AND id=$2 RETURNING *',
+        [tenant,product,x.visible]);
+      if(!row.rowCount)failure(404,'Producto no encontrado');
+      return row.rows[0];
     });
     routes.get('/api/v1/tenants/:tenantId/transactions',async req=>{
       const tenant=parseOrThrow(id,req.params.tenantId);await requireTenant(db,tenant,req.actor.id,owners);
@@ -183,6 +217,15 @@ export async function registerRoutes(app,{config,db,security}) {
       await db.query('INSERT INTO public.media_assets(tenant_id,owner_user_id,storage_bucket,storage_path,mime_type,kind) VALUES($1,$2,$3,$4,$5,$6)',[tenant,req.actor.id,config.mediaBucket,path,x.mimeType,x.kind]);
       return reply.code(201).send({bucket:config.mediaBucket,path,signedUrl:signed.data.signedUrl,token:signed.data.token});
     });
+  });
+  app.get('/api/v1/public/tenants',async req=>{
+    await limited(req);if(!db)failure(503,'Base de datos no configurada');
+    return (await db.query("SELECT id,name,slug,currency,time_zone FROM public.tenants WHERE status='active' ORDER BY name LIMIT 100")).rows;
+  });
+  app.get('/api/v1/public/tenants/:tenantId/products',async req=>{
+    await limited(req);if(!db)failure(503,'Base de datos no configurada');
+    const tenant=parseOrThrow(id,req.params.tenantId);
+    return (await db.query("SELECT p.id,p.name,p.sku,p.price_minor,p.stock,p.description,p.photo_url,p.category,p.cost_minor,p.min_stock,p.waiting_room_visible FROM public.products p JOIN public.tenants t ON t.id=p.tenant_id WHERE p.tenant_id=$1 AND p.is_active=true AND p.waiting_room_visible=true AND t.status='active' ORDER BY p.name LIMIT 200",[tenant])).rows;
   });
   app.get('/api/v1/public/tenants/:slug/catalog',async req=>{
     await limited(req); if(!db) failure(503,'Base de datos no configurada');

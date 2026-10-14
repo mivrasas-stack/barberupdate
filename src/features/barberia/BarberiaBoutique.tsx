@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { barberStore } from '../../services/store';
 import { formatCurrency } from '../../utils/formatters';
 import { Product, ProductCategory } from '../../types';
+import {isLiveBackend, addProduct, adjustStock, setProductVisibility, refreshLiveData} from '../../services/liveBackend';
 import {
   ShoppingBag,
   Sparkles,
@@ -53,8 +54,20 @@ export const BarberiaBoutique: React.FC = () => {
     p => p.businessId === shopId && p.stock <= p.minStock
   ).length;
 
-  const handleCreateProduct = (e: React.FormEvent) => {
+  const handleCreateProduct = async (e: React.FormEvent) => {
     e.preventDefault();
+    if(isLiveBackend){
+      try{
+        await addProduct(shopId,{name:newProdName,sku:newProdSku,price:newProdPrice,stock:newProdStock,
+          description:newProdDesc,photo:newProdPhoto,category:activeCategory,cost:newProdCost,
+          minStock:newProdMinStock,isVisibleInWaitingRoom:true});
+        await refreshLiveData();
+        addToast('Producto creado en el backend', 'success');
+        setIsNewProductModalOpen(false);
+        setNewProdName('');setNewProdDesc('');
+      }catch(e){addToast(e instanceof Error?e.message:'No se pudo crear el producto','error');}
+      return;
+    }
     barberStore.createProduct({
       businessId: shopId,
       name: newProdName,
@@ -75,8 +88,18 @@ export const BarberiaBoutique: React.FC = () => {
     setNewProdDesc('');
   };
 
-  const handleAdjustStock = (isAddition: boolean) => {
+  const handleAdjustStock = async (isAddition: boolean) => {
     if (!adjustingProduct) return;
+    if(isLiveBackend){
+      try{
+        const delta=isAddition?adjustQuantity:-adjustQuantity;
+        await adjustStock(shopId,adjustingProduct.id,delta,adjustReason);
+        await refreshLiveData();
+        addToast('Inventario actualizado en el backend','success');
+        setAdjustingProduct(null);
+      }catch(e){addToast(e instanceof Error?e.message:'Error de inventario','error');}
+      return;
+    }
     const delta = isAddition ? adjustQuantity : -adjustQuantity;
     const ok = barberStore.updateProductStock(adjustingProduct.id, delta, adjustReason);
     if (!ok) {
@@ -88,6 +111,12 @@ export const BarberiaBoutique: React.FC = () => {
   };
 
   const handleToggleWaitingRoom = (prod: Product) => {
+    if(isLiveBackend){
+      void setProductVisibility(shopId,prod.id,!prod.isVisibleInWaitingRoom).then(refreshLiveData)
+        .then(()=>addToast('Visibilidad actualizada en el backend','success'))
+        .catch(e=>addToast(e instanceof Error?e.message:'Error al actualizar visibilidad','error'));
+      return;
+    }
     prod.isVisibleInWaitingRoom = !prod.isVisibleInWaitingRoom;
     barberStore.updateProductStock(prod.id, 0, 'Cambio de visibilidad sala');
     addToast(`Visibilidad en sala de espera: ${prod.isVisibleInWaitingRoom ? 'Visible' : 'Oculto'}`, 'info');

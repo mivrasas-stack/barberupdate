@@ -41,3 +41,12 @@ El archivo protegido `src/services/apiAdapter.ts` contiene `USE_MOCK_ADAPTER = t
 - Pruebas imprescindibles al conectar: inicio/cierre de sesión, 401/403, separación entre barberías, agenda + reprogramación, venta/stock, reversos manuales, conexión perdida y sincronización de notificaciones.
 
 No se considera frontend integrado hasta verificar estos flujos en la aplicación real y obtener autorización para modificarla.
+
+## Estado posterior a este documento
+
+La capa principal de sesión/servicios se conectó en la laptop en modo `VITE_BACKEND_MODE=live` sin cambiar el diseño visual. Los pasos vigentes y el alcance probado se documentan en `docs/FRONTEND-CONEXION-REAL.md`. Algunos módulos del contrato permanecen pendientes; los requisitos de producción siguen siendo independientes.
+
+
+## ACTUALIZACION: integracion realizada y probada
+
+La antigua seccion de estado previo describia el frontend en modo mock. Desde la integracion de octubre 2026, el modo conectado se activa mediante .env.local ignorado por Git; la API local y Supabase Auth estan conectados para los flujos verificados. BarberOS se presenta por http://127.0.0.1:3199 (el puerto 3000 corresponde a otra aplicacion). Ver docs/REPORTE-VALIDACION-PLAYWRIGHT.md. Quedan sin integrar funciones visuales que requieren rutas o reglas comerciales adicionales; Wompi no esta activado.

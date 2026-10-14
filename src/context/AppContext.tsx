@@ -16,6 +16,7 @@ import {
   CommercialPageConfig,
 } from '../types';
 import { barberStore, BarberOSState } from '../services/store';
+import {isLiveBackend, signIn, signOut, clearSession, hasSession, loadAccount, backendRequest, registerOwnedShop} from '../services/liveBackend';
 
 export interface ToastItem {
   id: string;
@@ -28,6 +29,7 @@ interface AppContextType {
   currentUser: User | null;
   activeRole: UserRole;
   loginAs: (user: User) => void;
+  loginWithCredentials: (email: string, password: string, requestedRole?: UserRole) => Promise<void>;
   logout: () => void;
   switchRolePersona: (role: UserRole) => void;
 
@@ -136,6 +138,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const loginAs = (user: User) => {
+    if(isLiveBackend){addToast('Ingresa con tu correo y contraseña reales. Los perfiles de demostración no dan acceso.', 'error');return;}
     setCurrentUser(user);
     addToast(`Sesión iniciada como ${user.name} (${getRoleLabel(user.role)})`, 'success');
 
@@ -156,13 +159,54 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const loginWithCredentials = async (email: string, password: string, requestedRole?: UserRole) => {
+    if(!isLiveBackend)throw Error('El modo de datos reales no está configurado.');
+    await signIn(email,password);
+    try{
+      let data=await loadAccount();
+      if(requestedRole==='owner'&&data.shops.length===0){
+        const shopName=window.prompt('Tu cuenta no tiene una barbería. Escribe el nombre para crearla:');
+        if(shopName?.trim()){
+          await registerOwnedShop(shopName);
+          data=await loadAccount();
+        }
+      }
+      barberStore.hydrateFromBackend({users:[data.user],barbershops:data.shops,barbers:data.barbers,
+        services:data.services,products:data.products,appointments:data.appointments,
+        transactions:data.transactions,orders:data.orders,plans:data.plans,cashClosings:data.cashClosings});
+      setCurrentUser(data.user);
+      if(data.user.role==='owner')navigate(data.shops[0]?'/barberia/'+data.shops[0].slug+'/inicio':'/clientes/inicio');
+      else if(data.user.role==='barber_employee')navigate('/barbero/'+(data.barbers[0]?.slug||'barbero')+'/inicio');
+      else navigate('/clientes/inicio');
+      addToast('Sesión real iniciada correctamente', 'success');
+    }catch(error){clearSession();throw error;}
+  };
+
+  useEffect(()=>{
+    if(!isLiveBackend||!hasSession())return;
+    let alive=true;
+    loadAccount().then(data=>{
+      if(!alive)return;
+      barberStore.hydrateFromBackend({users:[data.user],barbershops:data.shops,barbers:data.barbers,
+        services:data.services,products:data.products,appointments:data.appointments,
+        transactions:data.transactions,orders:data.orders,plans:data.plans,cashClosings:data.cashClosings});
+      setCurrentUser(data.user);
+      if(data.user.role==='owner'&&data.shops[0])navigate('/barberia/'+data.shops[0].slug+'/inicio');
+      else if(data.user.role==='barber_employee')navigate('/barbero/'+(data.barbers[0]?.slug||'barbero')+'/inicio');
+      else navigate('/clientes/inicio');
+    }).catch(()=>{if(alive){clearSession();setCurrentUser(null);}});
+    return ()=>{alive=false;};
+  },[]);
+
   const logout = () => {
+    if(isLiveBackend){void signOut().catch(()=>clearSession());barberStore.clearRemoteSession();}
     setCurrentUser(null);
     navigate('/login');
     addToast('Sesión cerrada correctamente', 'info');
   };
 
   const switchRolePersona = (role: UserRole) => {
+    if(isLiveBackend){addToast('Los roles reales los asigna la barbería desde el backend.', 'error');return;}
     const targetUser = storeState.users.find(u => u.role === role);
     if (targetUser) {
       loginAs(targetUser);
@@ -206,9 +250,46 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const resetDemoData = () => {
+    if(isLiveBackend){addToast('El reinicio de datos simulados no está disponible en modo conectado.','info');return;}
     barberStore.resetToFactory();
     addToast('Datos de demostración reiniciados al estado original', 'info');
   };
+
+  // Durable REST catch-up: WebSocket delivery from the provider is not guaranteed.
+  // This changes data behavior only; no visual layout or CSS changes.
+  useEffect(()=>{
+    if(!isLiveBackend||!currentUser)return;
+    let mounted=true,working=false;
+    const key='barberos_notif_cursor_'+currentUser.id;
+    const sync=async()=>{
+      if(working)return;
+      working=true;
+      try{
+        let cursor=sessionStorage.getItem(key)||'';
+        for(let page=0;page<5;page++){
+          const result=await backendRequest<{
+            items:{id:string;title:string;body:string}[];
+            nextCursor:string|null;hasMore:boolean
+          }>('/me/notifications/sync?limit=50'+(cursor?'&cursor='+encodeURIComponent(cursor):''));
+          if(!mounted)break;
+          if(cursor&&result.items.length>0){
+            addToast(result.items.length===1?result.items[0].title:
+              result.items.length+' notificaciones nuevas','info');
+          }
+          if(result.nextCursor){
+            cursor=result.nextCursor;sessionStorage.setItem(key,cursor);
+          }
+          if(!result.hasMore)break;
+        }
+      }catch{/* A failed poll leaves the cursor intact for the next attempt. */}
+      finally{working=false;}
+    };
+    void sync();
+    const timer=window.setInterval(()=>void sync(),30000);
+    const online=()=>void sync();
+    window.addEventListener('online',online);
+    return ()=>{mounted=false;window.clearInterval(timer);window.removeEventListener('online',online);};
+  },[currentUser?.id]);
 
   const activeRole: UserRole = currentUser?.role || 'client';
 
@@ -218,6 +299,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         currentUser,
         activeRole,
         loginAs,
+        loginWithCredentials,
         logout,
         switchRolePersona,
         currentShop,

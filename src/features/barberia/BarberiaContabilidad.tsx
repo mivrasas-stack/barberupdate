@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { barberStore } from '../../services/store';
+import {isLiveBackend,recordTransaction,closeCash,refreshLiveData} from '../../services/liveBackend';
 import { formatCurrency, formatDate, exportToCSV } from '../../utils/formatters';
 import { Transaction, PaymentMethod, CashClosing } from '../../types';
 import {
@@ -70,9 +71,19 @@ export const BarberiaContabilidad: React.FC = () => {
 
   const theoreticalCashBalance = openingCash + cashIncome - cashExpenses;
 
-  const handleCreateExpense = (e: React.FormEvent) => {
+  const handleCreateExpense = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!expenseConcept || expenseAmount <= 0) return;
+    if(isLiveBackend){
+      try{
+        await recordTransaction(shopId,{type:'expense',category:expenseCategory,concept:expenseConcept,
+          amount:expenseAmount,paymentMethod:expensePaymentMethod});
+        await refreshLiveData();
+        addToast('Gasto registrado en el backend','success');
+        setIsExpenseModalOpen(false);setExpenseConcept('');setExpenseAmount(0);setExpenseNotes('');
+      }catch(error){addToast(error instanceof Error?error.message:'Error guardando gasto','error');}
+      return;
+    }
 
     barberStore.addTransaction({
       businessId: shopId,
@@ -91,9 +102,24 @@ export const BarberiaContabilidad: React.FC = () => {
     setExpenseNotes('');
   };
 
-  const handlePerformCashClosing = (e: React.FormEvent) => {
+  const handlePerformCashClosing = async (e: React.FormEvent) => {
     e.preventDefault();
     const diff = cashCounted - theoreticalCashBalance;
+    if(isLiveBackend){
+      try{
+        await closeCash(shopId,{
+          id:'',businessId:shopId,date:new Date().toISOString().slice(0,10),
+          openedAt:'',closedAt:'',responsibleName:'',
+          openingCash,cashIncome,electronicIncome,expensesPaidFromCash:cashExpenses,
+          withdrawals:0,theoreticalCash:theoreticalCashBalance,actualCashCounted:cashCounted,
+          difference:diff,notes:closingNotes,status:'closed'
+        });
+        await refreshLiveData();
+        addToast('Cierre de caja guardado en el backend','success');
+        setIsCashClosingModalOpen(false);setClosingNotes('');
+      }catch(error){addToast(error instanceof Error?error.message:'No se pudo cerrar caja','error');}
+      return;
+    }
 
     barberStore.recordCashClosing({
       businessId: shopId,

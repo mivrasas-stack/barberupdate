@@ -1,4 +1,5 @@
 import React from 'react';
+import {isLiveBackend} from './services/liveBackend';
 import { AppProvider, useApp } from './context/AppContext';
 import { Header } from './components/common/Header';
 import { RoleSwitcherBar } from './components/common/RoleSwitcherBar';
@@ -59,6 +60,12 @@ const AppContent: React.FC = () => {
   if (activeRoute === '/login' || (!currentUser && !activeRoute.startsWith('/vincular'))) {
     return <LoginView />;
   }
+
+  // Real data permissions always come from Supabase membership, never a hash URL.
+  if(isLiveBackend&&activeRoute.startsWith('/admin')&&currentUser?.role!=='superadmin')return <LoginView />;
+  if(isLiveBackend&&activeRoute.startsWith('/barberia/')&&currentUser?.role!=='owner')return <LoginView />;
+  if(isLiveBackend&&activeRoute.startsWith('/barbero/')&&
+    !['barber_employee','barber_independent','owner'].includes(currentUser?.role||''))return <LoginView />;
 
   // --- Area 1: Administrador Global ---
   if (activeRoute.startsWith('/admin')) {

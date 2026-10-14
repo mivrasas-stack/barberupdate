@@ -42,3 +42,12 @@ Para poder declarar la plataforma apta para producción se requieren decisiones 
 3. Nunca migrar bases ajenas ni afectar otros contenedores.
 4. No subir `.env` ni secretos, usar conexiones locales protegidas.
 5. No exponer el puerto 8188 más allá de `127.0.0.1` sin TLS y auditoría.
+
+## Actualización de integración de interfaz
+
+El propietario autorizó conectar el frontend conservando su diseño original. Se habilitó un modo local conectado con Supabase Auth, API proxy, hidratación segura de datos y operaciones de agenda, servicios, boutique, pedidos y caja. Migraciones adicionales: 017 (edición de servicios para rol SQL limitado) y 018 (campos completos de boutique). E2E y TypeScript aprobados. El alcance y los módulos aún en modo demostración figuran en `docs/FRONTEND-CONEXION-REAL.md`. La plataforma aún NO está certificada 100% para producción sin infraestructura externa ni restauración integral.
+
+
+## Actualizacion final de la fase de conexion visual
+
+El frontend ya no se considera completamente desconectado: la capa funcional principal consume Supabase Auth y API real sin cambio de estilos. Playwright de 7 casos paso en Chromium; 12 rutas principales del propietario y 8 del cliente cargan sin excepciones. Persistencia comprobada en servicios, stock, reservas y pedidos. Acceso local 3199, proxy a API 8188. Quedan acciones de la interfaz en modo demostracion y tareas de produccion; documentadas en docs/REPORTE-VALIDACION-PLAYWRIGHT.md. Wompi diferido exclusivamente para suscripciones SaaS de BarberOS.

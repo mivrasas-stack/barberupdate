@@ -45,6 +45,18 @@ test('BarberOS E2E: Auth, schedule, bookings, orders, cleanup',
     const service=await call('POST',prefix+'/services',{
       name:'Haircut',description:'',category:'haircut',priceMinor:25000,durationMinutes:30});
     check(service,201,'Create service');
+    const edited=await call('PATCH',prefix+'/services/'+service.data.id,{
+      name:'Haircut Updated',description:'Edited through live frontend contract',
+      category:'haircut',priceMinor:25000,durationMinutes:30
+    });
+    check(edited,200,'Frontend can persist service edits');
+    assert.equal(edited.data.name,'Haircut Updated');
+    const listing=await call('GET',prefix+'/services');
+    check(listing,200,'Frontend can list edited services');
+    assert.ok(listing.data.some(x=>x.id===service.data.id&&x.name==='Haircut Updated'));
+    const publicShops=await call('GET','/api/v1/public/tenants');
+    check(publicShops,200,'Public tenant directory for client portal');
+    assert.ok(publicShops.data.some(x=>x.id===tid));
     const bpath=prefix+'/barbers/'+barber.data.id;
     const hours=await call('PUT',bpath+'/hours',{intervals:
       Array.from({length:7},(_,weekday)=>({weekday,startMinute:540,endMinute:1080}))});
@@ -76,6 +88,9 @@ test('BarberOS E2E: Auth, schedule, bookings, orders, cleanup',
     check(otherTenant,201,'Other owner creates separate company');
     otherTid=otherTenant.data.id;
     check(await otherCall('GET',prefix+'/services'),403,'Reject cross-tenant services');
+    check(await otherCall('PATCH',prefix+'/services/'+service.data.id,{
+      name:'Unauthorized',description:'',category:'haircut',priceMinor:1,durationMinutes:30
+    }),403,'Cannot edit services across tenants');
     check(await otherCall('GET',prefix+'/orders'),403,'Reject cross-tenant orders');
     check(await otherCall('GET',prefix+'/reports/overview?from=2026-10-01&to=2026-10-31'),
       403,'Reject cross-tenant financial reports');
@@ -182,8 +197,23 @@ test('BarberOS E2E: Auth, schedule, bookings, orders, cleanup',
     check(freed,200,'Reopen cancelled slot');
     assert.ok(freed.data.slots.some(s=>s.starts_at===details.startsAt),'Cancelled slot must be available');
     const product=await call('POST',prefix+'/products',{name:'Hair Gel',
-      sku:'ITEST-'+randomBytes(5).toString('hex'),priceMinor:12500,stock:4});
+      sku:'ITEST-'+randomBytes(5).toString('hex'),priceMinor:12500,stock:4,
+      description:'Original boutique form',photoUrl:'https://example.com/product.jpg',
+      category:'food_drinks',costMinor:5500,minStock:2,waitingRoomVisible:true});
     check(product,201,'Create product');
+    assert.equal(product.data.category,'food_drinks');
+    assert.equal(Number(product.data.cost_minor),5500);
+    const publicProductsPath='/api/v1/public/tenants/'+tid+'/products';
+    const visible=await call('GET',publicProductsPath);
+    check(visible,200,'Public boutique catalog');
+    assert.ok(visible.data.some(x=>x.id===product.data.id));
+    const hidden=await call('PATCH',prefix+'/products/'+product.data.id+'/visibility',{visible:false});
+    check(hidden,200,'Owner can hide boutique product');
+    const afterHide=await call('GET',publicProductsPath);
+    check(afterHide,200,'Public boutique after hiding');
+    assert.ok(afterHide.data.every(x=>x.id!==product.data.id));
+    const shown=await call('PATCH',prefix+'/products/'+product.data.id+'/visibility',{visible:true});
+    check(shown,200,'Owner can show boutique product');
     const purchase={customerName:'Test Customer',items:[{productId:product.data.id,quantity:2}]};
     const orderKey='order-'+randomBytes(12).toString('hex');
     const ordered=await call('POST',prefix+'/orders',purchase,orderKey);

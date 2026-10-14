@@ -2,15 +2,21 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Scissors, Shield, Store, UserCheck, Users, ArrowRight, Lock, Mail, Sparkles, CheckCircle2 } from 'lucide-react';
 import { UserRole } from '../../types';
+import { isLiveBackend } from '../../services/liveBackend';
 
 export const LoginView: React.FC = () => {
-  const { state, loginAs, setIsPaletteModalOpen } = useApp();
-  const [email, setEmail] = useState('contacto@barberclub.co');
-  const [password, setPassword] = useState('••••••••••••');
+  const { state, loginAs, loginWithCredentials, setIsPaletteModalOpen, addToast } = useApp();
+  const [email, setEmail] = useState(isLiveBackend ? '' : 'contacto@barberclub.co');
+  const [password, setPassword] = useState(isLiveBackend ? '' : '••••••••••••');
   const [selectedRole, setSelectedRole] = useState<UserRole>('owner');
 
-  const handleManualSubmit = (e: React.FormEvent) => {
+  const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if(isLiveBackend){
+      try{await loginWithCredentials(email,password,selectedRole);}
+      catch(error){addToast(error instanceof Error?error.message:'No se pudo iniciar sesión','error');}
+      return;
+    }
     const user = state.users.find(u => u.email === email) || state.users.find(u => u.role === selectedRole) || state.users[1];
     loginAs(user);
   };
@@ -156,7 +162,7 @@ export const LoginView: React.FC = () => {
             </span>
             <h3 className="text-xl font-extrabold text-white mt-1 mb-1">Iniciar Sesión</h3>
             <p className="text-xs text-neutral-400 mb-5 leading-relaxed">
-              Ingresa tus credenciales o selecciona un rol para simular la autenticación.
+              {isLiveBackend ? 'Ingresa las credenciales de tu cuenta real en BarberOS.' : 'Ingresa tus credenciales o selecciona un rol para simular la autenticación.'}
             </p>
 
             <form onSubmit={handleManualSubmit} className="space-y-4">
@@ -219,7 +225,7 @@ export const LoginView: React.FC = () => {
           </div>
 
           <div className="mt-6 pt-4 border-t border-white/[0.08] text-[11px] text-neutral-400 text-center font-medium">
-            Modo simulación activo. Acceso instantáneo sin contraseñas.
+            {isLiveBackend ? 'Modo conectado: verificación real de identidad con Supabase.' : 'Modo simulación activo. Acceso instantáneo sin contraseñas.'}
           </div>
         </div>
       </div>

@@ -83,3 +83,12 @@ que el sistema está público ni completamente certificado para producción.
 **Conclusión:** backend funcional para demostración y evaluación técnica:
 **APROBADO**. Estado de plataforma lista para comercializar con alojamiento
 público: **PENDIENTE**, con bloqueos detallados arriba.
+
+## Actualización posterior: frontend original conectado parcialmente
+
+Se autorizó conectar el frontend conservando íntegros sus componentes visuales. Ahora el inicio de sesión, lecturas de empresas, servicios, productos, citas, ciertas operaciones de caja, agenda, reservas y pedidos consumen el backend real mediante Vite y Supabase Auth. La conexión es local y se valida mediante pruebas TypeScript, build, proxy y E2E de API. Algunos módulos continúan sin persistencia real; consultar el documento vigente `docs/FRONTEND-CONEXION-REAL.md`. Este informe conserva el estado histórico de la entrega anterior.
+
+
+## ACTUALIZACION POSTERIOR: interfaz original conectada parcialmente
+
+La afirmacion historica de que no existia conexion al frontend queda actualizada: hay autenticacion Supabase y rutas API reales para servicios, inventario, reservas, pedidos, caja y notificaciones, con la interfaz visual original intacta. Playwright Chromium registro 7/7 pruebas aprobadas en navegador y recorrio 20 pantallas sin excepciones JS. Acceso local: http://127.0.0.1:3199. El informe vigente es docs/REPORTE-VALIDACION-PLAYWRIGHT.md. No hay cuenta permanente creada, servidor publico ni certificacion total de produccion.

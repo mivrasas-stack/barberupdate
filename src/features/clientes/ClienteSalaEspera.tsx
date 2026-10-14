@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { barberStore } from '../../services/store';
+import {isLiveBackend,addOrder,refreshLiveData,mapOrder} from '../../services/liveBackend';
 import { formatCurrency } from '../../utils/formatters';
 import { Product, ProductCategory, OrderItem, Order } from '../../types';
 import {
@@ -61,7 +62,7 @@ export const ClienteSalaEspera: React.FC = () => {
     );
   };
 
-  const handleConfirmOrder = () => {
+  const handleConfirmOrder = async () => {
     if (!cart.length) return;
 
     const items: OrderItem[] = cart.map(it => ({
@@ -73,6 +74,17 @@ export const ClienteSalaEspera: React.FC = () => {
       subtotal: it.product.price * it.quantity,
     }));
 
+    if(isLiveBackend){
+      try{
+        const raw=await addOrder(shopId,currentUser?.name||currentUser?.email||'Cliente',
+          cart.map(item=>({productId:item.product.id,quantity:item.quantity})));
+        setLastGeneratedOrder({...mapOrder(raw,shopId),items});
+        setCart([]);
+        await refreshLiveData();
+        addToast('Pedido registrado en BarberOS','success');
+      }catch(error){addToast(error instanceof Error?error.message:'Error creando pedido','error');}
+      return;
+    }
     const order = barberStore.createOrder(
       shopId,
       currentUser?.id || 'usr-client-1',

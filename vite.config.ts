@@ -12,6 +12,8 @@ export default defineConfig(() => {
       },
     },
     server: {
+      // Same-origin development proxy: API stays on localhost, no CORS or secrets in browser.
+      proxy: { '/api/v1': { target: 'http://127.0.0.1:8188', changeOrigin: false } },
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modify—file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',

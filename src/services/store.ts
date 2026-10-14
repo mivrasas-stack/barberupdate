@@ -88,6 +88,7 @@ class Store {
   }
 
   private loadFromStorage(): BarberOSState {
+    if(import.meta.env.VITE_BACKEND_MODE==='live')return getInitialState();
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
@@ -100,6 +101,8 @@ class Store {
   }
 
   private persist() {
+    // Never write authenticated customers, appointments or tenants to demo localStorage.
+    if(import.meta.env.VITE_BACKEND_MODE==='live'){this.notify();return;}
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
     } catch (e) {
@@ -121,6 +124,25 @@ class Store {
 
   public getState(): BarberOSState {
     return this.state;
+  }
+
+  // Remote data never inherits mock identities, fake sales or local demo records.
+  // Keep the user's existing visual theme without changing any UI component.
+  public hydrateFromBackend(data: Partial<BarberOSState>): void {
+    this.state = {
+      ...getInitialState(),
+      palettes: this.state.palettes,
+      activePaletteId: this.state.activePaletteId,
+      currency: this.state.currency,
+      users: [], barbershops: [], barbers: [], services: [], products: [],
+      appointments: [], transactions: [], cashClosings: [], orders: [], reviews: [],
+      loyalty: {}, ...data,
+    };
+    this.notify(); // Do not persist authenticated tenant data to demo localStorage.
+  }
+
+  public clearRemoteSession(): void {
+    this.hydrateFromBackend({});
   }
 
   public resetToFactory(): void {

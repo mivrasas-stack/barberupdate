@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { Service, ServiceCategory } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
 import { Scissors, Plus, Clock, Users, X, Edit2, CheckCircle2 } from 'lucide-react';
+import {isLiveBackend, addService, editService, refreshLiveData} from '../../services/liveBackend';
 
 export const BarberiaServicios: React.FC = () => {
   const { currentShop, state, currency, addToast } = useApp();
@@ -39,8 +40,20 @@ export const BarberiaServicios: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if(isLiveBackend){
+      try{
+        const payload={name:formName,description:formDesc,price:formPrice,
+          durationMinutes:formDuration,category:formCategory};
+        if(editingService)await editService(shopId,editingService.id,payload);
+        else await addService(shopId,payload);
+        await refreshLiveData();
+        addToast('Servicio guardado en BarberOS', 'success');
+        setIsModalOpen(false);
+      }catch(error){addToast(error instanceof Error?error.message:'Error al guardar servicio','error');}
+      return;
+    }
     if (editingService) {
       editingService.name = formName;
       editingService.description = formDesc;

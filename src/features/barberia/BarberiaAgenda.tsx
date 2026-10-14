@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { barberStore } from '../../services/store';
+import {isLiveBackend,addBooking,updateBooking,refreshLiveData} from '../../services/liveBackend';
 import { formatCurrency, formatTime } from '../../utils/formatters';
 import { Appointment, AppointmentStatus, PaymentMethod } from '../../types';
 import {
@@ -112,10 +113,20 @@ export const BarberiaAgenda: React.FC = () => {
     '15:00', '16:00', '17:00', '18:00', '19:00', '20:00',
   ];
 
-  const handleCreateAppointment = (e: React.FormEvent) => {
+  const handleCreateAppointment = async (e: React.FormEvent) => {
     e.preventDefault();
     const service = state.services.find(s => s.id === newServiceId);
     if (!service) return;
+    if(isLiveBackend){
+      try{
+        await addBooking(shopId,{barberId:newBarberId,serviceId:service.id,date:selectedDate,
+          startTime:newStartTime,customerName:newCustName,customerPhone:newCustPhone,notes:newNotes});
+        await refreshLiveData();
+        addToast('Reserva creada en BarberOS','success');
+        setIsNewAptModalOpen(false);setNewCustName('');setNewCustPhone('');
+      }catch(error){addToast(error instanceof Error?error.message:'Error al reservar','error');}
+      return;
+    }
 
     const res = barberStore.createAppointment({
       businessId: shopId,
@@ -149,6 +160,7 @@ export const BarberiaAgenda: React.FC = () => {
 
   const handleRegisterWalkIn = (e: React.FormEvent) => {
     e.preventDefault();
+    if(isLiveBackend){addToast('Las llegadas sin cita requieren una reserva con horario disponible en el backend.', 'info');return;}
     const apt = barberStore.registerWalkIn(
       walkInCustName,
       walkInCustPhone,
@@ -163,6 +175,15 @@ export const BarberiaAgenda: React.FC = () => {
   };
 
   const handleAdvanceStatus = (apt: Appointment) => {
+    if(isLiveBackend){
+      const next=apt.status==='pending'?'confirmed':apt.status==='confirmed'?'waiting':apt.status==='waiting'?'in_service':null;
+      if(next){
+        void updateBooking(shopId,apt.id,next).then(refreshLiveData)
+          .then(()=>addToast('Estado de cita actualizado en la API','success'))
+          .catch(e=>addToast(e instanceof Error?e.message:'Error al actualizar','error'));
+      }else if(apt.status==='in_service'){setCompletingApt(apt);}
+      return;
+    }
     if (apt.status === 'waiting') {
       barberStore.updateAppointmentStatus(apt.id, 'in_service');
       addToast(`Servicio iniciado: ${apt.customerName} pasó a la silla`, 'info');
@@ -174,12 +195,25 @@ export const BarberiaAgenda: React.FC = () => {
 
   const handleConfirmCompletion = () => {
     if (!completingApt) return;
+    if(isLiveBackend){
+      if(completingApt.status!=='in_service'){addToast('Primero marca la cita en servicio.','error');return;}
+      void updateBooking(shopId,completingApt.id,'completed').then(refreshLiveData)
+        .then(()=>{addToast('Servicio finalizado. Registra el pago en caja si corresponde.','success');setCompletingApt(null);})
+        .catch(e=>addToast(e instanceof Error?e.message:'No se pudo finalizar','error'));
+      return;
+    }
     barberStore.updateAppointmentStatus(completingApt.id, 'completed', paymentMethodForComplete);
     addToast(`Servicio finalizado y cobrado (${paymentMethodForComplete.toUpperCase()})`, 'success');
     setCompletingApt(null);
   };
 
   const handleCancelApt = (id: string) => {
+    if(isLiveBackend){
+      void updateBooking(shopId,id,'cancelled').then(refreshLiveData)
+        .then(()=>addToast('Cita cancelada en la API','info'))
+        .catch(e=>addToast(e instanceof Error?e.message:'No se pudo cancelar','error'));
+      return;
+    }
     barberStore.updateAppointmentStatus(id, 'cancelled');
     addToast('Cita cancelada', 'info');
   };
