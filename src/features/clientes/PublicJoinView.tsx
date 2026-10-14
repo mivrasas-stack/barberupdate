@@ -9,7 +9,7 @@ export const PublicJoinView:React.FC=()=>{
  const [target,setTarget]=useState<PublicBusinessLink|null>(null);
  const [error,setError]=useState('');
  const [status,setStatus]=useState('');
- const [mode,setMode]=useState<'register'|'login'>('register');
+ const [mode,setMode]=useState<'register'|'login'|'profile'>('register');
  const [busy,setBusy]=useState(false);
  const [name,setName]=useState('');
  const [phone,setPhone]=useState('');
@@ -31,7 +31,7 @@ export const PublicJoinView:React.FC=()=>{
    if(mode==='register'&&!consent){setError('Confirma que deseas asociarte a este negocio');return}
    setBusy(true);setError('');setStatus('');
    try{
-     if(!existingSession){
+     if(!existingSession&&mode!=='profile'){
        if(mode==='register'){
          await registerWithEmail(email.trim(),password);
          try{await signIn(email.trim(),password)}
@@ -41,6 +41,7 @@ export const PublicJoinView:React.FC=()=>{
          }
        }else await signIn(email.trim(),password);
      }
+     if(!existingSession&&mode!=='profile'){setMode('profile');setStatus('Sesi�n iniciada. Completa tus datos para vincularte.');return;}
      const result=await linkCustomer(code,name.trim(),phone.trim());
      setStatus('¡Te vinculaste con '+result.name+'! Entrando a tu portal...');
      window.location.replace('/login#/clientes/inicio');
@@ -61,15 +62,16 @@ export const PublicJoinView:React.FC=()=>{
     {error&&<p role="alert" className="my-5 rounded-xl border border-red-600/30 bg-red-950/40 p-3 text-red-200 text-sm">{error}</p>}
     {status&&<p role="status" className="my-5 rounded-xl border border-emerald-600/30 bg-emerald-950/40 p-3 text-emerald-200 text-sm">{status}</p>}
     {target&&<form className="mt-7 space-y-4" onSubmit={e=>void join(e)}>
-      {!existingSession&&<div className="flex gap-2 rounded-xl bg-[#202020] p-1 text-sm">
+      {!existingSession&&mode!=='profile'&&<div className="flex gap-2 rounded-xl bg-[#202020] p-1 text-sm">
         <button type="button" onClick={()=>setMode('register')} className={'flex-1 rounded-lg p-2 '+(mode==='register'?'bg-[var(--gold-primary)] text-black font-bold':'text-neutral-400')}>Crear cuenta</button>
         <button type="button" onClick={()=>setMode('login')} className={'flex-1 rounded-lg p-2 '+(mode==='login'?'bg-[var(--gold-primary)] text-black font-bold':'text-neutral-400')}>Ya tengo cuenta</button>
       </div>}
-      <div><label htmlFor="join-name" className="block text-xs text-neutral-300 mb-2">Nombre y apellidos completos</label>
+      {(mode==='register'||mode==='profile'||existingSession)&&<><div><label htmlFor="join-name" className="block text-xs text-neutral-300 mb-2">Nombre y apellidos completos</label>
        <input id="join-name" required minLength={2} maxLength={120} autoComplete="name" value={name} onChange={e=>setName(e.target.value)} className="w-full rounded-xl border border-neutral-700 bg-[#101010] px-4 py-3 text-sm" placeholder="Tu nombre completo"/></div>
       <div><label htmlFor="join-phone" className="block text-xs text-neutral-300 mb-2">Teléfono de contacto</label>
        <input id="join-phone" required minLength={7} maxLength={32} autoComplete="tel" inputMode="tel" value={phone} onChange={e=>setPhone(e.target.value)} className="w-full rounded-xl border border-neutral-700 bg-[#101010] px-4 py-3 text-sm" placeholder="+57 300 123 4567"/></div>
-      {!existingSession&&<>
+      </>}
+      {!existingSession&&mode!=='profile'&&<>
        <div><label htmlFor="join-email" className="block text-xs text-neutral-300 mb-2">Correo electrónico</label>
         <input id="join-email" required type="email" autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)} className="w-full rounded-xl border border-neutral-700 bg-[#101010] px-4 py-3 text-sm" placeholder="tu@correo.com"/></div>
        <div><label htmlFor="join-password" className="block text-xs text-neutral-300 mb-2">Contraseña {mode==='register'?'(mínimo 8 caracteres)':''}</label>
@@ -78,7 +80,7 @@ export const PublicJoinView:React.FC=()=>{
         <input id="join-confirm" required type="password" autoComplete="new-password" minLength={8} value={confirm} onChange={e=>setConfirm(e.target.value)} className="w-full rounded-xl border border-neutral-700 bg-[#101010] px-4 py-3 text-sm"/></div>}
       </>}
       {mode==='register'&&<label className="flex items-start gap-3 text-xs text-neutral-400"><input type="checkbox" required checked={consent} onChange={e=>setConsent(e.target.checked)} className="mt-1 accent-amber-400"/><span>Acepto vincular mi cuenta con {target.name} y compartir con ese negocio los datos necesarios para gestionar mis citas.</span></label>}
-      <button disabled={busy} className="w-full rounded-xl py-3.5 bg-[var(--gold-primary)] text-black font-extrabold text-sm flex justify-center items-center gap-2 disabled:opacity-50">{busy?'Procesando...':existingSession?'Confirmar vinculación':mode==='register'?'Registrarme y vincular':'Ingresar y vincular'} <ArrowRight className="w-4 h-4"/></button>
+      <button disabled={busy} className="w-full rounded-xl py-3.5 bg-[var(--gold-primary)] text-black font-extrabold text-sm flex justify-center items-center gap-2 disabled:opacity-50">{busy?'Procesando...':existingSession?'Confirmar vinculación':mode==='register'?'Registrarme y vincular':mode==='profile'?'Confirmar vinculaci�n':'Ingresar y continuar'} <ArrowRight className="w-4 h-4"/></button>
       <p className="text-center text-xs text-neutral-500"><LockKeyhole className="w-3 h-3 inline-block mr-1"/>Tu contraseña se verifica con Supabase Auth, no se guarda en la barbería.</p>
     </form>}
     {status.startsWith('¡')&&<CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto mt-5"/>}

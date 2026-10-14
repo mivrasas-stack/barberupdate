@@ -41,6 +41,7 @@ interface AppContextType {
 
   // Navigation
   activeRoute: string;
+  restoringSession: boolean;
   navigate: (route: string) => void;
 
   // Store Entities (Reactive)
@@ -72,6 +73,7 @@ const AppContext = createContext<AppContextType | null>(null);
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [storeState, setStoreState] = useState<BarberOSState>(barberStore.getState());
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [restoringSession, setRestoringSession] = useState(isLiveBackend && hasSession());
   const [activeRoute, setActiveRoute] = useState<string>('/login');
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [isPaletteModalOpen, setIsPaletteModalOpen] = useState<boolean>(false);
@@ -186,7 +188,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   useEffect(()=>{
-    if(!isLiveBackend||!hasSession())return;
+    if(!isLiveBackend||!hasSession()){setRestoringSession(false);return;}
     let alive=true;
     loadAccount().then(data=>{
       if(!alive)return;
@@ -199,7 +201,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       else if(data.user.role==='barber_employee'||data.user.role==='barber_independent')
         navigate('/barbero/'+(data.barbers.find(b=>b.id===data.user.barberId)?.slug||data.barbers[0]?.slug||'barbero')+'/inicio');
       else navigate('/clientes/inicio');
-    }).catch(()=>{if(alive){clearSession();setCurrentUser(null);}});
+    }).catch(()=>{if(alive){clearSession();setCurrentUser(null);}}).finally(()=>{if(alive)setRestoringSession(false)});
     return ()=>{alive=false;};
   },[]);
 
@@ -311,7 +313,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCurrentShopSlug,
         currentBarber,
         setCurrentBarberSlug,
-        activeRoute,
+        activeRoute, restoringSession,
         navigate,
         state: storeState,
         activePalette,

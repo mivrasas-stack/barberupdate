@@ -55,9 +55,10 @@ import { PublicJoinView } from './features/clientes/PublicJoinView';
 import { ClientePerfil } from './features/clientes/ClientePerfil';
 
 const AppContent: React.FC = () => {
-  const { activeRoute, currentUser } = useApp();
+  const { activeRoute, currentUser, restoringSession } = useApp();
 
   if (window.location.pathname.startsWith('/vincular/'))return <PublicJoinView/>;
+  if (restoringSession) return <main role='status' className='min-h-screen bg-black text-white flex items-center justify-center'>Restaurando sesion...</main>;
 
   // If on login route or not logged in
   if (activeRoute === '/login' || (!currentUser && !activeRoute.startsWith('/vincular'))) {
