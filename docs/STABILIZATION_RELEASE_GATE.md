@@ -21,15 +21,15 @@ The existing `tests/e2e/connection.spec.js` covers:
 - shop profile persistence and image upload to Storage
 - navigation through commercial and client modules
 
-Execute the `QA real end-to-end (manual)` workflow on branch `fix/stabilization-five-priorities-20261014`, or run the same tests from the dedicated QA machine using a local environment. The workflow **will skip the live tests** unless the following repository Actions secrets are configured:
+Execute the `QA real end-to-end (manual)` workflow on branch `fix/stabilization-five-priorities-20261014`, or run the same tests from the dedicated QA machine using a local environment. The workflow **will skip the live tests** unless the following **three private** repository Actions secrets are configured:
 
-- `QA_SUPABASE_URL`
-- `QA_SUPABASE_PUBLISHABLE_KEY`
-- `QA_SUPABASE_SERVICE_ROLE_KEY`
-- `QA_DATABASE_URL` (API PostgreSQL connection)
-- `QA_ADMIN_DATABASE_URL` (admin-only cleanup of generated test data)
+- `QA_SUPABASE_SERVICE_ROLE_KEY` (backend-only test administration; never in frontend)
+- `QA_DATABASE_URL` (API PostgreSQL connection to the isolated QA project)
+- `QA_ADMIN_DATABASE_URL` (administrator PostgreSQL connection used only for cleanup)
 
-The workflow refuses any Supabase URL/connection not pointing to the isolated `wrfwhftzaflwhkvkzrjm` project. Do not place secret values in code, commits or PR comments. The integration test creates temporary users and test-only tenants and cleans them after completion. A green CI result **without a real QA run is not sufficient** for production release.
+The QA project URL and Supabase **publishable** client key are configured in the workflow already. They are intentionally public, not secrets. GitHub Actions' connector cannot create or edit private repository secrets; configure these three under the repository Settings → Secrets and variables → Actions, without copying values into code or chat.
+
+The workflow fails when these secrets are missing and refuses any Supabase URL/connection not pointing to the isolated `wrfwhftzaflwhkvkzrjm` project. Do not place secret values in code, commits or PR comments. The integration test creates temporary users and test-only tenants and cleans them after completion. A green CI result **without a real QA run is not sufficient** for production release.
 
 ## Deployment and acceptance
 
