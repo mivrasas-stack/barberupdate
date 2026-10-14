@@ -277,7 +277,7 @@ export async function adjustStock(tenant:string,productId:string,delta:number,re
  return mapProduct(await backendRequest<Db>('/tenants/'+tenant+'/products/'+productId+'/stock',
    {method:'POST',body:JSON.stringify({delta,reason})}),tenant);
 }
-export async function addBooking(tenant:string,data:{barberId:string;serviceId:string;date:string;startTime:string;customerName:string;customerPhone:string;notes?:string},zone='America/Bogota'){
+export async function addBooking(tenant:string,data:{barberId:string;serviceId:string;date:string;startTime:string;customerName:string;customerPhone:string;whatsappOptIn?:boolean;notes?:string},zone='America/Bogota'){
  // Obtain a server-computed instant instead of constructing a misleading UTC timestamp in the browser.
  const slots=await fetch(apiOrigin+'/public/tenants/'+encodeURIComponent(tenant)+
    '/availability?barberId='+encodeURIComponent(data.barberId)+
@@ -285,10 +285,11 @@ export async function addBooking(tenant:string,data:{barberId:string;serviceId:s
    .then(async res=>{const body=await res.json();if(!res.ok)throw Error(body.error||'No se pudo consultar disponibilidad');return body as {slots:{starts_at:string}[]};});
  const selected=slots.slots.find(s=>dayParts(s.starts_at,zone).time===data.startTime);
  if(!selected)throw Error('El horario seleccionado ya no está disponible. Actualiza la agenda.');
- const idempotencyKey='b'+crypto.randomUUID().replace(/-/g,'');
+ const idempotencyKey='b'+Array.from(crypto.getRandomValues(new Uint8Array(16)),byte=>byte.toString(16).padStart(2,'0')).join('');
  return backendRequest<Db>('/tenants/'+tenant+'/bookings',{method:'POST',
    body:JSON.stringify({barberId:data.barberId,serviceId:data.serviceId,
      startsAt:selected.starts_at,customerName:data.customerName,customerPhone:data.customerPhone,
+     whatsappOptIn:Boolean(data.whatsappOptIn),
      notes:data.notes||''})},idempotencyKey);
 }
 export async function updateBooking(tenant:string,id:string,status:string){

@@ -14,7 +14,7 @@ export function endOfBooking(value, duration, now=Date.now()) {
   return new Date(ms+duration*60000).toISOString();
 }
 const tenantSchema = z.object({ name:word(120),slug,currency:z.enum(['COP','USD','EUR']).default('COP'),timeZone:word(80).default('America/Bogota') }).strict();
-const bookingSchema = z.object({ barberId:id,serviceId:id,startsAt:z.iso.datetime({offset:true}),customerName:word(120),customerPhone:word(32),notes:z.string().max(2000).default('') }).strict();
+const bookingSchema = z.object({ barberId:id,serviceId:id,startsAt:z.iso.datetime({offset:true}),customerName:word(120),customerPhone:word(32),whatsappOptIn:z.boolean().default(false),notes:z.string().max(2000).default('') }).strict();
 
 export async function registerRoutes(app,{config,db,security}) {
   const {authenticated,limited,requireTenant,service}=security;
@@ -80,6 +80,17 @@ export async function registerRoutes(app,{config,db,security}) {
       const row=await db.query('INSERT INTO public.barbers(tenant_id,name,slug,user_id,bio,commission_rate) VALUES($1,$2,$3,$4,$5,$6) RETURNING *',[tenant,x.name,x.slug,x.userId||null,x.bio,x.commissionRate]);
       return reply.code(201).send(row.rows[0]);
     });
+    routes.patch('/api/v1/tenants/:tenantId/barbers/:barberId/whatsapp',async req=>{
+      const tenant=parseOrThrow(id,req.params.tenantId),barber=parseOrThrow(id,req.params.barberId);
+      await requireTenant(db,tenant,req.actor.id,owners);
+      const x=parseOrThrow(z.object({phone:z.string().trim().max(32).nullable(),optIn:z.boolean()}).strict(),req.body);
+      if(x.optIn && (!x.phone||x.phone.replace(/[^0-9]/g,'').length<10))
+        failure(400,'Telefono valido y consentimiento requerido');
+      const result=await db.query('UPDATE public.barbers SET whatsapp_phone=$3,whatsapp_opt_in=$4 WHERE tenant_id=$1 AND id=$2 RETURNING id,whatsapp_phone,whatsapp_opt_in',
+        [tenant,barber,x.phone||null,x.optIn]);
+      if(!result.rowCount)failure(404,'Barbero no encontrado');
+      return result.rows[0];
+    });
     routes.get('/api/v1/tenants/:tenantId/services',async req=>{
       const tenant=parseOrThrow(id,req.params.tenantId);
       await requireTenant(db,tenant,req.actor.id);
@@ -113,7 +124,7 @@ export async function registerRoutes(app,{config,db,security}) {
       if(typeof key!=='string'||!/^[a-zA-Z0-9_-]{12,100}$/.test(key)) failure(400,'Idempotency-Key requerido (12-100 caracteres)');
       const startsAt=new Date(x.startsAt).toISOString();
       endOfBooking(startsAt,30);
-      const requestHash=createHash('sha256').update(JSON.stringify([x.barberId,x.serviceId,startsAt,x.customerName,x.customerPhone,x.notes])).digest('hex');
+      const requestHash=createHash('sha256').update(JSON.stringify([x.barberId,x.serviceId,startsAt,x.customerName,x.customerPhone,x.whatsappOptIn,x.notes])).digest('hex');
       const booking=await db.transaction(async tx=>{
         await tx.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[tenant+':'+req.actor.id+':booking:'+key]);
         const existing=await tx.query('SELECT * FROM public.appointments WHERE tenant_id=$1 AND created_by=$2 AND idempotency_key=$3',[tenant,req.actor.id,key]);
@@ -127,8 +138,8 @@ export async function registerRoutes(app,{config,db,security}) {
         // computes authoritative duration/price and inserts the reservation.
         // The database exclusion constraint and schedule trigger remain authoritative.
         const inserted=await tx.query(
-          "INSERT INTO public.appointments(tenant_id,barber_id,service_id,customer_user_id,customer_name,customer_phone,created_by,starts_at,ends_at,price_minor,notes,idempotency_key,request_hash) SELECT $1,b.id,s.id,$4,$5,$6,$4,$7::timestamptz,$7::timestamptz + s.duration_minutes * interval '1 minute',s.price_minor,$8,$9,$10 FROM public.services s JOIN public.tenants t ON t.id=s.tenant_id AND t.status='active' JOIN public.barbers b ON b.tenant_id=s.tenant_id AND b.id=$2 AND b.status='active' WHERE s.tenant_id=$1 AND s.id=$3 AND s.is_active=true RETURNING *",
-          [tenant,x.barberId,x.serviceId,req.actor.id,x.customerName,x.customerPhone,startsAt,x.notes,key,requestHash]);
+          "INSERT INTO public.appointments(tenant_id,barber_id,service_id,customer_user_id,customer_name,customer_phone,created_by,starts_at,ends_at,price_minor,notes,idempotency_key,request_hash,whatsapp_opt_in) SELECT $1,b.id,s.id,$4,$5,$6,$4,$7::timestamptz,$7::timestamptz + s.duration_minutes * interval '1 minute',s.price_minor,$8,$9,$10,$11 FROM public.services s JOIN public.tenants t ON t.id=s.tenant_id AND t.status='active' JOIN public.barbers b ON b.tenant_id=s.tenant_id AND b.id=$2 AND b.status='active' WHERE s.tenant_id=$1 AND s.id=$3 AND s.is_active=true RETURNING *",
+          [tenant,x.barberId,x.serviceId,req.actor.id,x.customerName,x.customerPhone,startsAt,x.notes,key,requestHash,x.whatsappOptIn]);
         if(!inserted.rowCount) failure(404,'Servicio o barbero no disponible');
         return {row:inserted.rows[0],repeated:false};
       });
