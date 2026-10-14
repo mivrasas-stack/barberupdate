@@ -1,0 +1,31 @@
+name: Barber Paradise stabilization
+on:
+  push:
+    branches:
+      - fix/stabilization-five-priorities-20261014
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'backend/**'
+      - 'package*.json'
+      - '.github/workflows/stabilization.yml'
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run build
+      - run: npm ci
+        working-directory: backend
+      - run: node --check src/media-profile.js
+        working-directory: backend
+      - run: node --test test/media-profile.test.js
+        working-directory: backend
