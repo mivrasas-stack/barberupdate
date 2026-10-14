@@ -277,7 +277,7 @@ export async function adjustStock(tenant:string,productId:string,delta:number,re
  return mapProduct(await backendRequest<Db>('/tenants/'+tenant+'/products/'+productId+'/stock',
    {method:'POST',body:JSON.stringify({delta,reason})}),tenant);
 }
-export async function addBooking(tenant:string,data:{barberId:string;serviceId:string;date:string;startTime:string;customerName:string;customerPhone:string;notes?:string},zone='America/Bogota'){
+export async function addBooking(tenant:string,data:{barberId:string;serviceId:string;date:string;startTime:string;customerName:string;customerPhone:string;whatsappOptIn?:boolean;notes?:string},zone='America/Bogota'){
  // Obtain a server-computed instant instead of constructing a misleading UTC timestamp in the browser.
  const slots=await fetch(apiOrigin+'/public/tenants/'+encodeURIComponent(tenant)+
    '/availability?barberId='+encodeURIComponent(data.barberId)+
@@ -289,6 +289,7 @@ export async function addBooking(tenant:string,data:{barberId:string;serviceId:s
  return backendRequest<Db>('/tenants/'+tenant+'/bookings',{method:'POST',
    body:JSON.stringify({barberId:data.barberId,serviceId:data.serviceId,
      startsAt:selected.starts_at,customerName:data.customerName,customerPhone:data.customerPhone,
+     whatsappOptIn:Boolean(data.whatsappOptIn),
      notes:data.notes||''})},idempotencyKey);
 }
 export async function updateBooking(tenant:string,id:string,status:string){
