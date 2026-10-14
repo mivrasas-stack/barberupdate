@@ -72,7 +72,26 @@ jobs:
       - if: steps.qa.outputs.ready == 'true'
         name: Validate PostgreSQL URLs without exposing their contents
         run: |
-          node -e 'for (const name of ["DATABASE_URL","ADMIN_DATABASE_URL"]) { try { const u = new URL(process.env[name]); if (!["postgres:","postgresql:"].includes(u.protocol) || !u.hostname || !u.username || !u.password || !u.pathname || u.password.includes("YOUR-PASSWORD")) throw Error("incomplete"); console.log(name+" format OK"); } catch { console.error("::error::"+name+" has invalid or incomplete PostgreSQL URI syntax"); process.exitCode=1; } }'
+          node <<'NODE'
+          for (const name of ['DATABASE_URL','ADMIN_DATABASE_URL']) {
+            const raw=process.env[name] || '';
+            let reason='';
+            if (/^\s*(?:QA_)?(?:DATABASE_URL|ADMIN_DATABASE_URL)\s*[:=]/i.test(raw)) reason='VALUE_INCLUDES_SECRET_NAME';
+            else if (!/^postgres(?:ql)?:\/\//i.test(raw.trim())) reason='INCORRECT_POSTGRESQL_PREFIX';
+            else {
+              try {
+                const u=new URL(raw.trim());
+                if(!u.hostname) reason='DATABASE_HOST_MISSING';
+                else if(!u.username) reason='DATABASE_USERNAME_MISSING';
+                else if(!u.password) reason='DATABASE_PASSWORD_MISSING';
+                else if(!u.pathname || u.pathname==='/') reason='DATABASE_NAME_MISSING';
+                else if(/YOUR-PASSWORD|TU_CONTRASEÑA|PASSWORD_HERE/i.test(u.password)) reason='PASSWORD_PLACEHOLDER_NOT_REPLACED';
+              } catch { reason='MALFORMED_DATABASE_URI'; }
+            }
+            if(reason) { console.error('::error::'+name+' format diagnosis: '+reason); process.exitCode=1; }
+            else console.log(name+' format OK');
+          }
+          NODE
       - if: steps.qa.outputs.ready == 'true'
         name: Start isolated test API and Redis
         run: docker compose -f infra/compose.yaml up -d --build --wait
