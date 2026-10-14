@@ -43,6 +43,13 @@ services:
   worker:
     <<: *api
     command: ["node","src/worker.js"]
+    environment:
+      <<: *env
+      WHATSAPP_ACCESS_TOKEN: ${WHATSAPP_ACCESS_TOKEN:-}
+      WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:-}
+      WHATSAPP_GRAPH_VERSION: ${WHATSAPP_GRAPH_VERSION:-v23.0}
+      WHATSAPP_LANGUAGE: ${WHATSAPP_LANGUAGE:-es}
+      WHATSAPP_SEND_ENABLED: ${WHATSAPP_SEND_ENABLED:-false}
   lb:
     image: caddy:2.10-alpine
     restart: unless-stopped
