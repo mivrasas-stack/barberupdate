@@ -79,10 +79,10 @@ test.afterAll(async()=>{
 });
 async function login(page,identity){
  await page.goto('/');
- await expect(page.getByRole('heading',{name:/BarberOS/i}).first()).toBeVisible();
+ await expect(page.getByRole('heading',{name:/BIENVENIDO.*DE VUELTA/i}).first()).toBeVisible();
  await page.locator('input[type=email]').fill(identity.email);
  await page.locator('input[type=password]').fill(identity.password);
- await page.getByRole('button',{name:/Entrar al Sistema/i}).click();
+ await page.getByRole('button',{name:/Iniciar sesión/i}).click();
  await expect(page).toHaveURL(/#\/(?:barberia|clientes|barbero)\//,{timeout:20000});
 }
 function catchErrors(page){
@@ -113,7 +113,7 @@ test('Propietario real: login, protección de roles, catálogo y operaciones vis
  await page.goto('/#/barberia/'+state.slug+'/agenda');
  await expect(page.getByRole('heading',{name:/Agenda Global/i})).toBeVisible();
  await page.goto('/#/admin/inicio');
- await expect(page.getByText('Iniciar Sesión').first()).toBeVisible();
+ await expect(page.getByRole('button',{name:/Iniciar sesión/i}).first()).toBeVisible();
  expect(errors).toEqual([]);
 });
 test('Cliente real: login y catálogo del negocio sin acceso privado',async({page})=>{
@@ -124,7 +124,7 @@ test('Cliente real: login y catálogo del negocio sin acceso privado',async({pag
  await expect(page.getByRole('heading',{name:/Elige Barbería o Profesional/i})).toBeVisible();
  await expect(page.getByText('Barbería E2E del navegador').first()).toBeVisible();
  await page.goto('/#/barberia/'+state.slug+'/boutique');
- await expect(page.getByText('Iniciar Sesión').first()).toBeVisible();
+ await expect(page.getByRole('button',{name:/Iniciar sesión/i}).first()).toBeVisible();
  expect(errors).toEqual([]);
 });
 test('Propietario real: inventario ajustado desde la boutique original',async({page})=>{
@@ -182,7 +182,7 @@ test('Propietario: todas las pantallas principales conservan el diseño sin exce
  for(const route of routes){
    await page.goto('/#/barberia/'+state.slug+'/'+route);
    await expect(page.locator('main').first()).toBeVisible({timeout:12000});
-   await expect(page.getByRole('button',{name:/Entrar al Sistema/i})).toHaveCount(0);
+   await expect(page.getByRole('button',{name:/Iniciar sesión/i})).toHaveCount(0);
  }
  expect(errors).toEqual([]);
 });
@@ -193,14 +193,15 @@ test('Cliente: todos los módulos del portal abren sin errores de ejecución',as
    'historial','qr','perfil']){
    await page.goto('/#/clientes/'+route);
    await expect(page.locator('main').first()).toBeVisible({timeout:12000});
-   await expect(page.getByRole('button',{name:/Entrar al Sistema/i})).toHaveCount(0);
+   await expect(page.getByRole('button',{name:/Iniciar sesión/i})).toHaveCount(0);
  }
  expect(errors).toEqual([]);
 });
-test('No autenticado no obtiene privilegios con los accesos rápidos',async({page})=>{
+test('No autenticado no obtiene privilegios ni ve accesos de desarrollo',async({page})=>{
  await page.goto('/');
- await expect(page.getByText('Acceso Rápido de Demostración')).toBeVisible();
- await page.getByRole('button',{name:/Propietario de Barbería/i}).first().click();
- await expect(page.getByText('Iniciar Sesión').first()).toBeVisible();
- await expect(page).not.toHaveURL(/\/barberia\/.*\/inicio/);
+ await expect(page.getByRole('button',{name:/Iniciar sesión/i}).first()).toBeVisible();
+ await expect(page.getByText('Cuentas de Desarrollo')).toHaveCount(0);
+ await expect(page.getByRole('button',{name:'Owner',exact:true})).toHaveCount(0);
+ await page.goto('/#/barberia/empresa-protegida/inicio');
+ await expect(page.getByRole('button',{name:/Iniciar sesión/i}).first()).toBeVisible();
 });

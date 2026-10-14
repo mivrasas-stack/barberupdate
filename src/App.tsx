@@ -154,18 +154,35 @@ const AppContent: React.FC = () => {
   return <LoginView />;
 };
 
+// The reference login is full-bleed, without the application's global bars.
+// All existing authenticated views still render the same Header/RoleSwitcher as before.
+const AppFrame: React.FC = () => {
+  const { activeRoute, currentUser } = useApp();
+  const deniedRealRoute = Boolean(isLiveBackend && currentUser && (
+    (activeRoute.startsWith('/admin') && currentUser.role !== 'superadmin') ||
+    (activeRoute.startsWith('/barberia/') && currentUser.role !== 'owner') ||
+    (activeRoute.startsWith('/barbero/') &&
+      !['barber_employee', 'barber_independent', 'owner'].includes(currentUser.role))
+  ));
+  const isLogin = activeRoute === '/login'
+    || (!currentUser && !activeRoute.startsWith('/vincular')) || deniedRealRoute;
+  return (
+    <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] flex flex-col font-sans">
+      {!isLogin && <Header />}
+      <div className="flex-1">
+        <AppContent />
+      </div>
+      {!isLogin && <RoleSwitcherBar />}
+      <PaletteValidatorModal />
+      <ToastContainer />
+    </div>
+  );
+};
+
 export default function App() {
   return (
     <AppProvider>
-      <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] flex flex-col font-sans">
-        <Header />
-        <div className="flex-1">
-          <AppContent />
-        </div>
-        <RoleSwitcherBar />
-        <PaletteValidatorModal />
-        <ToastContainer />
-      </div>
+      <AppFrame />
     </AppProvider>
   );
 }

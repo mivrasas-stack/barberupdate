@@ -1,234 +1,203 @@
 import React, { useState } from 'react';
+import { ArrowRight, LockKeyhole, Mail } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { Scissors, Shield, Store, UserCheck, Users, ArrowRight, Lock, Mail, Sparkles, CheckCircle2 } from 'lucide-react';
-import { UserRole } from '../../types';
-import { isLiveBackend } from '../../services/liveBackend';
+import type { UserRole } from '../../types';
+import { isLiveBackend, requestPasswordReset, registerWithEmail } from '../../services/liveBackend';
 
+/**
+ * Login only. Reproduces the Barber Paradise visual supplied by the owner.
+ * No changes to the rest of the application's layouts, palette or components.
+ */
 export const LoginView: React.FC = () => {
-  const { state, loginAs, loginWithCredentials, setIsPaletteModalOpen, addToast } = useApp();
+  const { state, loginAs, loginWithCredentials, addToast } = useApp();
   const [email, setEmail] = useState(isLiveBackend ? '' : 'contacto@barberclub.co');
   const [password, setPassword] = useState(isLiveBackend ? '' : '••••••••••••');
-  const [selectedRole, setSelectedRole] = useState<UserRole>('owner');
+  const selectedRole: UserRole = 'owner';
+  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [busy, setBusy] = useState(false);
 
-  const handleManualSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if(isLiveBackend){
-      try{await loginWithCredentials(email,password,selectedRole);}
-      catch(error){addToast(error instanceof Error?error.message:'No se pudo iniciar sesión','error');}
-      return;
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    try {
+      if (mode === 'register') {
+        if (!isLiveBackend) {
+          addToast('El registro requiere el backend real.', 'info');
+          return;
+        }
+        await registerWithEmail(email, password);
+        addToast('Revisa tu correo si se requiere confirmar la cuenta; después inicia sesión.', 'success');
+        setMode('login');
+        return;
+      }
+      if (isLiveBackend) {
+        await loginWithCredentials(email, password, selectedRole);
+      } else {
+        const user = state.users.find(u => u.email === email)
+          || state.users.find(u => u.role === selectedRole)
+          || state.users[1];
+        if (user) loginAs(user);
+      }
+    } catch (error) {
+      addToast(error instanceof Error ? error.message : 'No fue posible ingresar', 'error');
+    } finally {
+      setBusy(false);
     }
-    const user = state.users.find(u => u.email === email) || state.users.find(u => u.role === selectedRole) || state.users[1];
-    loginAs(user);
   };
 
-  const personas = [
-    {
-      role: 'owner' as UserRole,
-      title: 'Propietario de Barbería',
-      name: 'Mateo Restrepo',
-      business: 'Barber Club Bogotá (Chicó)',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-      badge: 'Multi-Silla & Empleados',
-      icon: <Store className="w-4 h-4 text-[var(--gold-primary)]" />,
-      targetPath: '/barberia/barber-club/dashboard',
-    },
-    {
-      role: 'barber_independent' as UserRole,
-      title: 'Barbero Independiente',
-      name: 'Alex "The Blade" Fade',
-      business: 'Estudio Privado (VIP 1 a 1)',
-      avatar: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=150&auto=format&fit=crop&q=80',
-      badge: 'Autónomo & Boutique',
-      icon: <Scissors className="w-4 h-4 text-orange-400" />,
-      targetPath: '/barbero/alex-fade/dashboard',
-    },
-    {
-      role: 'client' as UserRole,
-      title: 'Portal de Clientes',
-      name: 'Camilo Andrés Torres',
-      business: 'Cliente Frecuente (420 pts)',
-      avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80',
-      badge: 'Reservas & Sala de Espera',
-      icon: <UserCheck className="w-4 h-4 text-emerald-400" />,
-      targetPath: '/clientes/dashboard',
-    },
-    {
-      role: 'superadmin' as UserRole,
-      title: 'Superadministrador',
-      name: 'Carlos Mendoza',
-      business: 'Control Global de Plataforma',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-      badge: 'Franquicias & Planes MRR',
-      icon: <Shield className="w-4 h-4 text-amber-400" />,
-      targetPath: '/admin/dashboard',
-    },
-  ];
+  const forgotPassword = async () => {
+    if (!isLiveBackend) {
+      addToast('Esta opción requiere el backend real.', 'info');
+      return;
+    }
+    if (!email.trim()) {
+      addToast('Escribe primero tu correo electrónico para recuperar la contraseña.', 'info');
+      return;
+    }
+    try {
+      await requestPasswordReset(email.trim());
+      addToast('Si existe la cuenta, recibirás instrucciones para recuperar tu contraseña.', 'success');
+    } catch (error) {
+      addToast(error instanceof Error ? error.message : 'No fue posible solicitar la recuperación', 'error');
+    }
+  };
+
+  const landing = import.meta.env.VITE_PUBLIC_LANDING_URL as string | undefined;
 
   return (
-    <div className="min-h-screen flex flex-col justify-center items-center px-4 py-12 text-[var(--text-primary)] relative overflow-hidden">
-      {/* Apple-style Multi-Layer Ambient Depth Glow */}
-      <div className="absolute top-[-10%] left-1/2 -translate-x-1/2 w-[900px] h-[450px] bg-[radial-gradient(ellipse_at_center,rgba(217,163,35,0.12)_0%,transparent_70%)] blur-[90px] rounded-full pointer-events-none" />
-      <div className="absolute bottom-[-5%] right-[-5%] w-[600px] h-[350px] bg-[radial-gradient(ellipse_at_center,rgba(217,163,35,0.06)_0%,transparent_70%)] blur-[80px] rounded-full pointer-events-none" />
+    <main
+      data-testid="barber-paradise-login"
+      className="min-h-screen w-full bg-[#080808] text-white lg:flex"
+      style={{ fontFamily: "'Inter', 'Montserrat', system-ui, sans-serif" }}
+    >
+      {/* Exact Barber Paradise photographic panel from the provided reference.
+          The brand inscription is already part of this photo. */}
+      <section
+        aria-label="Barber Paradise, exclusividad y estilo"
+        className="relative h-[35vh] min-h-[240px] w-full overflow-hidden bg-[#070707] lg:sticky lg:top-0 lg:h-screen lg:w-1/2 lg:min-h-[640px] lg:shrink-0"
+      >
+        <img
+          src="/images/barber-paradise-login.webp"
+          alt="Interior en blanco y negro de Barber Paradise, con sillón de barbero y paredes de ladrillo"
+          className="absolute inset-0 h-full w-full object-cover object-center"
+          draggable={false}
+        />
+      </section>
 
-      {/* Brand Header */}
-      <div className="text-center mb-10 relative z-10 animate-apple-enter">
-        <div className="inline-flex items-center justify-center w-16 h-16 rounded-3xl bg-gradient-to-b from-[#f5c754] to-[#b88928] text-black mb-4 shadow-[0_10px_30px_rgba(217,163,35,0.35),inset_0_1px_2px_rgba(255,255,255,0.7)] ring-1 ring-white/30">
-          <Scissors className="w-8 h-8 rotate-45" />
-        </div>
-        <h1 className="text-4xl font-extrabold tracking-tight text-white sm:text-5xl">
-          Barber<span className="text-[var(--gold-primary)]">OS</span>
-        </h1>
-        <p className="mt-2 text-sm text-neutral-400 max-w-md mx-auto font-medium">
-          Plataforma SaaS Integral de Gestión Comercial para Barberías, Barberos Independientes y Clientes
-        </p>
-      </div>
+      <section className="flex min-h-[65vh] w-full items-start justify-center bg-[#090909] px-4 pb-10 pt-5 sm:px-8 lg:min-h-screen lg:w-1/2 lg:px-8 lg:pt-[39px]">
+        <div
+          className="w-full max-w-[448px] rounded-[24px] border border-[#242424] bg-[#181818] px-[40px] pb-[38px] pt-[38px] shadow-[0_22px_54px_rgba(0,0,0,0.22)] max-[480px]:px-6"
+        >
+          <div className="mb-[22px] flex justify-center">
+            <div className="flex h-[48px] w-[48px] items-center justify-center rounded-full bg-[#222222]">
+              <LockKeyhole aria-hidden="true" className="h-[19px] w-[19px] text-[#e5a700]" strokeWidth={1.7} />
+            </div>
+          </div>
 
-      {/* Main Container */}
-      <div className="w-full max-w-4xl grid grid-cols-1 lg:grid-cols-12 gap-6 relative z-10 animate-apple-enter">
-        {/* Left Card: 1-Click Persona Quick Logins */}
-        <div className="lg:col-span-7 bg-[#141418]/80 backdrop-blur-2xl border border-white/[0.1] rounded-3xl p-6 sm:p-7 shadow-[0_20px_50px_rgba(0,0,0,0.6),inset_0_1px_1px_rgba(255,255,255,0.12)] flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--gold-primary)]">
-                  Acceso Rápido de Demostración
-                </span>
-                <h2 className="text-xl font-extrabold text-white mt-0.5">Elige el perfil para ingresar</h2>
-              </div>
-              <button
-                onClick={() => setIsPaletteModalOpen(true)}
-                className="text-xs text-neutral-300 hover:text-[var(--gold-primary)] transition-all flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.05] border border-white/[0.08] hover:border-white/20 active:scale-95 cursor-pointer"
+          <div className="mb-[38px] text-center">
+            <h1 className="text-[35px] font-[850] uppercase leading-[1.04] tracking-[-1.3px] max-[420px]:text-[29px]">
+              <span className="block text-[#f6f6f6]">
+                {mode === 'login' ? 'BIENVENIDO' : 'CREA TU'}
+              </span>
+              <span className="mt-[2px] block text-[#818181]">
+                {mode === 'login' ? 'DE VUELTA' : 'CUENTA'}
+              </span>
+            </h1>
+            <p className="mt-[17px] text-[13px] font-normal text-[#aaaaaa]">
+              {mode === 'login' ? 'Ingresa con tus credenciales verificadas.' : 'Únete a la experiencia Barber Paradise.'}
+            </p>
+          </div>
+
+          <form onSubmit={submit} className="space-y-[26px]">
+            <div>
+              <label
+                htmlFor="barber-email"
+                className="mb-[12px] block text-[10px] font-extrabold uppercase tracking-[1.8px] text-[#878787]"
               >
-                <Sparkles className="w-3.5 h-3.5 text-[var(--gold-primary)]" />
-                <span>Paleta</span>
-              </button>
-            </div>
-
-            <p className="text-xs text-neutral-400 mb-5 leading-relaxed">
-              Cada perfil cuenta con su propio layout, permisos visuales y base de datos relacional integrada:
-            </p>
-
-            <div className="space-y-3">
-              {personas.map(p => {
-                const targetUser = state.users.find(u => u.role === p.role) || state.users[0];
-                return (
-                  <button
-                    key={p.role}
-                    onClick={() => loginAs(targetUser)}
-                    className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.07] hover:border-[var(--gold-primary)]/50 transition-all duration-200 group text-left cursor-pointer shadow-sm hover:shadow-[0_10px_25px_rgba(0,0,0,0.4),0_0_20px_rgba(217,163,35,0.1)] active:scale-[0.985]"
-                  >
-                    <div className="flex items-center gap-3.5">
-                      <img
-                        src={p.avatar}
-                        alt={p.name}
-                        className="w-11 h-11 rounded-2xl object-cover ring-2 ring-white/10 group-hover:ring-[var(--gold-primary)]/60 transition-all"
-                      />
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-bold text-white group-hover:text-[var(--gold-primary)] transition-colors">
-                            {p.title}
-                          </span>
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/[0.06] text-neutral-300 border border-white/[0.08] font-medium">
-                            {p.badge}
-                          </span>
-                        </div>
-                        <div className="text-xs text-neutral-300 font-medium mt-0.5">{p.name}</div>
-                        <div className="text-[11px] text-neutral-500">{p.business}</div>
-                      </div>
-                    </div>
-                    <div className="w-8 h-8 rounded-xl bg-white/[0.06] group-hover:bg-[var(--gold-primary)] text-neutral-400 group-hover:text-black flex items-center justify-center transition-all shrink-0 shadow-inner">
-                      <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="mt-6 pt-4 border-t border-white/[0.08] flex items-center justify-between text-[11px] text-neutral-400">
-            <span className="flex items-center gap-1.5 font-medium">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              Adaptadores tipados listos para backend
-            </span>
-            <span className="font-mono text-neutral-500">v1.0.0 Apple UI</span>
-          </div>
-        </div>
-
-        {/* Right Card: Manual Simulation Login Form */}
-        <div className="lg:col-span-5 bg-[#141418]/80 backdrop-blur-2xl border border-white/[0.1] rounded-3xl p-6 sm:p-7 shadow-[0_20px_50px_rgba(0,0,0,0.6),inset_0_1px_1px_rgba(255,255,255,0.12)] flex flex-col justify-between">
-          <div>
-            <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--gold-primary)]">
-              Formulario de Acceso
-            </span>
-            <h3 className="text-xl font-extrabold text-white mt-1 mb-1">Iniciar Sesión</h3>
-            <p className="text-xs text-neutral-400 mb-5 leading-relaxed">
-              {isLiveBackend ? 'Ingresa las credenciales de tu cuenta real en BarberOS.' : 'Ingresa tus credenciales o selecciona un rol para simular la autenticación.'}
-            </p>
-
-            <form onSubmit={handleManualSubmit} className="space-y-4">
-              <div>
-                <label className="text-xs text-neutral-300 block mb-1.5 font-semibold">Correo Electrónico</label>
-                <div className="relative">
-                  <Mail className="w-4 h-4 text-neutral-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    required
-                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-2xl pl-10 pr-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[var(--gold-primary)] focus:bg-white/[0.07] transition-all shadow-inner"
-                    placeholder="correo@ejemplo.com"
-                  />
-                </div>
+                Correo electrónico
+              </label>
+              <div className="relative">
+                <Mail aria-hidden="true" className="absolute left-[16px] top-1/2 h-[19px] w-[19px] -translate-y-1/2 text-[#666666]" strokeWidth={1.8} />
+                <input
+                  id="barber-email"
+                  type="email"
+                  autoComplete="username"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  required
+                  placeholder="tu@correo.com"
+                  className="h-[70px] w-full rounded-[12px] border border-[#252525] bg-[#111111] pl-[47px] pr-4 text-[13px] font-semibold text-[#f4f4f4] outline-none placeholder:text-[#6b6b6b] focus:border-[#b77d0a]"
+                />
               </div>
-
-              <div>
-                <label className="text-xs text-neutral-300 block mb-1.5 font-semibold">Contraseña</label>
-                <div className="relative">
-                  <Lock className="w-4 h-4 text-neutral-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    required
-                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-2xl pl-10 pr-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[var(--gold-primary)] focus:bg-white/[0.07] transition-all shadow-inner"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs text-neutral-300 block mb-1.5 font-semibold">Rol Asignado</label>
-                <select
-                  value={selectedRole}
-                  onChange={e => {
-                    const r = e.target.value as UserRole;
-                    setSelectedRole(r);
-                    const matched = state.users.find(u => u.role === r);
-                    if (matched) setEmail(matched.email);
-                  }}
-                  className="w-full bg-white/[0.04] border border-white/[0.08] rounded-2xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-[var(--gold-primary)] focus:bg-white/[0.07] transition-all cursor-pointer shadow-inner"
+            </div>
+            <div>
+              <div className="mb-[12px] flex items-center justify-between gap-2">
+                <label
+                  htmlFor="barber-password"
+                  className="text-[10px] font-extrabold uppercase tracking-[1.8px] text-[#878787]"
                 >
-                  <option value="owner" className="bg-[#18181b] text-white">Propietario de Barbería (Barber Club)</option>
-                  <option value="barber_independent" className="bg-[#18181b] text-white">Barbero Independiente (Alex Fade)</option>
-                  <option value="client" className="bg-[#18181b] text-white">Cliente (Camilo Torres)</option>
-                  <option value="superadmin" className="bg-[#18181b] text-white">Superadministrador (Global)</option>
-                  <option value="barber_employee" className="bg-[#18181b] text-white">Barbero Asociado (Santiago)</option>
-                </select>
+                  Contraseña
+                </label>
+                {mode === 'login' && (
+                  <button
+                    type="button"
+                    onClick={() => void forgotPassword()}
+                    className="text-right text-[10px] font-semibold uppercase text-[#e6a800] transition-colors hover:text-[#ffc63b]"
+                  >
+                    ¿Olvidaste tu contraseña?
+                  </button>
+                )}
               </div>
+              <div className="relative">
+                <LockKeyhole aria-hidden="true" className="absolute left-[16px] top-1/2 h-[19px] w-[19px] -translate-y-1/2 text-[#666666]" strokeWidth={1.7} />
+                <input
+                  id="barber-password"
+                  type="password"
+                  autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  required
+                  minLength={mode === 'register' ? 8 : undefined}
+                  placeholder="••••••••"
+                  className="h-[70px] w-full rounded-[12px] border border-[#252525] bg-[#111111] pl-[47px] pr-4 text-[13px] font-semibold text-[#f4f4f4] outline-none placeholder:text-[#696969] focus:border-[#b77d0a]"
+                />
+              </div>
+            </div>
 
+            <button
+              type="submit"
+              disabled={busy}
+              className="flex h-[50px] w-full items-center justify-center gap-3 rounded-[13px] bg-gradient-to-r from-[#ffba15] to-[#f29a00] text-[12px] font-extrabold uppercase tracking-[1px] text-[#0c0905] shadow-[0_7px_22px_rgba(239,159,0,0.14)] transition-[filter,transform] hover:brightness-110 active:scale-[0.99] disabled:cursor-wait disabled:opacity-60"
+            >
+              {busy ? 'VALIDANDO...' : mode === 'register' ? 'REGISTRARME' : 'INICIAR SESIÓN'}
+              {!busy && <ArrowRight aria-hidden="true" className="h-[16px] w-[16px]" strokeWidth={2.2} />}
+            </button>
+          </form>
+
+          <div className="mt-[31px] border-t border-[#272727] pt-[18px] text-center">
+            <p className="text-[12px] text-[#8c8c8c]">
+              {mode === 'login' ? '¿No tienes una cuenta?' : '¿Ya tienes una cuenta?'}{' '}
               <button
-                type="submit"
-                className="w-full mt-2 py-3 rounded-2xl apple-button-gold text-black font-extrabold text-xs uppercase tracking-wider transition-all cursor-pointer"
+                type="button"
+                className="font-extrabold text-[#f3f3f3] hover:text-[#ffc019]"
+                onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
               >
-                Entrar al Sistema
+                {mode === 'login' ? 'Regístrate' : 'Inicia sesión'}
               </button>
-            </form>
-          </div>
-
-          <div className="mt-6 pt-4 border-t border-white/[0.08] text-[11px] text-neutral-400 text-center font-medium">
-            {isLiveBackend ? 'Modo conectado: verificación real de identidad con Supabase.' : 'Modo simulación activo. Acceso instantáneo sin contraseñas.'}
+            </p>
+            {landing ? (
+              <a href={landing} className="mt-[24px] block text-[12px] font-semibold uppercase tracking-[0.6px] text-[#606060] hover:text-[#b7b7b7]">
+                Volver a la página web
+              </a>
+            ) : (
+              <p className="mt-[24px] text-[12px] font-semibold uppercase tracking-[0.6px] text-[#585858]">
+                Volver a la página web
+              </p>
+            )}
           </div>
         </div>
-      </div>
-    </div>
+      </section>
+    </main>
   );
 };

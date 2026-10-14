@@ -43,6 +43,13 @@ function receiveToken(data:any){
 export async function signIn(email:string,password:string){
   receiveToken(await authCall('token?grant_type=password',{email,password}));
 }
+// Login-only actions: never expose privileged Supabase credentials to the browser.
+export async function registerWithEmail(email:string,password:string){
+  await authCall('signup',{email,password});
+}
+export async function requestPasswordReset(email:string){
+  await authCall('recover',{email});
+}
 async function token(){
   if(!session){
     try{session=JSON.parse(sessionStorage.getItem(storageKey)||'null') as Session|null;}
