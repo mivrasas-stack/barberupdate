@@ -20,6 +20,7 @@ CREATE TABLE public.whatsapp_deliveries (
 );
 CREATE INDEX idx_whatsapp_due ON public.whatsapp_deliveries(next_attempt_at,due_at) WHERE status='pending';
 ALTER TABLE public.whatsapp_deliveries ENABLE ROW LEVEL SECURITY;
+CREATE POLICY whatsapp_backend_access ON public.whatsapp_deliveries FOR ALL TO barberos_backend USING(true) WITH CHECK(true);
 REVOKE ALL ON public.whatsapp_deliveries FROM PUBLIC,anon,authenticated;
 GRANT SELECT,INSERT,UPDATE ON public.whatsapp_deliveries TO barberos_backend;
 GRANT UPDATE(whatsapp_opt_in) ON public.appointments TO barberos_backend;
