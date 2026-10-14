@@ -67,3 +67,11 @@ No conectar el frontend todavía. No declarar 100% de backend productivo.
 - Bloqueo de agenda consistente para evitar carreras entre creación de cita, horarios, ausencia y reprogramación; notificación y evento sin PII al cambiar fecha/barbero.
 - Prueba E2E ampliada: dos propietarios y empresas independientes, rechazo de acceso a servicios, pedidos, informes y horarios de la otra empresa; reprogramación de cliente y administrador; rechazo de conflictos. Eliminación comprobada de los datos temporales.
 - Wompi exclusivamente para vender suscripciones a BarberOS, por una landing page futura. Cero cobros de Wompi a clientes finales de barberías. Véase docs/wompi-deferred.md.
+
+## Supabase Storage: prueba E2E real
+
+- Se generó una URL firmada para una imagen PNG de prueba del propietario de BarberOS.
+- Un usuario propietario de otra barbería recibió HTTP 403 al intentar generar la URL para ese negocio.
+- Se subió el PNG mínimo a Storage con el token firmado, se recuperó desde la URL pública y se verificó HTTP 200.
+- La prueba eliminó posteriormente el objeto Storage, las dos barberías y los dos usuarios temporales; ninguna imagen de usuarios reales fue alterada.
+- La prueba está incorporada en backend/test/live-api.test.js y solamente se ejecuta con RUN_LIVE_API_INTEGRATION=1.

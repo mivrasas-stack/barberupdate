@@ -17,7 +17,7 @@ test('BarberOS E2E: Auth, schedule, bookings, orders, cleanup',
   const anon=createClient(process.env.SUPABASE_URL,process.env.SUPABASE_PUBLISHABLE_KEY,
     {auth:{persistSession:false,autoRefreshToken:false}});
   const pool=new pg.Pool({connectionString:process.env.ADMIN_DATABASE_URL||process.env.DATABASE_URL,max:1,connectionTimeoutMillis:10000});
-  let uid=null,tid=null,token=null,otherUid=null,otherTid=null;
+  let uid=null,tid=null,token=null,otherUid=null,otherTid=null,mediaPath=null,mediaBucket=null;
   const call=async(method,path,body,key)=>{
     const r=await fetch(base+path,{method,
       headers:{...(token?{Authorization:'Bearer '+token}:{}),
@@ -84,6 +84,27 @@ test('BarberOS E2E: Auth, schedule, bookings, orders, cleanup',
       'Second company owner can read their own company');
     check(await call('GET','/api/v1/tenants/'+otherTid+'/services'),403,
       'First company owner cannot read second company');
+    check(await otherCall('POST',prefix+'/media/signed-upload',
+      {mimeType:'image/png',kind:'logo'}),403,
+      'Other tenant cannot sign image upload');
+    const signed=await call('POST',prefix+'/media/signed-upload',
+      {mimeType:'image/png',kind:'logo'});
+    check(signed,201,'Owner signed upload');
+    mediaPath=signed.data.path;
+    mediaBucket=signed.data.bucket;
+    assert.ok(mediaPath.startsWith(tid+'/logo/'),'Storage path must be tenant-scoped');
+    const testImage=Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+nK2cAAAAASUVORK5CYII=',
+      'base64');
+    const storageResult=await anon.storage.from(mediaBucket).uploadToSignedUrl(
+      mediaPath,signed.data.token,
+      new Blob([testImage],{type:'image/png'}),
+      {contentType:'image/png',upsert:false});
+    assert.ifError(storageResult.error);
+    const publicImage=anon.storage.from(mediaBucket).getPublicUrl(mediaPath).data.publicUrl;
+    const download=await fetch(publicImage,{signal:AbortSignal.timeout(12000)});
+    assert.equal(download.status,200,'Signed upload must be accessible through public Storage URL');
+    assert.ok((await download.arrayBuffer()).byteLength>=testImage.length);
     const day=new Date(Date.now()+20*86400000).toISOString().slice(0,10);
     const availability=await call('GET','/api/v1/public/tenants/'+tid+
       '/availability?barberId='+barber.data.id+'&serviceId='+service.data.id+'&date='+day);
@@ -214,6 +235,16 @@ test('BarberOS E2E: Auth, schedule, bookings, orders, cleanup',
     console.log('PASS: E2E Auth, scheduling, booking, order, notifications, reports and cleanup');
   }finally{
     let cleanupError=null;
+    if(mediaPath){
+      try{
+        const removed=await admin.storage.from(mediaBucket).remove([mediaPath]);
+        assert.ifError(removed.error);
+        console.log('CLEANUP: temporary signed image removed from Supabase Storage');
+      }catch(e){
+        cleanupError=e;
+        console.error('CLEANUP STORAGE ERROR_TYPE='+(e.name||'unknown'));
+      }
+    }
     if(otherTid){
       try {await cleanupTestTenant(pool,otherTid);
         console.log('CLEANUP: second isolated tenant deleted');
