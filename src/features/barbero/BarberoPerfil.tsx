@@ -74,7 +74,7 @@ export const BarberoPerfil: React.FC = () => {
         </div>
       </div>
 
-      {isLiveBackend && barber && <div className="bg-[#141414] border border-neutral-700 p-4 rounded-xl"><p className="text-sm text-neutral-300 mb-2">Fotografía profesional</p><ImageUploader tenant={barber.businessId} category="barber" label="Actualizar mi foto" onUploaded={url=>void updatePortrait(url)}/></div>}
+      {isLiveBackend && barber && <div className="bg-[#141414] border border-neutral-700 p-4 rounded-xl"><p className="text-sm text-neutral-300 mb-2">Fotografía profesional</p><ImageUploader tenant={barber.businessId || ''} category="barber" label="Actualizar mi foto" onUploaded={url=>void updatePortrait(url)}/></div>}
 
       {/* Profile Card */}
       <div className="bg-[#141414] border border-[#262626] rounded-2xl p-6 shadow-xl flex flex-col sm:flex-row items-center gap-6">
@@ -122,7 +122,7 @@ export const BarberoPerfil: React.FC = () => {
 
         {barber.portfolio.length < 10 ? (
           <div className="space-y-2 text-xs">
-            {isLiveBackend && <ImageUploader tenant={barber.businessId} category="barber" onUploaded={url=>void handleAddPhoto(url)} />}
+            {isLiveBackend && <ImageUploader tenant={barber.businessId || ''} category="barber" onUploaded={url=>void handleAddPhoto(url)} />}
             {!isLiveBackend && <div className="flex gap-2">
             <input
               type="url"
