@@ -84,7 +84,7 @@ export const BarberiaBarberos: React.FC = () => {
               <div>
                 <div className="flex items-start gap-4 mb-4">
                   <img
-                    src={barber.photo} onError={e=>{if(!e.currentTarget.src.endsWith('/images/placeholder.svg'))e.currentTarget.src='/images/placeholder.svg';}}
+                    src={barber.photo || '/images/placeholder.svg'} onError={e=>{if(!e.currentTarget.src.endsWith('/images/placeholder.svg'))e.currentTarget.src='/images/placeholder.svg';}}
                     alt={barber.name}
                     className="w-16 h-16 rounded-xl object-cover border-2 border-[var(--gold-primary)] shrink-0"
                   />
