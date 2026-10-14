@@ -206,6 +206,40 @@ test('BarberOS E2E: Auth, schedule, bookings, orders, cleanup',
     assert.equal(summary.data.balanceMinor,0);
     check(await call('PATCH',prefix+'/orders/'+secondOrder.data.id+'/status',{status:'cancelled'}),
       409,'Paid order requires refund, not silent cancellation');
+    const refundPath=prefix+'/payments/'+pending.data.id+'/refund-manual';
+    check(await otherCall('POST',refundPath,{amountMinor:5000,
+      reason:'Customer refund requested',reference:'REF-'+randomBytes(8).toString('hex')}),
+      403,'Other company owner cannot refund this payment');
+    check(await call('POST',refundPath,{amountMinor:5000,reason:'Customer refund requested'},
+      'refund-'+randomBytes(12).toString('hex')),400,'Bank refund requires receipt');
+    const partialPayload={amountMinor:5000,reason:'Customer returned part of order',
+      reference:'REF-'+randomBytes(9).toString('hex')};
+    const refundKey='refund-'+randomBytes(12).toString('hex');
+    const partialRefund=await call('POST',refundPath,partialPayload,refundKey);
+    check(partialRefund,201,'Staff records partial refund');
+    check(await call('POST',refundPath,partialPayload,refundKey),200,'Refund replay is idempotent');
+    check(await call('POST',refundPath,{...partialPayload,amountMinor:5500},refundKey),
+      409,'Changed refund replay rejected');
+    check(await call('PATCH',prefix+'/orders/'+secondOrder.data.id+'/status',{status:'cancelled'}),
+      409,'Partially refunded order cannot silently cancel');
+    const remainder=await call('POST',refundPath,
+      {amountMinor:7500,reason:'Remaining money returned to customer',
+        reference:'REF-'+randomBytes(9).toString('hex')},
+      'refund-'+randomBytes(12).toString('hex'));
+    check(remainder,201,'Complete remaining refund');
+    check(await call('POST',refundPath,{amountMinor:1,reason:'Over limit refund',
+      reference:'REF-'+randomBytes(9).toString('hex')},'refund-'+randomBytes(12).toString('hex')),
+      409,'Reject refund exceeding original confirmed payment');
+    const refundedSummary=await call('GET',prefix+'/orders/'+secondOrder.data.id+'/payments');
+    check(refundedSummary,200,'Refund audit ledger');
+    assert.equal(Number(refundedSummary.data.refundedMinor),12500);
+    assert.equal(Number(refundedSummary.data.netReceivedMinor),0);
+    assert.equal(refundedSummary.data.refunds.length,2);
+    check(await call('PATCH',prefix+'/orders/'+secondOrder.data.id+'/status',
+      {status:'cancelled'}),200,'Cancel fully refunded order and return stock');
+    const afterRefund=await call('GET',prefix+'/products');
+    check(afterRefund,200,'Stock restored after refunded cancellation');
+    assert.equal(afterRefund.data.find(p=>p.id===product.data.id).stock,4);
     const options=await call('GET','/api/v1/public/payment-capabilities');
     check(options,200,'Payment capabilities');
     assert.equal(options.data.onlinePayments.enabled,false);

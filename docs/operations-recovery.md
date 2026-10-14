@@ -80,3 +80,11 @@ de desastres completa. Auth y objetos Storage quedan expresamente fuera.
 No ejecutar con credenciales de un proyecto diferente ni guardar salida
 de pg_dump en rutas compartidas o Git. No replicar datos reales sensibles
 a equipos sin control de acceso y cifrado.
+
+## Resiliencia de devoluciones manuales
+
+- Registro manual_refunds append-only para la cuenta de base de datos restringida del backend; no borrar ni modificar historicos para 'revertir' movimientos.
+- Cada devolucion y su asiento financiero se escriben dentro de la misma transaccion PostgreSQL. El pedido y el pago original se bloquean antes de calcular el importe aun reembolsable.
+- Las repeticiones con la misma Idempotency-Key responden con el mismo identificador, sin volver a contabilizar una devolucion.
+- Hay prueba con fallo contable simulado que valida rollback y retry dentro de un mock transaccional. Se necesita todavia prueba E2E de fallo real de PostgreSQL sin afectar tenants reales.
+- Si hay una discrepancia bancaria o transferencia no realizada, mantener el comprobante como operacion manual y resolverla por procedimiento contable autorizado; no afirmar verificacion bancaria automatica.

@@ -155,3 +155,16 @@ PowerShell desde backend/:
 Fastify confia en un unico salto reverse proxy Caddy. Caddy establece X-Forwarded-For con la IP del cliente observado directamente.
 Si se incorpora CDN, otro reverse proxy o ingress, revisar su configuracion de cabeceras y limites. No exponer directamente api1/api2 a Internet.
 Validado con backend/test/proxy-security.test.js.
+
+## Registro de devoluciones de pagos manuales de pedidos
+
+- POST /api/v1/tenants/:tenantId/payments/:paymentId/refund-manual
+- Solo propietario o gerente de la barberia. Requiere encabezado Idempotency-Key (12-100 caracteres).
+- Cuerpo JSON: {"amountMinor":5000,"reason":"Producto devuelto por el cliente","reference":"TRX-REEMBOLSO-001"}.
+- Para metodos distintos de efectivo es obligatorio registrar una referencia de la devolucion. **No efectua ningun envio bancario de dinero**; el operador confirma haberlo realizado por fuera del sistema.
+- Admite varias devoluciones parciales sin superar el pago confirmado. Guarda cada comprobante en manual_refunds, tabla append-only para el rol del backend.
+- El asiento contable de gasto se crea atomicamente con la devolucion; si falla, ambos cambios se revierten. El replay idempotente devuelve la misma devolucion sin duplicar gastos.
+- GET /api/v1/tenants/:tenantId/orders/:orderId/payments ahora incluye refunds, refundedMinor y netReceivedMinor; confirmedMinor sigue siendo el importe bruto cobrado.
+- Un pedido pendiente de cancelacion sigue bloqueado hasta registrar devoluciones por todo su dinero confirmado; al cancelar, el stock regresa. Un pedido ya entregado conserva su estado historico.
+- Wompi nunca interviene en estos reembolsos. Wompi sigue reservado exclusivamente para vender licencias/suscripciones BarberOS desde la futura landing page.
+- La migracion SQL 013 se aplico a Supabase BarberOS. La suite local contiene tests unitarios y simulacion de fallo contable; la ejecucion integral real con las nuevas devoluciones sigue pendiente de validacion.

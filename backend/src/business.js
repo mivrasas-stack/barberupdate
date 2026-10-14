@@ -88,8 +88,11 @@ export async function registerBusinessRoutes(app,{db,security}) {
         const allowed={received:['preparing','cancelled'],preparing:['ready','cancelled'],ready:['delivered','cancelled'],delivered:[],cancelled:[]};
         if(!allowed[before.status].includes(x.status)) failure(409,'Estado del pedido invalido');
         if(x.status==='cancelled'){
-          const confirmed=await tx.query("SELECT 1 FROM public.manual_payments WHERE tenant_id=$1 AND order_id=$2 AND status='confirmed' LIMIT 1",[tenant,orderId]);
-          if(confirmed.rowCount) failure(409,'Pedido con pagos registrados: requiere un proceso de reembolso antes de cancelar');
+          const balances=await tx.query(
+            "SELECT (SELECT coalesce(sum(amount_minor),0) FROM public.manual_payments WHERE tenant_id=$1 AND order_id=$2 AND status='confirmed')::bigint - (SELECT coalesce(sum(amount_minor),0) FROM public.manual_refunds WHERE tenant_id=$1 AND order_id=$2)::bigint AS outstanding",
+            [tenant,orderId]);
+          if(BigInt(balances.rows[0].outstanding)!==0n)
+            failure(409,'Se requiere registrar la devolucion total del dinero antes de cancelar');
           await tx.query("UPDATE public.manual_payments SET status='voided',voided_by=$3,voided_at=now() WHERE tenant_id=$1 AND order_id=$2 AND status='pending'",[tenant,orderId,req.actor.id]);
           const items=await tx.query('SELECT product_id,quantity FROM public.order_items WHERE order_id=$1 AND tenant_id=$2 ORDER BY product_id',[orderId,tenant]);
           for(const item of items.rows){

@@ -127,3 +127,13 @@ No conectar el frontend todavía. No declarar 100% de backend productivo.
 - Segunda muestra de carga real: 10/10 reservas aceptadas con concurrencia 5; p95 1245 ms frente a 2001 ms en muestra anterior. Muestras pequenas; no hay garantia estadistica de rendimiento ni SLA.
 - IP por cliente anonimo: Fastify confia exclusivamente en el salto Caddy inmediato; Caddy sobrescribe X-Forwarded-For con su IP observada. Test de cabecera spoofed aprobado; requiere adaptar config si se instala otro proxy/CDN.
 - Suite local: 13 pruebas aprobadas, 4 pruebas integrales opt-in omitidas en modo local; Caddy validado, monitor local 3/3 correcto, dos APIs y worker desplegados.
+
+## Prioridad funcional: devoluciones parciales/totales de pedidos (migracion 013)
+
+- Supabase proyecto dedicado: migracion 013 aplicada; manual_refunds tiene RLS habilitado, dos politicas, indices para acceder por pedido/pago y permisos de INSERT/SELECT al rol limitado del backend; anon no puede leer la tabla.
+- Se agrego API de reembolso manual exclusiva de propietario/gerente, con limites, comprobante, motivo, idempotencia, historico y asiento de expense en la misma transaccion.
+- Cancelacion de pedidos pagados: la API verifica importe cobrado menos reembolsado; solo cancela si el saldo recibido pendiente de devolver es cero. Devuelve stock solo cuando se cancela.
+- backend/test/refunds.test.js incorpora cuatro pruebas locales: replay idempotente, referencias/limites, aislamiento de otra empresa y fallo inyectado del asiento financiero seguido de retry.
+- Suite completa sin acceso real: 17 pruebas aprobadas, 4 integraciones opt-in omitidas; 0 fallidas.
+- backend/test/live-api.test.js ampliado con dos devoluciones de un pago real de prueba, bloqueo de cancelacion parcial, validacion de saldos y retorno de stock; **esa prueba integral ampliada NO se ha podido ejecutar aun por bloqueo de la herramienta**. No se certifica este escenario E2E real ni la recuperacion de una caida de PostgreSQL con datos persistentes.
+- Esta funcionalidad es solo contabilidad offline de barberias. El proyecto SaaS tiene Wompi desactivado y diferido a la futura landing page.
