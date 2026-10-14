@@ -231,7 +231,7 @@ export async function registerRoutes(app,{config,db,security}) {
   });
   app.get('/api/v1/public/tenants',async req=>{
     await limited(req);if(!db)failure(503,'Base de datos no configurada');
-    return (await db.query("SELECT id,name,slug,currency,time_zone,business_kind FROM public.tenants WHERE status='active' ORDER BY name LIMIT 100")).rows;
+    return (await db.query("SELECT id,name,slug,currency,time_zone,business_kind,logo_url,cover_url,tagline,address,city,phone,portfolio FROM public.tenants WHERE status='active' ORDER BY name LIMIT 100")).rows;
   });
   app.get('/api/v1/public/tenants/:tenantId/products',async req=>{
     await limited(req);if(!db)failure(503,'Base de datos no configurada');
@@ -245,7 +245,7 @@ export async function registerRoutes(app,{config,db,security}) {
     if(!t.rowCount) failure(404,'Negocio no encontrado');
     const tenant=t.rows[0];
     const [barbers,services]=await Promise.all([
-      db.query("SELECT id,slug,name,bio FROM public.barbers WHERE tenant_id=$1 AND status='active' ORDER BY name LIMIT 100",[tenant.id]),
+      db.query("SELECT id,slug,name,bio,photo_url,portfolio FROM public.barbers WHERE tenant_id=$1 AND status='active' ORDER BY name LIMIT 100",[tenant.id]),
       db.query("SELECT id,name,description,price_minor,duration_minutes,category FROM public.services WHERE tenant_id=$1 AND is_active=true ORDER BY name LIMIT 100",[tenant.id])
     ]);
     return {tenant,barbers:barbers.rows,services:services.rows};
