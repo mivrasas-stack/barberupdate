@@ -10,7 +10,7 @@ const shopProfile=z.object({
  address:z.string().max(240),city:z.string().max(120),phone:z.string().max(40)
 }).strict();
 const gallery=z.object({photos:z.array(url).max(10)}).strict();
-function verifyImage(buffer){
+export function verifyImage(buffer){
  if(buffer.length<12||buffer.length>4_000_000)failure(400,'Imagen vacía o mayor a 4 MB');
  if(buffer[0]===0xff&&buffer[1]===0xd8&&buffer[2]===0xff)return {ext:'jpg',mime:'image/jpeg'};
  if(buffer.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])))return {ext:'png',mime:'image/png'};
