@@ -64,7 +64,8 @@ export async function sendWhatsAppTemplate({accessToken,phoneNumberId,graphVersi
   if(!response.ok){
     const error=new Error('WhatsApp Cloud API rejected template request');
     error.status=response.status;
-    error.retryable=response.status===429||response.status>=500;
+    error.retryable=response.status===429;
+    error.ambiguous=response.status>=500;
     throw error;
   }
   const body=await response.json();
