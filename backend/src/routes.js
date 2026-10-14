@@ -130,6 +130,8 @@ export async function registerRoutes(app,{config,db,security}) {
           "INSERT INTO public.appointments(tenant_id,barber_id,service_id,customer_user_id,customer_name,customer_phone,created_by,starts_at,ends_at,price_minor,notes,idempotency_key,request_hash) SELECT $1,b.id,s.id,$4,$5,$6,$4,$7::timestamptz,$7::timestamptz + s.duration_minutes * interval '1 minute',s.price_minor,$8,$9,$10 FROM public.services s JOIN public.tenants t ON t.id=s.tenant_id AND t.status='active' JOIN public.barbers b ON b.tenant_id=s.tenant_id AND b.id=$2 AND b.status='active' WHERE s.tenant_id=$1 AND s.id=$3 AND s.is_active=true RETURNING *",
           [tenant,x.barberId,x.serviceId,req.actor.id,x.customerName,x.customerPhone,startsAt,x.notes,key,requestHash]);
         if(!inserted.rowCount) failure(404,'Servicio o barbero no disponible');
+        // Atomic, durable one-time confirmation request; no phone number in Redis payload.
+        await tx.query("INSERT INTO public.outbox_events(tenant_id,topic,payload) VALUES($1,'whatsapp.booking_confirmation',jsonb_build_object('appointmentId',$2::uuid))",[tenant,inserted.rows[0].id]);
         return {row:inserted.rows[0],repeated:false};
       });
       return reply.code(booking.repeated?200:201).send(booking.row);
