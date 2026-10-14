@@ -267,7 +267,7 @@ export async function registerRoutes(app,{config,db,security}) {
       await requireTenant(db,tenant,req.actor.id,owners);
       const x=parseOrThrow(z.object({phone:z.string().trim().max(32).nullable(),optIn:z.boolean()}).strict(),req.body);
       const digits=String(x.phone||'').replace(/[^0-9]/g,'');
-      if(x.optIn && !(/^3\\d{9}$/.test(digits)||/^[1-9]\\d{10,14}$/.test(digits)))
+      if(x.optIn && !(/^3\d{9}$/.test(digits)||/^[1-9]\d{10,14}$/.test(digits)))
         failure(400,'Teléfono de WhatsApp no válido');
       const q=await db.query('UPDATE public.barbers SET whatsapp_phone=$3,whatsapp_opt_in=$4 WHERE tenant_id=$1 AND id=$2 RETURNING id,whatsapp_phone,whatsapp_opt_in',[tenant,barber,x.phone||null,x.optIn]);
       if(!q.rowCount)failure(404,'Barbero no encontrado');
