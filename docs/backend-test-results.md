@@ -158,3 +158,23 @@ No conectar el frontend todavía. No declarar 100% de backend productivo.
 - E2E DB de integridad y E2E concurrente: APROBADOS. E2E Realtime WebSocket: FALLIDO en la última prueba; la API REST de sincronización está validada como alternativa, pero todavía no se certifica el WebSocket.
 - Auditoría de dependencias: 0 altas y 0 críticas; monitor real saludable 3/3; preflight de producción devuelve ready=false intencionalmente.
 - Informe de aceptación técnica y pendientes: docs/informe-cierre-backend.md.
+
+## Nueva comprobación de resiliencia y despliegue (octubre de 2026)
+
+- Ensayo actual de restore `backend/scripts/restore-public-drill.mjs` actualizado a migraciones 001-016, ejecutado con PostgreSQL 17 efímero aislado y `--network none`: restauró **24 tablas / 24 con RLS / 3 planes / 16 triggers / 48 políticas** en 17 segundos. El contenedor temporal se eliminó. No creó un backup durable.
+- Auth y Storage del Supabase exclusivo tienen **0 usuarios** y **0 objetos del bucket barberos-images** a esta fecha. Esto evita datos de terceros en el ensayo, pero **no demuestra recuperación de cuentas, contraseñas, sesiones ni archivos reales** y no sustituye restauración completa en staging.
+- Carga local acotada: **450 solicitudes HTTP 200 / 450**, 0 errores de red y 0 respuestas 5xx; p50 combinado 7,0 ms, p95 combinado 86,1 ms y p99 combinado 160,2 ms. Mezcla de health y catálogo, **no representa 1.000 clientes ni pruebas sostenidas de transacciones**.
+- Auditoría npm de dependencias de producción: **0 vulnerabilidades altas y 0 críticas detectadas**.
+- Preflight de producción: **ready=false**, correctamente; faltan dominio HTTPS, infraestructura 24/7, backup integral y restauración, alertas externas y revisión independiente.
+- Frontend inspeccionado solo en lectura: `src/services/apiAdapter.ts` contiene `USE_MOCK_ADAPTER = true`; por tanto **no consume las rutas del backend real**. Se requiere adaptación, autenticación y pruebas de integración cuando el usuario autorice modificar frontend.
+- La documentación oficial de Supabase indica que los cambios de Postgres vía Realtime no garantizan entrega de cada evento; la sincronización durable por REST `/api/v1/me/notifications/sync` debe ejecutarse en la futura integración del frontend, especialmente tras reconectar.
+
+## Actualización: ensayos de los cuatro bloques y conexión del frontend
+
+1. **Realtime:** nueva repetición de la prueba E2E falló: `SUBSCRIBED`, la API REST y las políticas RLS permiten leer la notificación de su destinatario, pero `REALTIME_DIAG_FILTERED=0`, `UNFILTERED=0`, `FOREIGN=0`. No es posible dar por certificada la entrega WebSocket; usar el catch-up REST ya validado, y diagnosticar el proveedor/eventos y reconexiones antes de producción.
+2. **Backup/restore:** restauración aislada de la versión actual del esquema público aprobada: 24 tablas/24 RLS, 3 planes, 16 triggers y 48 políticas, 126660 bytes, 17 segundos. Container efímero eliminado, cloud intacto. La recuperación de Auth y objetos Storage NO está validada; hoy el proyecto tenía 0 usuarios y 0 objetos de Storage. No existe en esta prueba un backup durable.
+3. **Carga y seguridad:** 450/450 HTTP 200, p50 7,0 ms, p95 86,1 ms, p99 160,2 ms en ruta de salud+catálogo local, sin reproducir mil sesiones ni ventas concurrentes. `npm audit --omit=dev` 0 altas, 0 críticas. Este smoke NO es benchmark de producción.
+4. **Producción:** preflight `ready=false` por ausencia de dominio HTTPS, autorización, backup/restauración completa, alertas y revisión independiente. Caddy sigue en loopback `127.0.0.1:8188`. No se expusieron nuevos puertos.
+5. **Frontend:** inspección read-only de `src/services/apiAdapter.ts`: `USE_MOCK_ADAPTER = true`. Clase HTTP preparada pero no conectada a los recursos reales, ni con integración JWT; el frontend no se modificó. Mapeo de contratos en `docs/frontend-backend-integration-contract.md`.
+
+**Veredicto:** se han reforzado restauración de esquema y smoke local, pero los cuatro bloques NO están completados al 100% para producción. El usuario deberá aprobar infraestructura/staging, dominio, almacenamiento de backups, objetivos de rendimiento y revisión final de seguridad. Wompi permanece apagado y reservado solo para vender BarberOS en la futura landing page.

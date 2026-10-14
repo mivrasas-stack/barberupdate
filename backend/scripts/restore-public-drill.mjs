@@ -77,7 +77,7 @@ try{
     ")";
   const out=await run(['exec',container,'psql','-U','postgres','-d','postgres','-At','-c',query]);
   const stats=JSON.parse(out.trim().split('\n').find(v=>v.startsWith('{')));
-  if(stats.tables!==22||stats.rls!==22||stats.plans!==3||stats.triggers<8||stats.policies<20)
+  if(stats.tables!==24||stats.rls!==24||stats.plans!==3||stats.triggers<12||stats.policies<24)
     throw Error('Restored verification failed '+JSON.stringify(stats));
   console.log('PUBLIC_SCHEMA_RESTORE=PASS');
   console.log('RESTORED_METRICS='+JSON.stringify(stats));
