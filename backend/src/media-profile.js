@@ -23,9 +23,10 @@ export async function registerMediaProfileRoutes(app,{db,security,config}){
   routes.addHook('preHandler',async req=>{await authenticated(req);await limited(req);if(!db)failure(503,'Base de datos no disponible');});
   routes.post('/api/v1/tenants/:tenantId/images', {bodyLimit:6_500_000},async(req,reply)=>{
    const tenant=parseOrThrow(id,req.params.tenantId);
-   await requireTenant(db,tenant,req.actor.id,['owner','manager']);
+   const role=await requireTenant(db,tenant,req.actor.id,['owner','manager','barber']);
    if(!service)failure(503,'Servicio de imágenes no configurado');
    const x=parseOrThrow(image,req.body);
+   if(role==='barber'&&x.category!=='barber')failure(403,'Solo puedes subir imágenes profesionales propias');
    const buffer=Buffer.from(x.data,'base64');
    const type=verifyImage(buffer);
    const key=tenant+'/'+x.category+'/'+randomUUID()+'.'+type.ext;
@@ -53,7 +54,11 @@ export async function registerMediaProfileRoutes(app,{db,security,config}){
   });
   routes.patch('/api/v1/tenants/:tenantId/barbers/:barberId/photo',async req=>{
    const tenant=parseOrThrow(id,req.params.tenantId),barber=parseOrThrow(id,req.params.barberId);
-   await requireTenant(db,tenant,req.actor.id,['owner','manager']);
+   const role=await requireTenant(db,tenant,req.actor.id,['owner','manager','barber']);
+   if(role==='barber'){
+     const own=await db.query('SELECT 1 FROM public.barbers WHERE tenant_id=$1 AND id=$2 AND user_id=$3',[tenant,barber,req.actor.id]);
+     if(!own.rowCount)failure(403,'Solo puedes editar tu perfil profesional');
+   }
    const x=parseOrThrow(z.object({url}).strict(),req.body);
    const result=await db.query('UPDATE public.barbers SET photo_url=$3 WHERE tenant_id=$1 AND id=$2 RETURNING id,photo_url',[tenant,barber,x.url]);
    if(!result.rowCount)failure(404,'Barbero no encontrado');
@@ -78,7 +83,11 @@ export async function registerMediaProfileRoutes(app,{db,security,config}){
   });
   routes.patch('/api/v1/tenants/:tenantId/barbers/:barberId/gallery',async req=>{
    const tenant=parseOrThrow(id,req.params.tenantId),barber=parseOrThrow(id,req.params.barberId);
-   await requireTenant(db,tenant,req.actor.id,['owner','manager']);
+   const role=await requireTenant(db,tenant,req.actor.id,['owner','manager','barber']);
+   if(role==='barber'){
+     const own=await db.query('SELECT 1 FROM public.barbers WHERE tenant_id=$1 AND id=$2 AND user_id=$3',[tenant,barber,req.actor.id]);
+     if(!own.rowCount)failure(403,'Solo puedes editar tu perfil profesional');
+   }
    const x=parseOrThrow(gallery,req.body);
    const result=await db.query('UPDATE public.barbers SET portfolio=$3 WHERE tenant_id=$1 AND id=$2 RETURNING portfolio',[tenant,barber,x.photos]);
    if(!result.rowCount)failure(404,'Barbero no encontrado');
