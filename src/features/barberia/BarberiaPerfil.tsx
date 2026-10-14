@@ -101,14 +101,14 @@ export const BarberiaPerfil: React.FC = () => {
       {/* Cover & Brand Lockup */}
       <div className="relative rounded-2xl overflow-hidden border border-[#262626] bg-[#141414]">
         <div className="h-44 w-full bg-neutral-900 relative">
-          <img src={shop.coverImage} onError={e=>{if(!e.currentTarget.src.endsWith('/images/placeholder.svg'))e.currentTarget.src='/images/placeholder.svg';}} alt={shop.name} className="w-full h-full object-cover" />
+          <img src={shop.coverImage || '/images/placeholder.svg'} onError={e=>{if(!e.currentTarget.src.endsWith('/images/placeholder.svg'))e.currentTarget.src='/images/placeholder.svg';}} alt={shop.name} className="w-full h-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-t from-[#141414] via-[#141414]/30 to-transparent" />
         </div>
 
         <div className="p-6 pt-0 relative -mt-10 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div className="flex items-end gap-4">
             <img
-              src={shop.logo} onError={e=>{if(!e.currentTarget.src.endsWith('/images/placeholder.svg'))e.currentTarget.src='/images/placeholder.svg';}}
+              src={shop.logo || '/images/placeholder.svg'} onError={e=>{if(!e.currentTarget.src.endsWith('/images/placeholder.svg'))e.currentTarget.src='/images/placeholder.svg';}}
               alt={shop.name}
               className="w-20 h-20 rounded-2xl object-cover border-4 border-[#141414] shadow-2xl"
             />
