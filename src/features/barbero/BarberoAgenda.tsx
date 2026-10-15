@@ -569,7 +569,7 @@ export const BarberoAgenda: React.FC = () => {
                 <div
                   key={apt.id}
                   onClick={() => setInspectingApt(apt)}
-                  className="p-3.5 rounded-xl bg-[#181818] border border-neutral-800 hover:border-[var(--gold-primary)] flex items-center justify-between text-xs cursor-pointer transition-all"
+                  className="p-3.5 rounded-xl bg-[#181818] border border-neutral-800 hover:border-[var(--gold-primary)] flex flex-wrap items-center justify-between gap-2 text-xs cursor-pointer transition-all"
                 >
                   <div className="flex items-center gap-3">
                     <span className="font-mono font-bold text-base text-white bg-neutral-900 px-3 py-1.5 rounded-lg border border-neutral-800">
@@ -590,6 +590,7 @@ export const BarberoAgenda: React.FC = () => {
                       {apt.status}
                     </span>
                   </div>
+                  <div className="w-full" onClick={e=>e.stopPropagation()}>{quickActions(apt)}</div>
                 </div>
               ))
             )}
