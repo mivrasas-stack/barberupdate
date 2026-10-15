@@ -90,12 +90,15 @@ export async function getClientAuthProfile():Promise<ClientAuthProfile>{
      style:String(cuts.style||''),topLength:String(cuts.topLength||''),beard:String(cuts.beard||''),notes:String(cuts.notes||'')
    }};
 }
-export async function saveClientAuthProfile(input:ClientAuthProfile):Promise<void>{
+export async function saveClientAuthProfile(input:ClientAuthProfile,originalEmail:string):Promise<void>{
  const jwt=await token();
- const body={email:input.email, data:{
-  full_name:input.name.trim(),phone:input.phone.trim(),
-  cut_preferences:input.preferences
- }};
+ const body:{email?:string;data:{full_name:string;phone:string;cut_preferences:ClientCutPreferences}}={
+  data:{full_name:input.name.trim(),phone:input.phone.trim(),cut_preferences:input.preferences}
+ };
+ // Avoid asking Supabase to reconfirm an unchanged email on every profile save.
+ if(input.email.trim().toLowerCase()!==originalEmail.trim().toLowerCase()){
+  body.email=input.email.trim().toLowerCase();
+ }
  const response=await fetch(supabaseUrl+'/auth/v1/user',{method:'PUT',headers:{
   apikey:supabasePublicKey,Authorization:'Bearer '+jwt,'Content-Type':'application/json'
  },body:JSON.stringify(body)});
