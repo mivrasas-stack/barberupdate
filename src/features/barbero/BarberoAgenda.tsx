@@ -195,8 +195,10 @@ export const BarberoAgenda: React.FC = () => {
        paymentMethod:txn.paymentMethod,transactionId:txn.id,receivedAt:txn.date,recordedBy:null,
        reference:txn.notes||'',verification:'Comprobante de demostración'});return;
     }
+    const tenant=apt.businessId||barber.businessId;
+    if(!tenant){addToast('No se encontró la barbería de esta cita','error');return;}
     setReceiptBusy(true);
-    try{setReceipt(await fetchAppointmentReceipt(apt.businessId||barber.businessId,apt.id));}
+    try{setReceipt(await fetchAppointmentReceipt(tenant,apt.id));}
     catch(err){addToast(err instanceof Error?err.message:'No se pudo cargar el comprobante','error');}
     finally{setReceiptBusy(false);}
   };
