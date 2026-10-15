@@ -112,9 +112,9 @@ export async function registerCustomerLinkRoutes(app,{db,security}){
          }
          enriched[index]={
            id:row.user_id,
-           name:row.full_name||authUser?.user_metadata?.full_name||authUser?.user_metadata?.name||'Cliente',
+           name:authUser?.user_metadata?.full_name||authUser?.user_metadata?.name||row.full_name||'Cliente',
            email:row.linked_by_qr?(authUser?.email||''):'' ,
-           phone:row.phone||'',
+           phone:authUser?.user_metadata?.phone||row.phone||'',
            avatar:authUser?.user_metadata?.avatar_url||'',
            linkedByQr:row.linked_by_qr===true,
            linkedAt:row.linked_at,
