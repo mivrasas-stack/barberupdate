@@ -11,7 +11,7 @@
     "worker": "node src/worker.js",
     "verify:delivery": "node scripts/verify-delivery.mjs",
     "test": "node --test test/*.test.js",
-    "check": "node --check src/app.js && node --check src/routes.js && node --check src/business.js && node --check src/scheduling.js && node --check src/notifications.js && node --check src/reports.js && node --check src/payments.js && node --check src/closures.js && node --check src/db.js && node --check src/security.js && node --check src/worker.js && node --check src/whatsapp-cloud.js && node --check src/whatsapp-dispatch.js && node --check src/whatsapp-routes.js"
+    "check": "node --check src/app.js && node --check src/routes.js && node --check src/business.js && node --check src/scheduling.js && node --check src/notifications.js && node --check src/reports.js && node --check src/payments.js && node --check src/closures.js && node --check src/db.js && node --check src/security.js && node --check src/worker.js && node --check src/whatsapp-cloud.js && node --check src/whatsapp-dispatch.js && node --check src/whatsapp-routes.js && node --check src/platform-integrations.js && node --check src/integration-secrets.js"
   },
   "dependencies": {
     "@fastify/cors": "11.1.0",

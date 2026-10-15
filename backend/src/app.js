@@ -15,6 +15,7 @@ import { registerCustomerLinkRoutes } from './customer-links.js';
 import { registerBarberInviteRoutes } from './barber-invites.js';
 import { registerMediaProfileRoutes } from './media-profile.js';
 import {registerWhatsAppRoutes} from './whatsapp-routes.js';
+import {registerPlatformIntegrationRoutes} from './platform-integrations.js';
 
 export async function buildApp(env = process.env) {
   const config = configFromEnv(env);
@@ -56,6 +57,7 @@ export async function buildApp(env = process.env) {
   await registerBarberInviteRoutes(app, { config, db, security });
   await registerMediaProfileRoutes(app, { config, db, security });
   await registerWhatsAppRoutes(app,{config,db,security});
+  await registerPlatformIntegrationRoutes(app,{config,db,security});
   app.addHook('onClose', async () => {
     await db?.close();
     security.redis?.disconnect();

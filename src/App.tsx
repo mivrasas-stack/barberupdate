@@ -19,6 +19,7 @@ import { AdminSubscriptions } from './features/admin/AdminSubscriptions';
 import { AdminPlans } from './features/admin/AdminPlans';
 import { AdminCommercialEditor } from './features/admin/AdminCommercialEditor';
 import { AdminAdministrators } from './features/admin/AdminAdministrators';
+import { AdminIntegrations } from './features/admin/AdminIntegrations';
 
 // Barbershop Owner Views
 import { BarberiaLayout } from './features/barberia/BarberiaLayout';
@@ -82,6 +83,7 @@ const AppContent: React.FC = () => {
     else if (activeRoute.includes('/planes')) child = <AdminPlans />;
     else if (activeRoute.includes('/editor-comercial')) child = <AdminCommercialEditor />;
     else if (activeRoute.includes('/administradores')) child = <AdminAdministrators />;
+    else if (activeRoute.includes('/integraciones')) child = <AdminIntegrations />;
     else if (activeRoute.includes('/inicio') || activeRoute === '/admin') child = <AdminInicio />;
 
     return (

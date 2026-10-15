@@ -2,6 +2,7 @@ import {timingSafeEqual} from 'node:crypto';
 import {z} from 'zod';
 import {failure,parseOrThrow} from './security.js';
 import {normalizeWhatsAppPhone,verifyWhatsAppSignature} from './whatsapp-cloud.js';
+import {resolveWhatsAppIntegration} from './integration-secrets.js';
 
 const id=z.uuid();
 const kinds=['created','reminder','rescheduled','cancelled'];
@@ -38,7 +39,8 @@ export async function registerWhatsAppRoutes(app,{config,db,security}){
       const tenant=parseOrThrow(id,req.params.tenantId);
       await requireTenant(db,tenant,req.actor.id,['owner','manager']);
       const x=parseOrThrow(settings,req.body);
-      if(x.enabled&&(!config.whatsappSendEnabled||!config.whatsappAccessToken||!config.whatsappPhoneNumberId))
+      const runtime=await resolveWhatsAppIntegration(db,config);
+      if(x.enabled&&(!runtime.whatsappSendEnabled||!runtime.whatsappAccessToken||!runtime.whatsappPhoneNumberId))
         failure(409,'WhatsApp Cloud API aun no esta habilitada en el servidor');
       if(x.enabled&&!Object.values(x.templates).some(Boolean))
         failure(400,'Configura al menos una plantilla aprobada antes de activar WhatsApp');
@@ -89,16 +91,18 @@ export async function registerWhatsAppRoutes(app,{config,db,security}){
     // Scope the raw body parser to this route group. JSON reserialization breaks Meta signatures.
     webhook.addContentTypeParser('application/json',{parseAs:'buffer'},(_req,body,done)=>done(null,body));
     webhook.get('/api/v1/whatsapp/webhook',async(req,reply)=>{
-      if(!config.whatsappWebhookVerifyToken)return reply.code(503).send('not configured');
+      const runtime=await resolveWhatsAppIntegration(db,config);
+      if(!runtime.whatsappWebhookVerifyToken)return reply.code(503).send('not configured');
       const q=req.query||{};
-      if(q['hub.mode']!=='subscribe'||!constantTimeMatch(q['hub.verify_token'],config.whatsappWebhookVerifyToken))
+      if(q['hub.mode']!=='subscribe'||!constantTimeMatch(q['hub.verify_token'],runtime.whatsappWebhookVerifyToken))
         return reply.code(403).send('forbidden');
       return reply.type('text/plain').send(String(q['hub.challenge']||''));
     });
     webhook.post('/api/v1/whatsapp/webhook',async(req,reply)=>{
-      if(!config.whatsappAppSecret||!db)return reply.code(503).send({error:'not configured'});
+      const runtime=await resolveWhatsAppIntegration(db,config);
+      if(!runtime.whatsappAppSecret||!db)return reply.code(503).send({error:'not configured'});
       const body=req.body;
-      if(!verifyWhatsAppSignature({appSecret:config.whatsappAppSecret,rawBody:body,signature:req.headers['x-hub-signature-256']}))
+      if(!verifyWhatsAppSignature({appSecret:runtime.whatsappAppSecret,rawBody:body,signature:req.headers['x-hub-signature-256']}))
         return reply.code(403).send({error:'invalid signature'});
       let data;
       try{data=JSON.parse(body.toString('utf8'));}
@@ -107,7 +111,7 @@ export async function registerWhatsAppRoutes(app,{config,db,security}){
       for(const item of data.entry||[]){
         for(const change of item.changes||[]){
           const value=change?.value;
-          if(value?.metadata?.phone_number_id!==config.whatsappPhoneNumberId)continue;
+          if(value?.metadata?.phone_number_id!==runtime.whatsappPhoneNumberId)continue;
           for(const status of value.statuses||[]){
             if(typeof status.id!=='string'||!['sent','delivered','read','failed'].includes(status.status))continue;
             await db.query("UPDATE public.whatsapp_messages SET status=CASE WHEN status='read' THEN status WHEN status='delivered' AND $2='sent' THEN status WHEN status IN ('sent','delivered') AND $2 IN ('sent','delivered','read','failed') THEN $2 ELSE status END,updated_at=now() WHERE provider_message_id=$1",

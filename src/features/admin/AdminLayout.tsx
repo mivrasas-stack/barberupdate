@@ -31,6 +31,7 @@ export const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children 
     { label: 'Planes Comerciales', path: '/admin/planes', icon: <Layers className="w-4 h-4" /> },
     { label: 'Editor Página Precios', path: '/admin/editor-comercial', icon: <Globe className="w-4 h-4" /> },
     { label: 'Administradores', path: '/admin/administradores', icon: <ShieldAlert className="w-4 h-4" /> },
+    { label: 'Centro de Integraciones', path: '/admin/integraciones', icon: <Settings className="w-4 h-4" /> },
   ];
 
   if (isInicio) {
