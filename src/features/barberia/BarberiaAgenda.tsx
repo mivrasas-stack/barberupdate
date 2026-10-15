@@ -361,6 +361,7 @@ export const BarberiaAgenda: React.FC = () => {
                   return (
                     <div
                       key={day.date}
+                      data-testid={`agenda-day-${day.date}`}
                       className={`p-3 text-center border-r border-white/[0.08] last:border-r-0 transition-colors ${
                         day.isToday ? 'bg-[var(--gold-primary)]/[0.08] ring-1 ring-inset ring-[var(--gold-primary)]/30' : ''
                       }`}
