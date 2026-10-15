@@ -34,6 +34,7 @@ export interface Barbershop {
   email: string;
   address: string;
   city: string;
+  coordinates?: {lat:number;lng:number};
   planId: string;
   subscriptionStatus: 'active' | 'trial' | 'past_due' | 'cancelled';
   subscriptionRenewsAt: string;
@@ -65,6 +66,9 @@ export interface Barber {
   specialties: string[];
   bio: string;
   commissionRate: number; // e.g. 0.50 (50%)
+  contractType?: 'commission'|'chair_rental'|'hybrid';
+  chairRentalFee?: number;
+  chairRentalPeriod?: 'daily'|'weekly'|'biweekly'|'monthly';
   status: 'active' | 'inactive';
   rating: number;
   reviewsCount: number;

@@ -7,8 +7,16 @@ const url=z.string().url().max(2048);
 const image=z.object({data:z.string().min(10).max(6_000_000),category:z.enum(['products','shop','barber'])}).strict();
 const shopProfile=z.object({
  name:z.string().trim().min(2).max(120),tagline:z.string().max(240),
- address:z.string().max(240),city:z.string().max(120),phone:z.string().max(40)
-}).strict();
+ address:z.string().max(240),city:z.string().max(120),phone:z.string().max(40),
+ email:z.union([z.literal(''),z.email().max(254)]).optional(),
+ latitude:z.number().min(-90).max(90).nullable().optional(),
+ longitude:z.number().min(-180).max(180).nullable().optional(),
+ openingHours:z.object({days:z.string().max(80),open:z.string().regex(/^([01]\\d|2[0-3]):[0-5]\\d$/),close:z.string().regex(/^([01]\\d|2[0-3]):[0-5]\\d$/)}).strict().optional(),
+ socialLinks:z.object({instagram:z.string().max(120),whatsapp:z.string().max(40)}).strict().optional()
+}).strict().superRefine((data,ctx)=>{
+ if((data.latitude===undefined)!==(data.longitude===undefined))
+  ctx.addIssue({code:'custom',message:'Debes proporcionar ambas coordenadas',path:['latitude']});
+});
 const gallery=z.object({photos:z.array(url).max(10)}).strict();
 export function verifyImage(buffer){
  if(buffer.length<12||buffer.length>4_000_000)failure(400,'Imagen vacía o mayor a 4 MB');
@@ -39,8 +47,18 @@ export async function registerMediaProfileRoutes(app,{db,security,config}){
    const tenant=parseOrThrow(id,req.params.tenantId);
    await requireTenant(db,tenant,req.actor.id,['owner','manager']);
    const x=parseOrThrow(shopProfile,req.body);
-   const result=await db.query(`UPDATE public.tenants SET name=$2,tagline=$3,address=$4,city=$5,phone=$6
-     WHERE id=$1 AND status='active' RETURNING *`,[tenant,x.name,x.tagline,x.address,x.city,x.phone]);
+   const result=await db.query(`UPDATE public.tenants
+     SET name=$2,tagline=$3,address=$4,city=$5,phone=$6,
+         email=COALESCE($7,email),
+         latitude=CASE WHEN $8::boolean THEN $9::numeric ELSE latitude END,
+         longitude=CASE WHEN $8::boolean THEN $10::numeric ELSE longitude END,
+         opening_hours=COALESCE($11::jsonb,opening_hours),
+         social_links=COALESCE($12::jsonb,social_links)
+     WHERE id=$1 AND status='active' RETURNING *`,
+     [tenant,x.name,x.tagline,x.address,x.city,x.phone,x.email??null,
+       x.latitude!==undefined,x.latitude??null,x.longitude??null,
+       x.openingHours?JSON.stringify(x.openingHours):null,
+       x.socialLinks?JSON.stringify(x.socialLinks):null]);
    if(!result.rowCount)failure(404,'Barbería no encontrada');
    return result.rows[0];
   });
@@ -72,6 +90,29 @@ export async function registerMediaProfileRoutes(app,{db,security,config}){
    const result=await db.query('UPDATE public.tenants SET '+column+'=$2 WHERE id=$1 RETURNING logo_url,cover_url',[tenant,x.url]);
    if(!result.rowCount)failure(404,'Barbería no encontrada');
    return result.rows[0];
+  });
+  routes.patch('/api/v1/tenants/:tenantId/barbers/:barberId/contract',async req=>{
+   const tenant=parseOrThrow(id,req.params.tenantId),barber=parseOrThrow(id,req.params.barberId);
+   await requireTenant(db,tenant,req.actor.id,['owner','manager']);
+   const x=parseOrThrow(z.object({
+     contractType:z.enum(['commission','chair_rental','hybrid']),
+     commissionRate:z.number().min(0).max(1),
+     chairRentalFee:z.number().int().min(0).max(1_000_000_000),
+     chairRentalPeriod:z.enum(['daily','weekly','biweekly','monthly']),
+     status:z.enum(['active','inactive'])
+   }).strict().superRefine((v,ctx)=>{
+     if(v.contractType==='chair_rental'&&v.chairRentalFee<=0)
+       ctx.addIssue({code:'custom',message:'El arriendo requiere una cuota mayor que cero',path:['chairRentalFee']});
+     if(v.contractType==='hybrid'&&(v.chairRentalFee<=0||v.commissionRate<=0))
+       ctx.addIssue({code:'custom',message:'La modalidad híbrida requiere una cuota y una comisión',path:['chairRentalFee']});
+   }),req.body);
+   const row=await db.query(`UPDATE public.barbers
+     SET contract_type=$3,commission_rate=$4,chair_rental_fee=$5,
+         chair_rental_period=$6,status=$7
+     WHERE tenant_id=$1 AND id=$2 RETURNING id,contract_type,commission_rate,chair_rental_fee,chair_rental_period,status`,
+     [tenant,barber,x.contractType,x.commissionRate,x.chairRentalFee,x.chairRentalPeriod,x.status]);
+   if(!row.rowCount)failure(404,'Barbero no encontrado');
+   return row.rows[0];
   });
   routes.patch('/api/v1/tenants/:tenantId/gallery',async req=>{
    const tenant=parseOrThrow(id,req.params.tenantId);

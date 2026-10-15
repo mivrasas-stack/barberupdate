@@ -82,3 +82,35 @@ test('barber can upload personal media, but cannot edit another barber or busine
   assert.equal(uploads.length,1);
  }finally{await app.close();}
 });
+
+test('owner can persist full commercial profile and conditions; barbers cannot change contracts',async()=>{
+ const {app,calls}=await setup();
+ try{
+  const payload={name:'Barbería QA',tagline:'Elegancia',address:'Calle 14',city:'Chía',
+   phone:'3120000000',email:'qa@example.com',latitude:4.86,longitude:-74.04,
+   openingHours:{days:'Lunes a sábado',open:'09:00',close:'20:00'},
+   socialLinks:{instagram:'@barberiaqa',whatsapp:'3120000000'}};
+  const result=await app.inject({method:'PATCH',url:'/api/v1/tenants/'+tenant+'/profile',payload});
+  assert.equal(result.statusCode,200,result.body);
+  const update=calls.find(v=>v.sql.includes('opening_hours='));
+  assert.ok(update);
+  assert.deepEqual(update.args.slice(8,10),[4.86,-74.04]);
+  assert.equal(JSON.parse(update.args[10]).days,'Lunes a sábado');
+  const path='/api/v1/tenants/'+tenant+'/barbers/'+ownBarber+'/contract';
+  const contract=await app.inject({method:'PATCH',url:path,payload:{
+    contractType:'hybrid',commissionRate:0.35,chairRentalFee:80000,
+    chairRentalPeriod:'weekly',status:'active'}});
+  assert.equal(contract.statusCode,200,contract.body);
+  assert.ok(calls.some(v=>v.sql.includes('SET contract_type=')));
+  const invalid=await app.inject({method:'PATCH',url:path,payload:{
+    contractType:'chair_rental',commissionRate:0,chairRentalFee:0,
+    chairRentalPeriod:'monthly',status:'active'}});
+  assert.equal(invalid.statusCode,400,invalid.body);
+ }finally{await app.close();}
+ const {app:barberApp}=await setup('barber');
+ try{
+  const denied=await barberApp.inject({method:'PATCH',url:'/api/v1/tenants/'+tenant+'/barbers/'+ownBarber+'/contract',
+   payload:{contractType:'commission',commissionRate:0.5,chairRentalFee:0,chairRentalPeriod:'monthly',status:'active'}});
+  assert.equal(denied.statusCode,403);
+ }finally{await barberApp.close();}
+});
