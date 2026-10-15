@@ -55,7 +55,7 @@ export const BarberoDashboard: React.FC = () => {
         <div className="p-5 rounded-3xl apple-glass-card">
           <span className="text-xs text-neutral-400 font-semibold block mb-1">Mis Ingresos Hoy</span>
           <div className="text-3xl font-extrabold font-mono text-emerald-400">
-            {formatCurrency(todayIncome || 110000, currency)}
+            {formatCurrency(todayIncome, currency)}
           </div>
           <span className="text-[10px] text-neutral-400 mt-2 block font-medium">100% de comisiones directas</span>
         </div>
@@ -63,7 +63,7 @@ export const BarberoDashboard: React.FC = () => {
         <div className="p-5 rounded-3xl apple-glass-card">
           <span className="text-xs text-neutral-400 font-semibold block mb-1">Citas Agendadas Hoy</span>
           <div className="text-3xl font-extrabold font-mono text-white">
-            {todayApts.length || 3} <span className="text-xs font-normal text-neutral-400 font-sans">reservas</span>
+            {todayApts.length} <span className="text-xs font-normal text-neutral-400 font-sans">reservas</span>
           </div>
           <span className="text-[10px] text-neutral-400 mt-2 block font-medium">{completedToday} cortes finalizados</span>
         </div>
@@ -71,7 +71,7 @@ export const BarberoDashboard: React.FC = () => {
         <div className="p-5 rounded-3xl apple-glass-card">
           <span className="text-xs text-neutral-400 font-semibold block mb-1">Clientes Registrados</span>
           <div className="text-3xl font-extrabold font-mono text-white">
-            {barberApts.length + 18} <span className="text-xs font-normal text-neutral-400 font-sans">frecuentes</span>
+            {new Set(barberApts.map(a=>a.customerId).filter(Boolean)).size} <span className="text-xs font-normal text-neutral-400 font-sans">frecuentes</span>
           </div>
           <span className="text-[10px] text-neutral-400 mt-2 block font-medium">Cartera propia</span>
         </div>

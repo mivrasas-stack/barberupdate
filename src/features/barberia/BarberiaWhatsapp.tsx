@@ -17,7 +17,7 @@ export function BarberiaWhatsapp({tenant,addToast}:{tenant:string;addToast:(mess
   const [saving,setSaving]=useState(false);
   const [enabled,setEnabled]=useState(false);
   const [languageCode,setLanguageCode]=useState('es_CO');
-  const [reminderHours,setReminderHours]=useState(24);
+  const [reminderHours,setReminderHours]=useState<number|null>(null);
   const [names,setNames]=useState<Record<Kind,string>>({created:'',reminder:'',rescheduled:'',cancelled:''});
   const [parameters,setParameters]=useState<Record<Kind,string>>({
     created:defaultParameters,reminder:defaultParameters,rescheduled:defaultParameters,cancelled:defaultParameters,
@@ -43,6 +43,9 @@ export function BarberiaWhatsapp({tenant,addToast}:{tenant:string;addToast:(mess
   const save=async(e:React.FormEvent)=>{
     e.preventDefault();
     if(saving)return;
+    if(reminderHours===null||reminderHours<1||reminderHours>168||!Number.isInteger(reminderHours)){
+      addToast('Indica entre 1 y 168 horas para el recordatorio','error');return;
+    }
     const templates:Partial<Record<Kind,Spec>>={};
     for(const kind of kinds){
       const name=names[kind].trim();
@@ -80,7 +83,7 @@ export function BarberiaWhatsapp({tenant,addToast}:{tenant:string;addToast:(mess
           className="w-full bg-[#181818] border border-neutral-700 rounded-lg p-2 text-white"/>
       </label>
       <label className="text-xs text-neutral-400 space-y-1">Anticipación del recordatorio (horas)
-        <input type="number" min={1} max={168} value={reminderHours} onChange={e=>setReminderHours(Number(e.target.value))}
+        <input type="number" min={1} max={168} placeholder="0" value={reminderHours??''} onChange={e=>setReminderHours(e.target.value===''?null:Number(e.target.value))}
           className="w-full bg-[#181818] border border-neutral-700 rounded-lg p-2 text-white"/>
       </label>
     </div>

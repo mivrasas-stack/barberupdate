@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { barberStore } from '../../services/store';
 import {isLiveBackend,addBooking,updateBooking,refreshLiveData} from '../../services/liveBackend';
 import { formatCurrency, formatTime } from '../../utils/formatters';
+import {CopAmountInput} from '../../components/common/CopAmountInput';
 import { Appointment, AppointmentStatus, PaymentMethod } from '../../types';
 import {
   Calendar,
@@ -43,7 +44,7 @@ export const BarberiaAgenda: React.FC = () => {
   const [newServiceId, setNewServiceId] = useState(state.services[0]?.id || '');
   const [newBarberId, setNewBarberId] = useState(state.barbers[0]?.id || '');
   const [newStartTime, setNewStartTime] = useState('11:00');
-  const [newDiscount, setNewDiscount] = useState(0);
+  const [newDiscount, setNewDiscount] = useState<number|null>(null);
   const [newNotes, setNewNotes] = useState('');
 
   // Form states for Walk-In
@@ -123,7 +124,7 @@ export const BarberiaAgenda: React.FC = () => {
           startTime:newStartTime,customerName:newCustName,customerPhone:newCustPhone,notes:newNotes});
         await refreshLiveData();
         addToast('Reserva creada en BarberOS','success');
-        setIsNewAptModalOpen(false);setNewCustName('');setNewCustPhone('');
+        setIsNewAptModalOpen(false);setNewCustName('');setNewCustPhone('');setNewDiscount(null);
       }catch(error){addToast(error instanceof Error?error.message:'Error al reservar','error');}
       return;
     }
@@ -141,8 +142,8 @@ export const BarberiaAgenda: React.FC = () => {
       endTime: '12:00',
       durationMinutes: service.durationMinutes,
       price: service.price,
-      discount: newDiscount,
-      finalPrice: Math.max(0, service.price - newDiscount),
+      discount: newDiscount??0,
+      finalPrice: Math.max(0, service.price - (newDiscount??0)),
       status: 'confirmed',
       notes: newNotes,
     });
@@ -156,6 +157,7 @@ export const BarberiaAgenda: React.FC = () => {
     setIsNewAptModalOpen(false);
     setNewCustName('');
     setNewCustPhone('');
+    setNewDiscount(null);
   };
 
   const handleRegisterWalkIn = (e: React.FormEvent) => {
@@ -780,12 +782,8 @@ export const BarberiaAgenda: React.FC = () => {
 
                 <div>
                   <label className="text-neutral-400 block mb-1">Descuento Especial (COP)</label>
-                  <input
-                    type="number"
-                    value={newDiscount}
-                    onChange={e => setNewDiscount(Number(e.target.value))}
-                    className="w-full bg-[#181818] border border-[#2a2a2a] rounded-lg px-3 py-2 text-white font-mono"
-                  />
+                  <CopAmountInput value={newDiscount} onChange={setNewDiscount} ariaLabel="Descuento de cita en COP"
+                    className="bg-[#181818] border border-[#2a2a2a] rounded-lg px-3 py-2 text-white font-mono" />
                 </div>
               </div>
 

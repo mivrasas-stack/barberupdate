@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { SubscriptionPlan } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
+import {CopAmountInput} from '../../components/common/CopAmountInput';
 import { barberStore } from '../../services/store';
 import { Layers, Plus, Check, Edit2, Copy, ToggleLeft, ToggleRight, X, Sparkles } from 'lucide-react';
 
@@ -21,21 +22,28 @@ export const AdminPlans: React.FC = () => {
       name: 'Nuevo Plan Comercial',
       audience: 'barbershop',
       tagline: 'Descripción del plan para atraer nuevos clientes',
-      monthlyPrice: 99000,
-      annualPrice: 990000,
+      monthlyPrice: 0,
+      annualPrice: 0,
       currency: 'COP',
-      maxBarbers: 5,
-      maxPortfolioImages: 10,
+      maxBarbers: 0,
+      maxPortfolioImages: 0,
       features: ['Gestión de citas', 'Control de caja básica', 'Código QR propio'],
       isActive: true,
       order: state.plans.length + 1,
     };
     setEditingPlan(blank);
-    setForm(blank);
+    setForm({...blank,monthlyPrice:undefined,annualPrice:undefined,maxBarbers:undefined,maxPortfolioImages:undefined});
   };
 
   const handleSave = () => {
-    if (!form.name) return;
+    if (!form.name?.trim() || !Number.isSafeInteger(form.monthlyPrice)
+      || form.monthlyPrice===undefined || form.monthlyPrice<0
+      || !Number.isSafeInteger(form.annualPrice)||form.annualPrice===undefined||form.annualPrice<0
+      || !Number.isInteger(form.maxBarbers)||!form.maxBarbers||form.maxBarbers<1
+      || !Number.isInteger(form.maxPortfolioImages)||form.maxPortfolioImages===undefined
+      || form.maxPortfolioImages<1||form.maxPortfolioImages>10){
+      addToast('Completa los importes en COP y las capacidades del plan','error');return;
+    }
     if (editingPlan?.id) {
       barberStore.updatePlan(form as SubscriptionPlan);
       addToast('Plan comercial actualizado correctamente', 'success');
@@ -214,21 +222,17 @@ export const AdminPlans: React.FC = () => {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-neutral-400 block mb-1">Precio Mensual (COP)</label>
-                  <input
-                    type="number"
-                    value={form.monthlyPrice || 0}
-                    onChange={e => setForm({ ...form, monthlyPrice: Number(e.target.value) })}
-                    className="w-full bg-[#181818] border border-[#2a2a2a] rounded-lg px-3 py-2 text-white font-mono"
-                  />
+                  <CopAmountInput value={form.monthlyPrice??null}
+                    onChange={value=>setForm({...form,monthlyPrice:value??undefined})}
+                    required ariaLabel="Precio mensual en COP"
+                    className="bg-[#181818] border border-[#2a2a2a] rounded-lg px-3 py-2 text-white font-mono" />
                 </div>
                 <div>
                   <label className="text-neutral-400 block mb-1">Precio Anual (COP)</label>
-                  <input
-                    type="number"
-                    value={form.annualPrice || 0}
-                    onChange={e => setForm({ ...form, annualPrice: Number(e.target.value) })}
-                    className="w-full bg-[#181818] border border-[#2a2a2a] rounded-lg px-3 py-2 text-white font-mono"
-                  />
+                  <CopAmountInput value={form.annualPrice??null}
+                    onChange={value=>setForm({...form,annualPrice:value??undefined})}
+                    required ariaLabel="Precio anual en COP"
+                    className="bg-[#181818] border border-[#2a2a2a] rounded-lg px-3 py-2 text-white font-mono" />
                 </div>
               </div>
 
@@ -237,8 +241,9 @@ export const AdminPlans: React.FC = () => {
                   <label className="text-neutral-400 block mb-1">Máx. Barberos / Sillas</label>
                   <input
                     type="number"
-                    value={form.maxBarbers || 1}
-                    onChange={e => setForm({ ...form, maxBarbers: Number(e.target.value) })}
+                    value={form.maxBarbers??''}
+                    min={1} placeholder="0"
+                    onChange={e => setForm({ ...form, maxBarbers:e.target.value===''?undefined:Number(e.target.value) })}
                     className="w-full bg-[#181818] border border-[#2a2a2a] rounded-lg px-3 py-2 text-white font-mono"
                   />
                 </div>
@@ -247,8 +252,9 @@ export const AdminPlans: React.FC = () => {
                   <input
                     type="number"
                     max={10}
-                    value={form.maxPortfolioImages || 10}
-                    onChange={e => setForm({ ...form, maxPortfolioImages: Number(e.target.value) })}
+                    value={form.maxPortfolioImages??''}
+                    min={1} placeholder="0"
+                    onChange={e => setForm({ ...form, maxPortfolioImages:e.target.value===''?undefined:Number(e.target.value) })}
                     className="w-full bg-[#181818] border border-[#2a2a2a] rounded-lg px-3 py-2 text-white font-mono"
                   />
                 </div>

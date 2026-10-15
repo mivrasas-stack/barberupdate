@@ -1,36 +1,16 @@
 import { CurrencyType } from '../types';
 
-export const formatCurrency = (amount: number, currency: CurrencyType = 'COP'): string => {
-  if (currency === 'COP') {
-    return new Intl.NumberFormat('es-CO', {
-      style: 'currency',
-      currency: 'COP',
-      maximumFractionDigits: 0,
-    }).format(amount);
-  }
+const copFormatter = new Intl.NumberFormat('es-CO', {
+  style: 'currency',
+  currency: 'COP',
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+});
 
-  if (currency === 'USD') {
-    // Demo rate: 1 USD ~ 4,000 COP
-    const inUSD = amount / 4000;
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      maximumFractionDigits: 2,
-    }).format(inUSD);
-  }
-
-  if (currency === 'EUR') {
-    // Demo rate: 1 EUR ~ 4,300 COP
-    const inEUR = amount / 4300;
-    return new Intl.NumberFormat('de-DE', {
-      style: 'currency',
-      currency: 'EUR',
-      maximumFractionDigits: 2,
-    }).format(inEUR);
-  }
-
-  return `$ ${amount.toLocaleString()}`;
-};
+// Monetary values are stored as whole Colombian pesos throughout BarberOS.
+// The currency parameter remains for API compatibility; do not apply invented FX rates.
+export const formatCurrency = (amount: number, _currency: CurrencyType = 'COP'): string =>
+  copFormatter.format(Number.isFinite(amount) ? amount : 0);
 
 export const formatDate = (dateStr: string): string => {
   if (!dateStr) return '';
