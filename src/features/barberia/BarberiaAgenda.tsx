@@ -2,7 +2,7 @@ import React, {useEffect,useState} from 'react';
 import {useRollingAgendaDate,rollingAgendaDays,shiftAgendaDate} from '../../utils/agendaDates';
 import { useApp } from '../../context/AppContext';
 import { barberStore } from '../../services/store';
-import {isLiveBackend,addBooking,updateBooking,refreshLiveData} from '../../services/liveBackend';
+import {isLiveBackend,addBooking,updateBooking,refreshLiveData,finishAndPayAppointment,type AppointmentPaymentReceipt} from '../../services/liveBackend';
 import { formatCurrency, formatTime } from '../../utils/formatters';
 import {CopAmountInput} from '../../components/common/CopAmountInput';
 import { Appointment, AppointmentStatus, PaymentMethod } from '../../types';
@@ -39,6 +39,8 @@ export const BarberiaAgenda: React.FC = () => {
   const [isNewAptModalOpen, setIsNewAptModalOpen] = useState(false);
   const [isWalkInModalOpen, setIsWalkInModalOpen] = useState(false);
   const [completingApt, setCompletingApt] = useState<Appointment | null>(null);
+  const [paymentReceipt,setPaymentReceipt]=useState<AppointmentPaymentReceipt|null>(null);
+  const [finishingBusy,setFinishingBusy]=useState(false);
   const [paymentMethodForComplete, setPaymentMethodForComplete] = useState<PaymentMethod>('cash');
 
   // Form states for New Appointment
@@ -166,13 +168,23 @@ export const BarberiaAgenda: React.FC = () => {
       !window.confirm(status==='cancelled'
         ?'¿Cancelar esta cita? El horario volverá a estar disponible cuando aún sea futuro.'
         :'¿Confirmas que el cliente no asistió? Se liberará cualquier franja aún reservable.'))return;
+    let reason:string|undefined;
+    if(['cancelled','no_show'].includes(status)){
+      reason=window.prompt(status==='no_show'?'Motivo de ausencia del cliente:':'Motivo de cancelación:',
+        status==='no_show'?'Cliente no asistió a la cita':'Cancelada a solicitud del cliente')?.trim();
+      if(!reason)return;
+      if(reason.length<3||reason.length>250){addToast('Escribe un motivo de 3 a 250 caracteres.','error');return;}
+    }
     if(statusBusy)return;
     setStatusBusy(true);
     try{
       if(isLiveBackend){
-        await updateBooking(shopId,apt.id,status);
+        await updateBooking(shopId,apt.id,status,reason);
         await refreshLiveData();
-      }else barberStore.updateAppointmentStatus(apt.id,status);
+      }else{
+        barberStore.updateAppointmentStatus(apt.id,status);
+        if(reason)barberStore.setAppointmentCancellationReason(apt.id,reason);
+      }
       addToast(status==='in_service'?'Corte iniciado':
         status==='no_show'?'Ausencia registrada':
         status==='cancelled'?'Cita cancelada':status==='waiting'?'Llegada registrada':
@@ -182,20 +194,35 @@ export const BarberiaAgenda: React.FC = () => {
     finally{setStatusBusy(false);}
   };
 
-  const handleConfirmCompletion = () => {
-    if (!completingApt) return;
-    if(isLiveBackend){
-      if(completingApt.status!=='in_service'){addToast('Primero marca la cita en servicio.','error');return;}
-      void updateBooking(shopId,completingApt.id,'completed').then(refreshLiveData)
-        .then(()=>{addToast('Servicio finalizado. Registra el pago en caja si corresponde.','success');setCompletingApt(null);})
-        .catch(e=>addToast(e instanceof Error?e.message:'No se pudo finalizar','error'));
-      return;
-    }
-    barberStore.updateAppointmentStatus(completingApt.id, 'completed', paymentMethodForComplete);
-    addToast(`Servicio finalizado y cobrado (${paymentMethodForComplete.toUpperCase()})`, 'success');
-    setCompletingApt(null);
+  const handleConfirmCompletion=async()=>{
+    if(!completingApt||finishingBusy)return;
+    if(completingApt.status!=='in_service'){addToast('Primero inicia el corte','error');return;}
+    setFinishingBusy(true);
+    try{
+      if(isLiveBackend){
+        const method=paymentMethodForComplete;
+        if(method==='split'){addToast('Los cobros divididos se deben gestionar desde Caja para conservar su desglose.','error');return;}
+        const saved=await finishAndPayAppointment(shopId,completingApt.id,method);
+        // A UI refresh is not part of the payment transaction.
+        await refreshLiveData().catch(()=>addToast('Cobro guardado. Actualiza la agenda para verlo.','info'));
+        setPaymentReceipt(saved);
+      }else{
+        barberStore.updateAppointmentStatus(completingApt.id,'completed',paymentMethodForComplete);
+        const txn=barberStore.getState().transactions.find(t=>t.referenceId===completingApt.id&&t.type==='income');
+        setPaymentReceipt({
+          appointmentId:completingApt.id,customerName:completingApt.customerName,serviceName:completingApt.serviceName,
+          startsAt:completingApt.date+'T'+completingApt.startTime+':00-05:00',completed:true,
+          totalMinor:completingApt.finalPrice,currency:'COP',
+          paymentMethod:paymentMethodForComplete,transactionId:txn?.id||null,
+          receivedAt:txn?.date||new Date().toISOString(),recordedBy:null,reference:'',
+          verification:'Comprobante de demostración, no representa un pago real.'
+        });
+      }
+      setCompletingApt(null);
+      addToast('Corte y cobro registrados en Contabilidad','success');
+    }catch(err){addToast(err instanceof Error?err.message:'No se pudo registrar el cobro','error');}
+    finally{setFinishingBusy(false);}
   };
-
 
   return (
     <div className="space-y-6">
@@ -722,6 +749,16 @@ export const BarberiaAgenda: React.FC = () => {
        </div>
       )}
 
+      {paymentReceipt&&<div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 p-4">
+       <section role="dialog" aria-modal="true" aria-labelledby="owner-receipt-heading" className="w-full max-w-md rounded-2xl border border-emerald-500/40 bg-[#151515] p-6 space-y-3">
+        <h2 id="owner-receipt-heading" className="text-lg font-bold text-emerald-300">Comprobante de servicio</h2>
+        <p className="text-sm text-white">{paymentReceipt.customerName} · {paymentReceipt.serviceName}</p>
+        <p className="text-2xl font-bold text-white">{formatCurrency(paymentReceipt.totalMinor,currency)}</p>
+        <p className="text-xs text-neutral-300">Método: {paymentReceipt.paymentMethod} · Movimiento: {paymentReceipt.transactionId||'Cortesía sin cargo'}</p>
+        <p className="text-xs text-neutral-400">{paymentReceipt.verification}</p>
+        <button onClick={()=>setPaymentReceipt(null)} className="w-full rounded-xl bg-[var(--gold-primary)] p-3 text-black text-xs font-bold">Cerrar</button>
+       </section>
+      </div>}
       {/* Modal: Nueva Cita Programada */}
       {isNewAptModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
@@ -995,10 +1032,11 @@ export const BarberiaAgenda: React.FC = () => {
                 Cancelar
               </button>
               <button
-                onClick={handleConfirmCompletion}
+                onClick={()=>void handleConfirmCompletion()}
+                disabled={finishingBusy}
                 className="px-4 py-2 rounded-xl bg-emerald-500 text-black font-bold text-xs hover:bg-emerald-400"
               >
-                Confirmar Cobro
+                {finishingBusy?'Registrando...':'Confirmar cobro recibido y finalizar'}
               </button>
             </div>
           </div>

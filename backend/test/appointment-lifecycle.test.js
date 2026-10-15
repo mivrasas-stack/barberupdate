@@ -23,7 +23,7 @@ async function setup(initialStatus='confirmed',startOffsetMinutes=0,role='owner'
     return {rowCount:1,rows:[{...booking}]};
    }
    if(sql.includes('UPDATE public.appointments SET status=')){
-    booking.status=args[2];
+    booking.status=args[2];booking.cancellation_reason=args[3]||null;
     return {rowCount:1,rows:[{...booking}]};
    }
    throw Error('Unexpected SQL '+sql.slice(0,120));
@@ -48,15 +48,17 @@ async function setup(initialStatus='confirmed',startOffsetMinutes=0,role='owner'
  await app.ready();
  return {app,booking,statements};
 }
-const call=(app,status)=>app.inject({method:'PATCH',url,payload:{status}});
+const call=(app,status,reason)=>app.inject({method:'PATCH',url,payload:{
+ status,...(['cancelled','no_show'].includes(status)?{reason:reason||'Cliente no asistió a la cita'}:{})
+}});
 
-test('confirmed booking can start service, finish only after start; closed states cannot reopen',async()=>{
+test('confirmed booking can start service; completion requires a settled payment',async()=>{
  const {app,booking}=await setup();
  try{
   assert.equal((await call(app,'in_service')).statusCode,200);
   assert.equal(booking.status,'in_service');
-  assert.equal((await call(app,'completed')).statusCode,200);
-  assert.equal(booking.status,'completed');
+  assert.equal((await call(app,'completed')).statusCode,409);
+  assert.equal(booking.status,'in_service');
   assert.equal((await call(app,'cancelled')).statusCode,409);
  }finally{await app.close();}
 });
@@ -87,10 +89,21 @@ test('no-show after grace period and cancellation close booking without deleting
   assert.equal((await call(canceled.app,'in_service')).statusCode,409);
  }finally{await canceled.app.close();}
 });
-test('pending booking cannot start service without confirmation',async()=>{
+test('pending booking starts instantly when the barbero confirms client arrival',async()=>{
  const {app}=await setup('pending',0);
  try{
-  assert.equal((await call(app,'in_service')).statusCode,409);
-  assert.equal((await call(app,'confirmed')).statusCode,200);
+  assert.equal((await call(app,'in_service')).statusCode,200);
+  assert.equal((await call(app,'confirmed')).statusCode,409);
  }finally{await app.close();}
+});
+
+test('cancel or no-show must include a bounded real reason',async()=>{
+ const fixture=await setup('confirmed',-20);
+ try{
+  assert.equal((await fixture.app.inject({method:'PATCH',url,payload:{status:'cancelled'}})).statusCode,400);
+  assert.equal((await fixture.app.inject({method:'PATCH',url,payload:{status:'no_show',reason:'ab'}})).statusCode,400);
+  const result=await call(fixture.app,'no_show','Cliente ausente tras la espera');
+  assert.equal(result.statusCode,200,result.body);
+  assert.equal(fixture.booking.cancellation_reason,'Cliente ausente tras la espera');
+ }finally{await fixture.app.close();}
 });

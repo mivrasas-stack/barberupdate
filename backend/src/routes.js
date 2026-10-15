@@ -151,7 +151,10 @@ export async function registerRoutes(app,{config,db,security}) {
     routes.patch('/api/v1/tenants/:tenantId/appointments/:appointmentId/status',async req=>{
       const tenant=parseOrThrow(id,req.params.tenantId),apt=parseOrThrow(id,req.params.appointmentId);
       const role=await requireTenant(db,tenant,req.actor.id,['owner','manager','barber']);
-      const x=parseOrThrow(z.object({status:z.enum(appointmentStatuses)}).strict(),req.body);
+      const x=parseOrThrow(z.object({
+        status:z.enum(appointmentStatuses),
+        reason:z.string().trim().min(3).max(250).optional()
+      }).strict(),req.body);
       return db.transaction(async tx=>{
         const found=await tx.query('SELECT a.*,b.user_id AS barber_user_id FROM public.appointments a JOIN public.barbers b ON b.id=a.barber_id AND b.tenant_id=a.tenant_id WHERE a.tenant_id=$1 AND a.id=$2 FOR UPDATE OF a',[tenant,apt]);
         if(!found.rowCount) failure(404,'Reserva no encontrada');
@@ -159,12 +162,97 @@ export async function registerRoutes(app,{config,db,security}) {
         if(role==='barber'&&old.barber_user_id!==req.actor.id) failure(403,'No autorizado');
         // Staff can start an arrived client's service directly from a confirmed booking.
         // A no-show cannot be recorded until 15 minutes after the booked start.
-        const transitions={pending:['confirmed','cancelled'],confirmed:['waiting','in_service','cancelled','no_show'],waiting:['in_service','cancelled','no_show'],in_service:['completed'],completed:[],cancelled:[],no_show:[]};
+        const transitions={pending:['confirmed','in_service','cancelled','no_show'],confirmed:['waiting','in_service','cancelled','no_show'],waiting:['in_service','cancelled','no_show'],in_service:[],completed:[],cancelled:[],no_show:[]};
+        if(['cancelled','no_show'].includes(x.status)&&!x.reason) failure(400,'Indica el motivo de cancelacion');
+        if(!['cancelled','no_show'].includes(x.status)&&x.reason) failure(400,'Solo se puede guardar motivo al cancelar o marcar ausencia');
         if(x.status==='no_show'&&new Date(old.starts_at).getTime()>Date.now()-15*60*1000)
           failure(409,'Solo puedes marcar ausencia 15 minutos después de la hora reservada');
         if(!transitions[old.status]?.includes(x.status)) failure(409,'Transicion no permitida');
-        return (await tx.query('UPDATE public.appointments SET status=$3,updated_at=now() WHERE tenant_id=$1 AND id=$2 RETURNING *',[tenant,apt,x.status])).rows[0];
+        return (await tx.query('UPDATE public.appointments SET status=$3,cancellation_reason=$4,updated_at=now() WHERE tenant_id=$1 AND id=$2 RETURNING *',[tenant,apt,x.status,x.reason||null])).rows[0];
       });
+    });
+    // Cash collected by an authorized staff member is recorded atomically with completion.
+    // A receipt is an operator attestation, NOT an external payment-provider confirmation.
+    const receiptOf=(appointment,transaction,currency)=>({
+      appointmentId:appointment.id,
+      customerName:appointment.customer_name,
+      serviceName:appointment.service_name,
+      startsAt:appointment.starts_at,
+      completed:appointment.status==='completed',
+      totalMinor:Number(appointment.price_minor),
+      currency,
+      paymentMethod:transaction?.payment_method||'courtesy',
+      transactionId:transaction?.id||null,
+      receivedAt:transaction?.created_at||appointment.updated_at,
+      recordedBy:transaction?.created_by||null,
+      reference:transaction?.notes||'',
+      verification:'Cobro presencial declarado por personal autorizado; no verificado por banco o pasarela.'
+    });
+    routes.post('/api/v1/tenants/:tenantId/appointments/:appointmentId/finish-and-pay',async req=>{
+      const tenant=parseOrThrow(id,req.params.tenantId),apt=parseOrThrow(id,req.params.appointmentId);
+      const role=await requireTenant(db,tenant,req.actor.id,['owner','manager','barber']);
+      const payload=parseOrThrow(z.object({
+        method:z.enum(['cash','nequi','daviplata','transfer','debit','credit']),
+        confirmReceived:z.literal(true),
+        reference:z.string().trim().max(120).optional()
+      }).strict(),req.body);
+      return db.transaction(async tx=>{
+        const found=await tx.query(
+          'SELECT a.*,b.user_id AS barber_user_id,s.name AS service_name FROM public.appointments a JOIN public.barbers b ON b.id=a.barber_id AND b.tenant_id=a.tenant_id JOIN public.services s ON s.id=a.service_id AND s.tenant_id=a.tenant_id WHERE a.tenant_id=$1 AND a.id=$2 FOR UPDATE OF a',
+          [tenant,apt]);
+        if(!found.rowCount)failure(404,'Cita no encontrada');
+        const appointment=found.rows[0];
+        if(role==='barber'&&appointment.barber_user_id!==req.actor.id)failure(403,'No puedes cobrar citas de otro barbero');
+        const oldPayment=await tx.query(
+          "SELECT * FROM public.transactions WHERE tenant_id=$1 AND reference_id=$2 AND type='income'",
+          [tenant,apt]);
+        const existing=oldPayment.rows[0]||null;
+        if(appointment.status==='completed'){
+          if(existing&&existing.payment_method!==payload.method)failure(409,'La cita ya tiene un cobro registrado con otro metodo');
+          if(!existing&&Number(appointment.price_minor)>0)failure(409,'Cita finalizada sin un registro de cobro; revisar en Caja');
+          const shop=await tx.query("SELECT currency FROM public.tenants WHERE id=$1",[tenant]);
+          return receiptOf(appointment,existing,shop.rows[0]?.currency||'COP');
+        }
+        if(appointment.status!=='in_service')failure(409,'Primero inicia el corte antes de cobrar');
+        if(existing)failure(409,'La cita ya tiene un ingreso asociado. Revisa Caja antes de continuar.');
+        const amount=Number(appointment.price_minor);
+        if(!Number.isSafeInteger(amount)||amount<0)failure(409,'Precio de cita invalido');
+        // Serialize with cash closing. If the day is closed, the database rejects
+        // the accounting entry and the appointment remains in service (rollback).
+        const shop=await tx.query(
+          "SELECT (now() AT TIME ZONE time_zone)::date::text AS local_day,currency FROM public.tenants WHERE id=$1 AND status='active'",
+          [tenant]);
+        if(!shop.rowCount)failure(404,'Barberia no disponible');
+        let transaction=null;
+        if(amount>0){
+          await tx.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[tenant+':cash:'+shop.rows[0].local_day]);
+          const notes='Cobro manual de servicio, cita '+apt+(payload.reference?' | Referencia: '+payload.reference:'');
+          const saved=await tx.query(
+            "INSERT INTO public.transactions(tenant_id,type,category,concept,amount_minor,payment_method,reference_id,created_by,notes) VALUES($1,'income','haircut_service',$2,$3,$4,$5,$6,$7) RETURNING *",
+            [tenant,'Corte: '+String(appointment.service_name).slice(0,225),amount,payload.method,apt,req.actor.id,notes]);
+          transaction=saved.rows[0];
+        }
+        const updated=await tx.query(
+          "UPDATE public.appointments SET status='completed',updated_at=now() WHERE tenant_id=$1 AND id=$2 AND status='in_service' RETURNING *",
+          [tenant,apt]);
+        if(!updated.rowCount)failure(409,'El estado de la cita cambio, intenta nuevamente');
+        return receiptOf({...appointment,...updated.rows[0]},transaction,shop.rows[0].currency);
+      });
+    });
+    routes.get('/api/v1/tenants/:tenantId/appointments/:appointmentId/payment-receipt',async req=>{
+      const tenant=parseOrThrow(id,req.params.tenantId),apt=parseOrThrow(id,req.params.appointmentId);
+      const role=await requireTenant(db,tenant,req.actor.id,['owner','manager','barber']);
+      const result=await db.query(
+        'SELECT a.*,b.user_id AS barber_user_id,s.name AS service_name,t.currency FROM public.appointments a JOIN public.barbers b ON b.id=a.barber_id AND b.tenant_id=a.tenant_id JOIN public.services s ON s.id=a.service_id AND s.tenant_id=a.tenant_id JOIN public.tenants t ON t.id=a.tenant_id WHERE a.tenant_id=$1 AND a.id=$2',
+        [tenant,apt]);
+      if(!result.rowCount)failure(404,'Cita no encontrada');
+      const a=result.rows[0];
+      if(role==='barber'&&a.barber_user_id!==req.actor.id)failure(403,'Sin permiso');
+      if(a.status!=='completed')failure(409,'Aun no existe comprobante de servicio finalizado');
+      const entries=await db.query(
+        "SELECT * FROM public.transactions WHERE tenant_id=$1 AND reference_id=$2 AND type='income'",[tenant,apt]);
+      if(!entries.rowCount&&Number(a.price_minor)>0)failure(404,'Sin ingreso contabilizado para esta cita');
+      return receiptOf(a,entries.rows[0]||null,a.currency);
     });
     routes.get('/api/v1/tenants/:tenantId/products',async req=>{
       const tenant=parseOrThrow(id,req.params.tenantId);await requireTenant(db,tenant,req.actor.id);
