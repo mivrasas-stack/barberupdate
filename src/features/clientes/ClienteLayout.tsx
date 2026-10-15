@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import {isLiveBackend} from '../../services/liveBackend';
+import {useCustomerLinks} from '../../services/useCustomerLinks';
 import {
   Home,
   LayoutDashboard,
@@ -19,6 +20,8 @@ import {
 
 export const ClienteLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { activeRoute, navigate, state, currentUser } = useApp();
+  const {items:links}=useCustomerLinks(currentUser?.id);
+  const shopName=links.find(x=>x.business_kind==='barbershop')?.name;
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const customerId = currentUser?.id || 'usr-client-1';
@@ -70,13 +73,13 @@ export const ClienteLayout: React.FC<{ children: React.ReactNode }> = ({ childre
           <div className="p-3 mb-4 bg-gradient-to-br from-[#1a1a1a] to-[#141414] rounded-2xl border border-[#2a2a2a] shadow-lg">
             <div className="flex items-center gap-2.5">
               <img
-                src={currentUser?.avatar || 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=100&auto=format&fit=crop&q=80'}
+                src={currentUser?.avatar || '/branding/barbernow-logo.png'}
                 alt={currentUser?.name || 'Cliente'}
                 className="w-10 h-10 rounded-full object-cover border-2 border-[var(--gold-primary)] shrink-0"
               />
               <div className="truncate">
-                <h3 className="text-xs font-bold text-white truncate">{currentUser?.name || 'Camilo Torres'}</h3>
-                <span className="text-[10px] text-neutral-400">Cliente Preferencial</span>
+                <h3 className="text-xs font-bold text-white truncate">{currentUser?.name || 'Cliente'}</h3>
+                <span className="text-[10px] text-neutral-400">Cliente</span>
               </div>
             </div>
 
@@ -119,7 +122,7 @@ export const ClienteLayout: React.FC<{ children: React.ReactNode }> = ({ childre
 
         <div className="pt-3 border-t border-neutral-800 text-[11px] text-neutral-500">
           <span>Barbería vinculada:</span>
-          <div className="font-semibold text-neutral-300 truncate">Barber Club Bogotá</div>
+          <div className="font-semibold text-neutral-300 truncate">{shopName||'Sin barbería vinculada'}</div>
         </div>
       </aside>
 
