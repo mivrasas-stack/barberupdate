@@ -4,7 +4,7 @@ const pathname=window.location.pathname.replace(/\/+$/, '') || '/';
 const publicPages=new Set(['/','/directorio','/profesionales','/register','/register/professional']);
 const legacySystemLink=/^#\/(login|barberia|barbero|clientes|admin|vincular)(\/|$)/.test(window.location.hash);
 if(publicPages.has(pathname) && !legacySystemLink){
-  document.title='BarberParadise';
+  document.title='BarberNow';
   const outfit=document.createElement('link');
   outfit.rel='stylesheet';
   outfit.href='https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap';
