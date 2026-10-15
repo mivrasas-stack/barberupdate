@@ -157,7 +157,11 @@ export async function registerRoutes(app,{config,db,security}) {
         if(!found.rowCount) failure(404,'Reserva no encontrada');
         const old=found.rows[0];
         if(role==='barber'&&old.barber_user_id!==req.actor.id) failure(403,'No autorizado');
-        const transitions={pending:['confirmed','cancelled'],confirmed:['waiting','cancelled','no_show'],waiting:['in_service','cancelled','no_show'],in_service:['completed'],completed:[],cancelled:[],no_show:[]};
+        // Staff can start an arrived client's service directly from a confirmed booking.
+        // A no-show cannot be recorded until 15 minutes after the booked start.
+        const transitions={pending:['confirmed','cancelled'],confirmed:['waiting','in_service','cancelled','no_show'],waiting:['in_service','cancelled','no_show'],in_service:['completed'],completed:[],cancelled:[],no_show:[]};
+        if(x.status==='no_show'&&new Date(old.starts_at).getTime()>Date.now()-15*60*1000)
+          failure(409,'Solo puedes marcar ausencia 15 minutos después de la hora reservada');
         if(!transitions[old.status]?.includes(x.status)) failure(409,'Transicion no permitida');
         return (await tx.query('UPDATE public.appointments SET status=$3,updated_at=now() WHERE tenant_id=$1 AND id=$2 RETURNING *',[tenant,apt,x.status])).rows[0];
       });
