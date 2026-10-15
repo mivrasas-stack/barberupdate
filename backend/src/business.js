@@ -11,6 +11,13 @@ const orderPayload=z.object({
 }).strict();
 const statusPayload=z.object({status:z.enum(['preparing','ready','delivered','cancelled'])}).strict();
 const reviewPayload=z.object({appointmentId:id,rating:z.number().int().min(1).max(5),comment:z.string().max(2000).default('')}).strict();
+const rewardPayload=z.object({
+ title:word(120),description:z.string().max(500).default(''),
+ pointsCost:z.number().int().min(1).max(1000000),
+ isActive:z.boolean().default(true)
+}).strict();
+const rewardPatch=rewardPayload.partial().refine(x=>Object.keys(x).length>0);
+const redeemPayload=z.object({rewardId:id}).strict();
 const cashPayload=z.object({
   closingDate:z.iso.date(),
   openingCashMinor:z.number().int().min(0),
@@ -109,18 +116,97 @@ export async function registerBusinessRoutes(app,{db,security}) {
       const review=await db.transaction(async tx=>{
         const appt=await tx.query("SELECT barber_id FROM public.appointments WHERE tenant_id=$1 AND id=$2 AND customer_user_id=$3 AND status='completed'",[tenant,x.appointmentId,req.actor.id]);
         if(!appt.rowCount) failure(403,'Solo se puede reseñar una cita propia completada');
-        return (await tx.query('INSERT INTO public.reviews(tenant_id,appointment_id,barber_id,customer_user_id,rating,comment) VALUES($1,$2,$3,$4,$5,$6) RETURNING *',[tenant,x.appointmentId,appt.rows[0].barber_id,req.actor.id,x.rating,x.comment])).rows[0];
+        const recorded=(await tx.query('INSERT INTO public.reviews(tenant_id,appointment_id,barber_id,customer_user_id,rating,comment) VALUES($1,$2,$3,$4,$5,$6) RETURNING *',[tenant,x.appointmentId,appt.rows[0].barber_id,req.actor.id,x.rating,x.comment])).rows[0];
+        // Bonus applied once, in the same transaction as the unique appointment review.
+        await tx.query('INSERT INTO public.loyalty_accounts(tenant_id,user_id) VALUES($1,$2) ON CONFLICT DO NOTHING',[tenant,req.actor.id]);
+        await tx.query('INSERT INTO public.loyalty_events(tenant_id,user_id,points_delta,description) VALUES($1,$2,25,$3)',
+          [tenant,req.actor.id,'Reseña de cita '+x.appointmentId]);
+        await tx.query('UPDATE public.loyalty_accounts SET points=points+25,updated_at=now() WHERE tenant_id=$1 AND user_id=$2',[tenant,req.actor.id]);
+        return recorded;
       });
       return reply.code(201).send(review);
     });
     api.get('/api/v1/tenants/:tenantId/reviews',async req=>{
       const tenant=parseOrThrow(id,req.params.tenantId);
       await requireTenant(db,tenant,req.actor.id,['owner','manager']);
-      return (await db.query('SELECT id,tenant_id,barber_id,rating,comment,created_at FROM public.reviews WHERE tenant_id=$1 ORDER BY created_at DESC LIMIT 200',[tenant])).rows;
+      return (await db.query(
+        'SELECT r.id,r.tenant_id,r.appointment_id,r.barber_id,r.customer_user_id,r.rating,r.comment,r.created_at,a.customer_name,a.service_id,a.starts_at FROM public.reviews r JOIN public.appointments a ON a.id=r.appointment_id AND a.tenant_id=r.tenant_id WHERE r.tenant_id=$1 ORDER BY r.created_at DESC LIMIT 200',[tenant])).rows;
     });
     api.get('/api/v1/me/loyalty',async req=>{
       return (await db.query('SELECT tenant_id,points,visits_count,updated_at FROM public.loyalty_accounts WHERE user_id=$1 ORDER BY updated_at DESC LIMIT 200',[req.actor.id])).rows;
     });
+
+    // Customer reviews are read only from their own completed bookings.
+    api.get('/api/v1/me/reviews',async req=>{
+      return (await db.query('SELECT r.* FROM public.reviews r WHERE r.customer_user_id=$1 ORDER BY r.created_at DESC LIMIT 200',[req.actor.id])).rows;
+    });
+    api.get('/api/v1/me/loyalty-events',async req=>{
+      return (await db.query('SELECT id,tenant_id,points_delta,description,created_at FROM public.loyalty_events WHERE user_id=$1 ORDER BY created_at DESC LIMIT 200',[req.actor.id])).rows;
+    });
+    api.get('/api/v1/me/rewards',async req=>{
+      // Catalog of active rewards, with balances kept separate by tenant.
+      return (await db.query("SELECT r.id,r.tenant_id,r.title,r.description,r.points_cost,r.is_active,coalesce(a.points,0)::integer AS available_points FROM public.loyalty_rewards r JOIN public.tenants t ON t.id=r.tenant_id AND t.status='active' LEFT JOIN public.loyalty_accounts a ON a.tenant_id=r.tenant_id AND a.user_id=$1 WHERE r.is_active=true ORDER BY r.tenant_id,r.points_cost LIMIT 300",[req.actor.id])).rows;
+    });
+    api.get('/api/v1/me/redemptions',async req=>{
+      return (await db.query('SELECT d.id,d.tenant_id,d.reward_id,d.points_cost,d.status,d.created_at,r.title FROM public.loyalty_redemptions d JOIN public.loyalty_rewards r ON r.id=d.reward_id AND r.tenant_id=d.tenant_id WHERE d.user_id=$1 ORDER BY d.created_at DESC LIMIT 100',[req.actor.id])).rows;
+    });
+    api.post('/api/v1/tenants/:tenantId/redeem',async(req,reply)=>{
+      const tenant=parseOrThrow(id,req.params.tenantId);
+      const x=parseOrThrow(redeemPayload,req.body);
+      const key=req.headers['idempotency-key'];
+      if(!safeKey(key)) failure(400,'Idempotency-Key requerido');
+      const response=await db.transaction(async tx=>{
+        await tx.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[tenant+':'+req.actor.id+':redeem:'+key]);
+        // Deduplicate retrying client requests to prevent double-charge.
+        const past=await tx.query('SELECT d.* FROM public.loyalty_redemptions d WHERE d.tenant_id=$1 AND d.user_id=$2 AND d.idempotency_key=$3',[tenant,req.actor.id,key]);
+        if(past.rowCount){
+          if(past.rows[0].reward_id!==x.rewardId) failure(409,'La clave de reintento ya se usó para otra recompensa');
+          return {row:past.rows[0],repeated:true};
+        }
+        const reward=await tx.query("SELECT r.id,r.points_cost FROM public.loyalty_rewards r JOIN public.tenants t ON t.id=r.tenant_id AND t.status='active' WHERE r.tenant_id=$1 AND r.id=$2 AND r.is_active=true",[tenant,x.rewardId]);
+        if(!reward.rowCount) failure(404,'Recompensa no disponible');
+        const cost=reward.rows[0].points_cost;
+        const balance=await tx.query('UPDATE public.loyalty_accounts SET points=points-$3,updated_at=now() WHERE tenant_id=$1 AND user_id=$2 AND points >=$3 RETURNING points',[tenant,req.actor.id,cost]);
+        if(!balance.rowCount) failure(409,'Puntos insuficientes en esta barbería');
+        const row=(await tx.query('INSERT INTO public.loyalty_redemptions(tenant_id,user_id,reward_id,points_cost,idempotency_key) VALUES($1,$2,$3,$4,$5) RETURNING *',[tenant,req.actor.id,x.rewardId,cost,key])).rows[0];
+        await tx.query('INSERT INTO public.loyalty_events(tenant_id,user_id,points_delta,description) VALUES($1,$2,$3,$4)',[tenant,req.actor.id,-cost,'Canje de recompensa '+x.rewardId]);
+        return {row,repeated:false};
+      });
+      return reply.code(response.repeated?200:201).send(response.row);
+    });
+    api.get('/api/v1/tenants/:tenantId/rewards',async req=>{
+      const tenant=parseOrThrow(id,req.params.tenantId);
+      await requireTenant(db,tenant,req.actor.id,['owner','manager']);
+      return (await db.query('SELECT * FROM public.loyalty_rewards WHERE tenant_id=$1 ORDER BY created_at DESC LIMIT 200',[tenant])).rows;
+    });
+    api.post('/api/v1/tenants/:tenantId/rewards',async(req,reply)=>{
+      const tenant=parseOrThrow(id,req.params.tenantId);
+      await requireTenant(db,tenant,req.actor.id,['owner','manager']);
+      const x=parseOrThrow(rewardPayload,req.body);
+      const row=await db.query('INSERT INTO public.loyalty_rewards(tenant_id,title,description,points_cost,is_active) VALUES($1,$2,$3,$4,$5) RETURNING *',[tenant,x.title,x.description,x.pointsCost,x.isActive]);
+      return reply.code(201).send(row.rows[0]);
+    });
+    api.patch('/api/v1/tenants/:tenantId/rewards/:rewardId',async req=>{
+      const tenant=parseOrThrow(id,req.params.tenantId),rewardId=parseOrThrow(id,req.params.rewardId);
+      await requireTenant(db,tenant,req.actor.id,['owner','manager']);
+      const x=parseOrThrow(rewardPatch,req.body);
+      const changed=await db.query('UPDATE public.loyalty_rewards SET title=coalesce($3,title),description=coalesce($4,description),points_cost=coalesce($5,points_cost),is_active=coalesce($6,is_active),updated_at=now() WHERE tenant_id=$1 AND id=$2 RETURNING *',[tenant,rewardId,x.title??null,x.description??null,x.pointsCost??null,x.isActive??null]);
+      if(!changed.rowCount) failure(404,'Recompensa no encontrada');
+      return changed.rows[0];
+    });
+    api.get('/api/v1/tenants/:tenantId/redemptions',async req=>{
+      const tenant=parseOrThrow(id,req.params.tenantId);
+      await requireTenant(db,tenant,req.actor.id,['owner','manager']);
+      return (await db.query('SELECT d.id,d.user_id,d.points_cost,d.status,d.created_at,r.title FROM public.loyalty_redemptions d JOIN public.loyalty_rewards r ON r.tenant_id=d.tenant_id AND r.id=d.reward_id WHERE d.tenant_id=$1 ORDER BY d.created_at DESC LIMIT 200',[tenant])).rows;
+    });
+    api.patch('/api/v1/tenants/:tenantId/redemptions/:redemptionId/fulfill',async req=>{
+      const tenant=parseOrThrow(id,req.params.tenantId),redemptionId=parseOrThrow(id,req.params.redemptionId);
+      await requireTenant(db,tenant,req.actor.id,['owner','manager']);
+      const changed=await db.query("UPDATE public.loyalty_redemptions SET status='fulfilled',fulfilled_at=now() WHERE tenant_id=$1 AND id=$2 AND status='pending' RETURNING *",[tenant,redemptionId]);
+      if(!changed.rowCount) failure(409,'Este canje no existe o ya fue gestionado');
+      return changed.rows[0];
+    });
+
     api.post('/api/v1/tenants/:tenantId/cash-closings',async(req,reply)=>{
       const tenant=parseOrThrow(id,req.params.tenantId);
       await requireTenant(db,tenant,req.actor.id,['owner','manager']);
