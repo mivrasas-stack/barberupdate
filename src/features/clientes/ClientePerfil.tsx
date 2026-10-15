@@ -58,7 +58,7 @@ export const ClientePerfil:React.FC=()=>{
   setBusy(true);
   try{
    if(isLiveBackend){
-    await saveClientAuthProfile({name:fullName,email:mail,phone:contact,avatar:currentUser?.avatar||'',preferences});
+    await saveClientAuthProfile({name:fullName,email:mail,phone:contact,avatar:currentUser?.avatar||'',preferences},originalEmail);
    }
    updateCurrentUserProfile({name:fullName,email:originalEmail!==mail?originalEmail:mail,phone:contact});
    if(originalEmail!==mail){
