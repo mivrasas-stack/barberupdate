@@ -350,6 +350,29 @@ class Store {
     return true;
   }
 
+  public editProduct(id:string,changes:Partial<Pick<Product,'name'|'sku'|'price'|'description'|'photo'|'category'|'cost'|'minStock'>>):boolean{
+    const product=this.state.products.find(p=>p.id===id&&p.isActive);
+    if(!product)return false;
+    Object.assign(product,changes);
+    this.persist();
+    return true;
+  }
+  public archiveProduct(id:string):boolean{
+    const product=this.state.products.find(p=>p.id===id&&p.isActive);
+    if(!product)return false;
+    product.isActive=false;
+    product.isVisibleInWaitingRoom=false;
+    this.persist();
+    return true;
+  }
+  public restoreProduct(id:string):boolean{
+    const product=this.state.products.find(p=>p.id===id&&!p.isActive);
+    if(!product)return false;
+    product.isActive=true;
+    this.persist();
+    return true;
+  }
+
   public createProduct(prod: Omit<Product, 'id' | 'createdAt'>): Product {
     const newProd: Product = {
       ...prod,
