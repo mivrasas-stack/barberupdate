@@ -236,6 +236,13 @@ class Store {
     return { success: true, appointment: newApt };
   }
 
+  public setAppointmentCancellationReason(id:string,reason:string):void{
+    const appointment=this.state.appointments.find(a=>a.id===id);
+    if(!appointment||!['cancelled','no_show'].includes(appointment.status))return;
+    appointment.cancellationReason=reason.trim().slice(0,250);
+    this.persist();
+  }
+
   public updateAppointmentStatus(
     id: string,
     newStatus: AppointmentStatus,
@@ -253,7 +260,7 @@ class Store {
 
       // Avoid duplicate revenue: check if transaction already registered
       const existingTxn = this.state.transactions.find(t => t.referenceId === apt.id);
-      if (!existingTxn) {
+      if (!existingTxn && apt.finalPrice>0) {
         const newTxn: Transaction = {
           id: `txn-${Date.now()}`,
           businessId: apt.businessId,
