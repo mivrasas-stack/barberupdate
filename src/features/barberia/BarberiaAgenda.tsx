@@ -203,7 +203,8 @@ export const BarberiaAgenda: React.FC = () => {
         const method=paymentMethodForComplete;
         if(method==='split'){addToast('Los cobros divididos se deben gestionar desde Caja para conservar su desglose.','error');return;}
         const saved=await finishAndPayAppointment(shopId,completingApt.id,method);
-        await refreshLiveData();
+        // A UI refresh is not part of the payment transaction.
+        await refreshLiveData().catch(()=>addToast('Cobro guardado. Actualiza la agenda para verlo.','info'));
         setPaymentReceipt(saved);
       }else{
         barberStore.updateAppointmentStatus(completingApt.id,'completed',paymentMethodForComplete);
