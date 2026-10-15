@@ -67,7 +67,7 @@ export const Header: React.FC = () => {
           onClick={() => {
             if (activeRole === 'superadmin') navigate('/admin/inicio');
             else if (activeRole === 'owner') navigate(`/barberia/${currentShop?.slug || 'barber-club'}/inicio`);
-            else if (activeRole === 'barber_independent' || activeRole === 'barber_employee') navigate(`/barbero/${currentBarber?.slug || 'alex-fade'}/inicio`);
+            else if (activeRole === 'barber_employee') navigate(`/barbero/${currentBarber?.slug || 'alex-fade'}/inicio`);
             else navigate('/clientes/inicio');
           }}
           aria-label="BarberNow — inicio" className="flex items-center gap-2 text-left group cursor-pointer transition-transform duration-200 active:scale-95"
