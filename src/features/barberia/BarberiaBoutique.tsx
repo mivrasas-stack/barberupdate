@@ -5,7 +5,7 @@ import { ImageUploader } from './ImageUploader';
 import { formatCurrency } from '../../utils/formatters';
 import {CopAmountInput} from '../../components/common/CopAmountInput';
 import { Product, ProductCategory } from '../../types';
-import {isLiveBackend, addProduct, adjustStock, setProductVisibility, refreshLiveData, backendRequest} from '../../services/liveBackend';
+import {isLiveBackend, addProduct, editProduct, removeProduct, restoreProduct, adjustStock, setProductVisibility, refreshLiveData, backendRequest} from '../../services/liveBackend';
 import {
   ShoppingBag,
   Sparkles,
@@ -20,6 +20,9 @@ import {
   PackagePlus,
   PackageMinus,
   CheckCircle2,
+  Pencil,
+  Trash2,
+  RotateCcw,
 } from 'lucide-react';
 
 export const BarberiaBoutique: React.FC = () => {
@@ -29,6 +32,9 @@ export const BarberiaBoutique: React.FC = () => {
 
   // Modals
   const [isNewProductModalOpen, setIsNewProductModalOpen] = useState(false);
+  const [editingProduct,setEditingProduct]=useState<Product|null>(null);
+  const [showArchived,setShowArchived]=useState(false);
+  const [processingId,setProcessingId]=useState<string|null>(null);
   const [adjustingProduct, setAdjustingProduct] = useState<Product | null>(null);
   const [adjustQuantity, setAdjustQuantity] = useState<number|null>(null);
   const [adjustReason, setAdjustReason] = useState('Reposición de proveedor');
@@ -49,12 +55,44 @@ export const BarberiaBoutique: React.FC = () => {
     const matchesShop = p.businessId === shopId;
     const matchesCategory = p.category === activeCategory;
     const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()) || p.sku.toLowerCase().includes(search.toLowerCase());
-    return matchesShop && matchesCategory && matchesSearch;
+    return matchesShop && (showArchived?!p.isActive:p.isActive) && matchesCategory && matchesSearch;
   });
 
   const lowStockCount = state.products.filter(
-    p => p.businessId === shopId && p.stock <= p.minStock
+    p => p.businessId === shopId && p.isActive && p.stock <= p.minStock
   ).length;
+
+  const resetProductForm=()=>{
+    setEditingProduct(null);setNewProdName('');setNewProdDesc('');setNewProdPhoto('');
+    setNewProdPrice(null);setNewProdCost(null);setNewProdStock(null);setNewProdMinStock(null);setNewProdSku('');
+  };
+  const openCreate=()=>{resetProductForm();setIsNewProductModalOpen(true);};
+  const openEdit=(product:Product)=>{
+    setEditingProduct(product);setActiveCategory(product.category);
+    setNewProdName(product.name);setNewProdDesc(product.description);setNewProdPhoto(product.photo);
+    setNewProdPrice(product.price);setNewProdCost(product.cost);setNewProdStock(product.stock);
+    setNewProdMinStock(product.minStock);setNewProdSku(product.sku);
+    setIsNewProductModalOpen(true);
+  };
+  const archive=async(product:Product)=>{
+    if(!window.confirm('¿Eliminar «'+product.name+'» del catálogo? Se conservarán las ventas y los movimientos de inventario.'))return;
+    setProcessingId(product.id);
+    try{
+      if(isLiveBackend){await removeProduct(shopId,product.id);await refreshLiveData();}
+      else barberStore.archiveProduct(product.id);
+      addToast('Producto eliminado del catálogo. Puedes restaurarlo desde Archivados.','success');
+    }catch(err){addToast(err instanceof Error?err.message:'No se pudo eliminar el producto','error');}
+    finally{setProcessingId(null);}
+  };
+  const restore=async(product:Product)=>{
+    setProcessingId(product.id);
+    try{
+      if(isLiveBackend){await restoreProduct(shopId,product.id);await refreshLiveData();}
+      else barberStore.restoreProduct(product.id);
+      addToast('Producto restaurado. Revisa la visibilidad de sala.','success');
+    }catch(err){addToast(err instanceof Error?err.message:'No se pudo restaurar el producto','error');}
+    finally{setProcessingId(null);}
+  };
 
   const handleCreateProduct = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,14 +104,28 @@ export const BarberiaBoutique: React.FC = () => {
     }
     if(isLiveBackend){
       try{
-        await addProduct(shopId,{name:newProdName,sku:newProdSku,price:newProdPrice,stock:newProdStock??0,
-          description:newProdDesc,photo:newProdPhoto,category:activeCategory,cost:newProdCost??0,
-          minStock:newProdMinStock??0,isVisibleInWaitingRoom:true});
+        if(editingProduct){
+          await editProduct(shopId,editingProduct.id,{name:newProdName,sku:newProdSku,price:newProdPrice,
+           description:newProdDesc,photo:newProdPhoto,category:activeCategory,cost:newProdCost??0,minStock:newProdMinStock??0});
+        }else{
+          await addProduct(shopId,{name:newProdName,sku:newProdSku,price:newProdPrice,stock:newProdStock??0,
+           description:newProdDesc,photo:newProdPhoto,category:activeCategory,cost:newProdCost??0,
+           minStock:newProdMinStock??0,isVisibleInWaitingRoom:true});
+        }
         await refreshLiveData();
-        addToast('Producto creado en el backend', 'success');
+        addToast(editingProduct?'Producto actualizado en el backend':'Producto creado en el backend','success');
         setIsNewProductModalOpen(false);
-        setNewProdName('');setNewProdDesc('');setNewProdPrice(null);setNewProdCost(null);setNewProdStock(null);setNewProdMinStock(null);
+        resetProductForm();
       }catch(e){addToast(e instanceof Error?e.message:'No se pudo crear el producto','error');}
+      return;
+    }
+    if(editingProduct){
+      barberStore.editProduct(editingProduct.id,{
+        name:newProdName,sku:newProdSku,price:newProdPrice,description:newProdDesc,
+        photo:newProdPhoto,category:activeCategory,cost:newProdCost??0,minStock:newProdMinStock??0
+      });
+      addToast('Producto actualizado','success');
+      setIsNewProductModalOpen(false);resetProductForm();
       return;
     }
     barberStore.createProduct({
@@ -92,9 +144,7 @@ export const BarberiaBoutique: React.FC = () => {
     });
     addToast(`Producto ${newProdName} creado exitosamente`, 'success');
     setIsNewProductModalOpen(false);
-    setNewProdName('');
-    setNewProdDesc('');
-    setNewProdPrice(null);setNewProdCost(null);setNewProdStock(null);setNewProdMinStock(null);
+    resetProductForm();
   };
 
   const updateProductPhoto=async(id:string,url:string)=>{
@@ -164,7 +214,7 @@ export const BarberiaBoutique: React.FC = () => {
           )}
 
           <button
-            onClick={() => setIsNewProductModalOpen(true)}
+            onClick={openCreate}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--gold-primary)] text-black text-xs font-bold hover:bg-[var(--gold-hover)] transition-all shadow-md"
           >
             <Plus className="w-4 h-4" />
@@ -242,6 +292,13 @@ export const BarberiaBoutique: React.FC = () => {
         />
       </div>
 
+      <div className="flex items-center gap-2 text-xs">
+        <button type="button" aria-pressed={!showArchived} onClick={()=>setShowArchived(false)}
+          className={`px-3 py-2 rounded-xl ${!showArchived?'bg-[var(--gold-primary)] text-black font-bold':'bg-[#1e1e1e] text-neutral-300 border border-[#303030]'}`}>Productos activos</button>
+        <button type="button" aria-pressed={showArchived} onClick={()=>setShowArchived(true)}
+          className={`px-3 py-2 rounded-xl ${showArchived?'bg-[var(--gold-primary)] text-black font-bold':'bg-[#1e1e1e] text-neutral-300 border border-[#303030]'}`}>Archivados</button>
+      </div>
+
       {/* Products Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {products.map(prod => {
@@ -281,7 +338,7 @@ export const BarberiaBoutique: React.FC = () => {
                   </div>
                 </div>
 
-                {isLiveBackend && <div className="mb-3"><ImageUploader tenant={shopId} category="products" label="Reemplazar imagen" onUploaded={url=>void updateProductPhoto(prod.id,url)}/></div>}
+                {isLiveBackend && prod.isActive && <div className="mb-3"><ImageUploader tenant={shopId} category="products" label="Reemplazar imagen" onUploaded={url=>void updateProductPhoto(prod.id,url)}/></div>}
                 <div className="p-3 bg-[#181818] rounded-xl border border-neutral-800 space-y-1.5 text-xs">
                   <div className="flex items-center justify-between">
                     <span className="text-neutral-400">Precio Venta:</span>
@@ -310,8 +367,23 @@ export const BarberiaBoutique: React.FC = () => {
                 </div>
               </div>
 
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                {prod.isActive?<>
+                  <button type="button" disabled={processingId===prod.id} onClick={()=>openEdit(prod)}
+                    className="flex items-center justify-center gap-1.5 rounded-lg border border-[var(--gold-primary)]/40 px-3 py-2 text-xs font-bold text-[var(--gold-primary)] disabled:opacity-50">
+                    <Pencil className="w-3.5 h-3.5"/> Editar
+                  </button>
+                  <button type="button" disabled={processingId===prod.id} onClick={()=>void archive(prod)}
+                    className="flex items-center justify-center gap-1.5 rounded-lg border border-red-500/30 px-3 py-2 text-xs font-bold text-red-300 disabled:opacity-50">
+                    <Trash2 className="w-3.5 h-3.5"/> Eliminar
+                  </button>
+                </>:<button type="button" disabled={processingId===prod.id} onClick={()=>void restore(prod)}
+                  className="col-span-2 flex items-center justify-center gap-1.5 rounded-lg border border-emerald-500/30 px-3 py-2 text-xs font-bold text-emerald-300 disabled:opacity-50">
+                  <RotateCcw className="w-3.5 h-3.5"/> Restaurar
+                </button>}
+              </div>
               {/* Adjust Stock Button */}
-              <div className="mt-4 pt-3 border-t border-neutral-800 flex items-center justify-between">
+              {prod.isActive && <div className="mt-4 pt-3 border-t border-neutral-800 flex items-center justify-between">
                 <button
                   onClick={() => {
                     setAdjustingProduct(prod);
@@ -321,7 +393,7 @@ export const BarberiaBoutique: React.FC = () => {
                 >
                   Ajustar Inventario (+ / -)
                 </button>
-              </div>
+              </div>}
             </div>
           );
         })}
@@ -395,16 +467,16 @@ export const BarberiaBoutique: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div className="relative w-full max-w-lg bg-[#141414] border border-[#262626] rounded-2xl shadow-2xl p-6">
             <div className="flex items-center justify-between pb-3 border-b border-[#262626]">
-              <h3 className="text-base font-bold text-white">Crear Producto para Boutique</h3>
+              <h3 className="text-base font-bold text-white">{editingProduct?'Editar Producto':'Crear Producto para Boutique'}</h3>
               <button
-                onClick={() => setIsNewProductModalOpen(false)}
+                onClick={() => {setIsNewProductModalOpen(false);resetProductForm();}}
                 className="p-1 text-neutral-400 hover:text-white"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateProduct} className="py-4 space-y-3 text-xs">
+            <form onSubmit={handleCreateProduct} className="py-4 space-y-3 text-xs max-h-[75vh] overflow-y-auto pr-1">
               {isLiveBackend && <ImageUploader tenant={shopId} category="products" onUploaded={setNewProdPhoto} label="Subir imagen del producto"/>}
               {newProdPhoto && <img src={newProdPhoto} onError={e=>{if(!e.currentTarget.src.endsWith('/images/placeholder.svg'))e.currentTarget.src='/images/placeholder.svg';}} alt="Vista previa del producto" className="h-24 object-contain"/>}
               <div>
@@ -445,9 +517,10 @@ export const BarberiaBoutique: React.FC = () => {
 
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="text-neutral-400 block mb-1">Stock Inicial</label>
+                  <label className="text-neutral-400 block mb-1">{editingProduct?'Stock (ajustar por movimiento)':'Stock Inicial'}</label>
                   <input
                     type="number"
+                    disabled={!!editingProduct}
                     value={newProdStock??''}
                     placeholder="0"
                     onChange={e => setNewProdStock(e.target.value===''?null:Number(e.target.value))}
@@ -487,7 +560,7 @@ export const BarberiaBoutique: React.FC = () => {
                   type="submit"
                   className="px-4 py-2 rounded-xl bg-[var(--gold-primary)] text-black font-bold hover:bg-[var(--gold-hover)]"
                 >
-                  Guardar Producto
+                  {editingProduct?'Guardar Cambios':'Guardar Producto'}
                 </button>
               </div>
             </form>
