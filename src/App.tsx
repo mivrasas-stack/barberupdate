@@ -71,7 +71,7 @@ const AppContent: React.FC = () => {
   if(isLiveBackend&&activeRoute.startsWith('/admin')&&currentUser?.role!=='superadmin')return <LoginView />;
   if(isLiveBackend&&activeRoute.startsWith('/barberia/')&&currentUser?.role!=='owner')return <LoginView />;
   if(isLiveBackend&&activeRoute.startsWith('/barbero/')&&
-    !['barber_employee','barber_independent','owner'].includes(currentUser?.role||''))return <LoginView />;
+    !['barber_employee','owner'].includes(currentUser?.role||''))return <LoginView />;
 
   // --- Area 1: Administrador Global ---
   if (activeRoute.startsWith('/admin')) {
@@ -169,7 +169,7 @@ const AppFrame: React.FC = () => {
     (activeRoute.startsWith('/admin') && currentUser.role !== 'superadmin') ||
     (activeRoute.startsWith('/barberia/') && currentUser.role !== 'owner') ||
     (activeRoute.startsWith('/barbero/') &&
-      !['barber_employee', 'barber_independent', 'owner'].includes(currentUser.role))
+      !['barber_employee', 'owner'].includes(currentUser.role))
   ));
   const isLogin = window.location.pathname.startsWith('/unirse-barbero/') || window.location.pathname.startsWith('/vincular/') || activeRoute === '/login'
     || (!currentUser && !activeRoute.startsWith('/vincular')) || deniedRealRoute;
