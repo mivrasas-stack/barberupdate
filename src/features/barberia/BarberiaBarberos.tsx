@@ -4,6 +4,8 @@ import { Barber } from '../../types';
 import { barberStore } from '../../services/store';
 import { ImageUploader } from './ImageUploader';
 import { BarberInvites } from './BarberInvites';
+import {BarberWorkTerms} from './BarberWorkTerms';
+import {formatCurrency} from '../../utils/formatters';
 import {backendRequest,isLiveBackend,refreshLiveData} from '../../services/liveBackend';
 import { Scissors, Plus, Star, Phone, Mail, Clock, Calendar, Image, X, Check, Trash2 } from 'lucide-react';
 
@@ -12,6 +14,7 @@ export const BarberiaBarberos: React.FC = () => {
   const [selectedBarber, setSelectedBarber] = useState<Barber | null>(null);
   const [newPhotoUrl, setNewPhotoUrl] = useState('');
   const [showInvites, setShowInvites] = useState(false);
+  const [termsBarber,setTermsBarber]=useState<Barber|null>(null);
 
   const shopId = currentShop?.id || 'shop-1';
   const barbers = state.barbers.filter(b => b.businessId === shopId);
@@ -110,9 +113,14 @@ export const BarberiaBarberos: React.FC = () => {
                 {isLiveBackend && <div className="mb-3"><ImageUploader tenant={shopId} category="barber" label="Actualizar foto de perfil" onUploaded={url=>void updatePortrait(barber.id,url)}/></div>}
                 <div className="p-3 bg-[#181818] rounded-xl border border-neutral-800 space-y-2 text-xs">
                   <div className="flex items-center justify-between text-neutral-300">
-                    <span className="text-neutral-500">Comisión por Servicio:</span>
-                    <span className="font-mono font-bold text-emerald-400">{(barber.commissionRate * 100).toFixed(0)}%</span>
+                    <span className="text-neutral-500">Modalidad de trabajo:</span>
+                    <span className="font-mono font-bold text-emerald-400">{barber.contractType==='chair_rental'?'Arriendo de silla':barber.contractType==='hybrid'?'Híbrido':'Comisión '+(barber.commissionRate*100).toFixed(0)+'%'}</span>
                   </div>
+                  {(barber.contractType==='chair_rental'||barber.contractType==='hybrid')&&
+                   <div className="flex items-center justify-between text-neutral-300">
+                    <span className="text-neutral-500">Arriendo de silla:</span>
+                    <span className="font-mono text-amber-400">{formatCurrency(barber.chairRentalFee||0)} / {barber.chairRentalPeriod||'mes'}</span>
+                   </div>}
                   <div className="flex items-center justify-between text-neutral-300">
                     <span className="text-neutral-500">Horario Laboral:</span>
                     <span className="font-mono text-white">{barber.workHours.start} - {barber.workHours.end}</span>
@@ -145,6 +153,10 @@ export const BarberiaBarberos: React.FC = () => {
 
               <div className="mt-4 pt-3 border-t border-neutral-800 flex items-center justify-between">
                 <span className="text-[11px] font-mono text-neutral-500">Código: {barber.publicCode}</span>
+                {isLiveBackend&&<button type="button" onClick={()=>setTermsBarber(barber)}
+                  className="px-3 py-1.5 rounded-lg bg-amber-400 text-black font-semibold text-xs">
+                  Condiciones de trabajo
+                </button>}
                 <button
                   onClick={() => setSelectedBarber(barber)}
                   className="px-3.5 py-1.5 rounded-lg bg-[#202020] hover:bg-[var(--gold-primary)] hover:text-black text-xs font-semibold text-white transition-colors flex items-center gap-1.5"
@@ -158,6 +170,8 @@ export const BarberiaBarberos: React.FC = () => {
         })}
       </div>
 
+      {termsBarber&&isLiveBackend&&<BarberWorkTerms tenant={shopId} barber={termsBarber}
+        onClose={()=>setTermsBarber(null)} onSaved={()=>setTermsBarber(null)} addToast={addToast}/>}
       {/* Portfolio Manager Modal (Max 10 photos strictly enforced) */}
       {selectedBarber && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
