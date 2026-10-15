@@ -61,8 +61,19 @@ export async function signIn(email:string,password:string){
   receiveToken(await authCall('token?grant_type=password',{email,password}));
 }
 // Login-only actions: never expose privileged Supabase credentials to the browser.
-export async function registerWithEmail(email:string,password:string){
-  await authCall('signup',{email,password});
+export async function registerWithEmail(email:string,password:string,profile?:{fullName:string;phone:string}){
+  await authCall('signup',{email,password,...(profile?{data:{full_name:profile.fullName,phone:profile.phone}}:{})});
+}
+// El profesional conserva sus datos de contacto en Supabase Auth, no en la barbería.
+export async function updateAuthProfile(profile:{fullName:string;phone:string}){
+  const jwt=await token();
+  const response=await fetch(supabaseUrl+'/auth/v1/user',{
+    method:'PUT',
+    headers:{apikey:supabasePublicKey,Authorization:'Bearer '+jwt,'Content-Type':'application/json'},
+    body:JSON.stringify({data:{full_name:profile.fullName,phone:profile.phone}})
+  });
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok)throw Error(data.msg||data.error_description||data.message||data.error||'No se pudo guardar el perfil de contacto.');
 }
 export async function requestPasswordReset(email:string){
   await authCall('recover',{email});
