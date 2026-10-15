@@ -143,7 +143,7 @@ export const ClienteReservas: React.FC = () => {
           }
         }
         await refreshLiveData();
-        addToast('¡Reserva registrada en el backend!','success');
+        addToast('¡Cita confirmada! Tu barbero ya tiene la reserva en su agenda.','success');
         setStep(6);
       }catch(error){addToast(error instanceof Error?error.message:'No se pudo reservar','error');}
       return;

@@ -246,3 +246,49 @@ test('Barbero registra ausencia con motivo y conserva el historial de la cita',a
  await expect(row).toContainText('no_show');
  await expect(row).toContainText('Cliente no asistió');
 });
+
+
+test('Agenda del dueño permite iniciar directo incluso citas antiguas pendientes; sin confirmar ni registrar llegada',async({page})=>{
+ await page.clock.install({time:new Date('2026-10-15T15:00:00Z')});
+ await page.goto('/login');
+ await page.getByLabel('Correo electrónico').fill('contacto@barberclub.co');
+ await page.getByRole('button',{name:/iniciar sesión/i}).click();
+ await page.evaluate(()=>{location.hash='#/barberia/shop-1/agenda';});
+ await expect(page.getByRole('heading',{name:/Agenda Global/i})).toBeVisible();
+ await page.getByRole('button',{name:'Lista',exact:true}).click();
+ const pending=page.getByRole('row').filter({hasText:'Esteban Cárdenas'});
+ await expect(pending).toContainText('pending');
+ await pending.getByRole('button',{name:'Ver detalle'}).click();
+ const detail=page.getByRole('dialog',{name:'Detalle de la cita'});
+ await expect(detail.getByRole('button',{name:'Iniciar corte'})).toBeVisible();
+ await expect(detail.getByRole('button',{name:'Confirmar cita'})).toHaveCount(0);
+ await expect(detail.getByRole('button',{name:'Registrar llegada del cliente'})).toHaveCount(0);
+ await detail.getByRole('button',{name:'Iniciar corte'}).click();
+ await expect(detail).toHaveCount(0);
+ await expect(pending).toContainText('in_service');
+});
+
+test('BarberNow muestra confirmación de cancelación personalizada sin alertas localhost',async({page})=>{
+ await page.clock.install({time:new Date('2026-10-15T15:00:00Z')});
+ await page.goto('/login');
+ await page.getByLabel('Correo electrónico').fill('contacto@barberclub.co');
+ await page.getByRole('button',{name:/iniciar sesión/i}).click();
+ await page.evaluate(()=>{location.hash='#/barberia/shop-1/agenda';});
+ await expect(page.getByRole('heading',{name:/Agenda Global/i})).toBeVisible();
+ await page.getByRole('button',{name:'Lista',exact:true}).click();
+ const row=page.getByRole('row').filter({hasText:'Mauricio Gómez'});
+ await row.getByRole('button',{name:'Ver detalle'}).click();
+ const detail=page.getByRole('dialog',{name:'Detalle de la cita'});
+ await detail.getByRole('button',{name:'Cancelar cita y liberar horario'}).click();
+ await expect(detail).toHaveCount(0);
+ const custom=page.getByRole('dialog',{name:'Cancelar cita'});
+ await expect(custom).toBeVisible();
+ await expect(custom.getByLabel('Motivo')).toHaveValue('Cancelada a solicitud del cliente');
+ await custom.getByLabel('Motivo').selectOption('Otro motivo');
+ await custom.getByLabel('Escribe el motivo').fill('Cliente informó que no podrá venir');
+ await custom.getByRole('button',{name:'Confirmar cancelación'}).click();
+ await expect(custom).toHaveCount(0);
+ await expect(row).toContainText('cancelled');
+ await row.getByRole('button',{name:'Ver detalle'}).click();
+ await expect(page.getByRole('dialog',{name:'Detalle de la cita'})).toContainText('Cliente informó que no podrá venir');
+});
