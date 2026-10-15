@@ -50,7 +50,7 @@ export const PublicJoinView:React.FC=()=>{
  };
  return <main className="min-h-screen bg-[#090909] px-4 py-10 text-white">
   <div className="mx-auto max-w-xl">
-   <a href="/" className="text-[var(--gold-primary)] font-bold text-xs">← Barber Paradise</a>
+   <a href="/" className="text-[var(--gold-primary)] font-bold text-xs">← BarberNow</a>
    <div className="mt-7 border border-[#303030] bg-[#151515] rounded-3xl p-6 sm:p-9 shadow-2xl">
     <div className="mx-auto w-14 h-14 bg-[var(--gold-primary)] rounded-2xl text-black flex items-center justify-center mb-5"><Scissors className="w-7 h-7"/></div>
     <div className="text-center">
