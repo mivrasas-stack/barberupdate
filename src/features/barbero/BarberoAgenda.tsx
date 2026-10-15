@@ -167,7 +167,8 @@ export const BarberoAgenda: React.FC = () => {
       let saved:AppointmentPaymentReceipt;
       if(isLiveBackend){
         saved=await finishAndPayAppointment(barber.businessId,payTarget.id,paymentMethod,paymentReference.trim());
-        await refreshLiveData();
+        // The payment already committed; a refresh failure must not hide the receipt.
+        await refreshLiveData().catch(()=>addToast('Cobro guardado. Actualiza la agenda para ver el nuevo estado.','info'));
       }else{
         barberStore.updateAppointmentStatus(payTarget.id,'completed',paymentMethod);
         const txn=barberStore.getState().transactions.find(t=>t.referenceId===payTarget.id&&t.type==='income');
