@@ -3,11 +3,59 @@ import { useApp } from '../../context/AppContext';
 import { Palette, ChevronDown, LogOut, User } from 'lucide-react';
 import { CurrencyType, UserRole } from '../../types';
 
+const COLOMBIA_TIME_ZONE = 'America/Bogota';
+
+/** Actualización local sin peticiones de red: la fecha y la hora siempre corresponden a Colombia. */
+const ColombiaClock: React.FC = () => {
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const update = () => setNow(new Date());
+    const interval = window.setInterval(update, 1000);
+    document.addEventListener('visibilitychange', update);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', update);
+    };
+  }, []);
+
+  const dateLabel = new Intl.DateTimeFormat('es-CO', {
+    timeZone: COLOMBIA_TIME_ZONE, weekday: 'short', day: 'numeric', month: 'short', year: 'numeric'
+  }).format(now);
+  const shortDate = new Intl.DateTimeFormat('es-CO', {
+    timeZone: COLOMBIA_TIME_ZONE, day: 'numeric', month: 'short'
+  }).format(now);
+  const timeLabel = new Intl.DateTimeFormat('es-CO', {
+    timeZone: COLOMBIA_TIME_ZONE, hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true
+  }).format(now);
+  const shortTime = new Intl.DateTimeFormat('es-CO', {
+    timeZone: COLOMBIA_TIME_ZONE, hour: 'numeric', minute: '2-digit', hour12: true
+  }).format(now);
+
+  return (
+    <div
+      data-testid="barbernow-header-clock"
+      role="timer"
+      aria-label={`Fecha y hora de Colombia: ${dateLabel}, ${timeLabel}`}
+      title="Fecha y hora de Colombia (Bogotá, UTC−5)"
+      className="flex h-10 shrink-0 items-center gap-1.5 sm:gap-2 rounded-full border border-[#8b6b27]/70 bg-gradient-to-b from-[#211b11] to-[#120f0c] px-2 sm:px-3 shadow-[0_0_18px_rgba(210,158,42,0.14)]"
+    >
+      <span aria-hidden="true" className="text-lg leading-none">💈</span>
+      <span aria-hidden="true" className="rounded-md border border-[#ad852e]/50 bg-[#b28a29]/20 px-1.5 py-1 font-mono text-[9px] font-bold text-[#ebc864]">CO</span>
+      <span className="flex min-w-0 flex-col leading-[1.12] tabular-nums">
+        <time dateTime={now.toISOString()} className="hidden sm:block whitespace-nowrap text-[10px] font-medium text-[#d2b77d]">{dateLabel}</time>
+        <time dateTime={now.toISOString()} className="hidden sm:block whitespace-nowrap text-[12px] font-extrabold text-white">{timeLabel}</time>
+        <time dateTime={now.toISOString()} className="sm:hidden whitespace-nowrap text-[10px] font-extrabold text-white">{shortTime}</time>
+        <span className="sm:hidden whitespace-nowrap text-[9px] text-[#d2b77d]">{shortDate}</span>
+      </span>
+    </div>
+  );
+};
+
 export const Header: React.FC = () => {
   const {
     currentUser,
     activeRole,
-    activeRoute,
     navigate,
     logout,
     currency,
@@ -15,6 +63,7 @@ export const Header: React.FC = () => {
     setIsPaletteModalOpen,
      currentShop,
     currentBarber,
+    state,
   } = useApp();
 
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -30,37 +79,21 @@ export const Header: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const getBreadcrumb = () => {
-    if (activeRoute.startsWith('/admin')) {
-      const part = activeRoute.split('/')[2] || 'inicio';
-      return `Superadmin / ${capitalize(part)}`;
-    }
-    if (activeRoute.startsWith('/barberia/')) {
-      const parts = activeRoute.split('/');
-      const shopSlug = parts[2];
-      const part = parts[3] || 'inicio';
-      return `${currentShop?.name || shopSlug} / ${capitalize(part)}`;
-    }
-    if (activeRoute.startsWith('/barbero/')) {
-      const parts = activeRoute.split('/');
-      const barberSlug = parts[2];
-      const part = parts[3] || 'inicio';
-      return `Pro Studio / ${currentBarber?.name || barberSlug} / ${capitalize(part)}`;
-    }
-    if (activeRoute.startsWith('/clientes')) {
-      const part = activeRoute.split('/')[2] || 'inicio';
-      return `Portal Clientes / ${capitalize(part)}`;
-    }
-    return 'BarberNow';
-  };
-
   const capitalize = (str: string) => {
     if (!str) return '';
     return str.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase());
   };
 
+  const activeShopName = activeRole === 'owner'
+    ? currentShop?.name
+    : activeRole === 'barber_employee'
+      ? state.barbershops.find(shop => shop.id === currentBarber?.businessId)?.name
+      : activeRole === 'client' && currentUser?.businessId
+        ? state.barbershops.find(shop => shop.id === currentUser.businessId)?.name
+        : undefined;
+
   return (
-    <header className="sticky top-0 z-40 flex items-center justify-between gap-4 px-4 sm:px-6 py-2.5 bg-[#0e0e11]/80 backdrop-blur-2xl border-b border-white/[0.08] shadow-[0_4px_30px_rgba(0,0,0,0.5),inset_0_-1px_0_rgba(255,255,255,0.04)] text-[var(--text-primary)] transition-all">
+    <header className="sticky top-0 z-40 flex h-[57px] items-center justify-between gap-2 px-3 sm:px-6 bg-[#0e0e11]/80 backdrop-blur-2xl border-b border-white/[0.08] shadow-[0_4px_30px_rgba(0,0,0,0.5),inset_0_-1px_0_rgba(255,255,255,0.04)] text-[var(--text-primary)] transition-all">
       {/* Zone 1: Wordmark */}
       <div className="flex items-center gap-3 shrink-0">
         <button
@@ -84,52 +117,21 @@ export const Header: React.FC = () => {
           </span>
         </button>
 
-        {/* Separator & Breadcrumb */}
-        <div className="hidden md:flex items-center gap-2 pl-3 border-l border-white/10 text-xs text-neutral-400">
-          <span className="font-mono text-neutral-600">/</span>
-          <span className="px-2.5 py-1 rounded-full bg-white/[0.04] border border-white/[0.06] text-neutral-300 font-medium text-[11px] truncate max-w-xs shadow-inner">
-            {getBreadcrumb()}
-          </span>
-        </div>
       </div>
 
-      {/* Zone 2: Navigation Links or Context Switchers */}
-      <div className="hidden lg:flex items-center gap-2 text-xs">
-        {currentUser?.businessId && (
-          <span className="px-3 py-1 rounded-full bg-white/[0.05] border border-white/[0.08] text-neutral-300 text-[11px] font-medium truncate max-w-[220px] shadow-sm backdrop-blur-md">
-            📍 {currentShop?.name}
+      {/* Identidad de la sede, centrada como en la referencia: nunca muestra una sede inventada. */}
+      {activeShopName && (
+        <div className="pointer-events-none absolute left-1/2 hidden -translate-x-1/2 2xl:flex max-w-[240px]">
+          <span className="max-w-full truncate rounded-full border border-white/[0.12] bg-[#272729] px-3 py-1.5 text-[11px] font-semibold text-neutral-300 shadow-inner">
+            <span aria-hidden="true" className="mr-1">📍</span>{activeShopName}
           </span>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Zone 3: Actions & Controls */}
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-        {/* Live Palette Button (User's specific request) */}
-        <button
-          onClick={() => setIsPaletteModalOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full bg-[var(--gold-primary)]/10 text-[var(--gold-primary)] border border-[var(--gold-primary)]/30 hover:bg-[var(--gold-primary)]/20 hover:border-[var(--gold-primary)]/50 transition-all duration-200 cursor-pointer whitespace-nowrap active:scale-95 shadow-[0_2px_8px_rgba(217,163,35,0.15)]"
-          title="Validar y cambiar paleta de colores en vivo"
-        >
-          <Palette className="w-3.5 h-3.5 text-[var(--gold-primary)]" />
-          <span className="hidden sm:inline">Paleta de Colores</span>
-        </button>
-
-        {/* Currency Switcher */}
-        <div className="relative flex items-center bg-black/40 backdrop-blur-md border border-white/[0.08] rounded-full p-0.5 text-xs font-mono shadow-inner">
-          {(['COP', 'USD'] as CurrencyType[]).map(cur => (
-            <button
-              key={cur}
-              onClick={() => setCurrency(cur)}
-              className={`px-2.5 py-1 rounded-full text-[11px] font-bold transition-all duration-200 ${
-                currency === cur
-                  ? 'bg-gradient-to-b from-[#f3c048] to-[#c9931b] text-black shadow-sm'
-                  : 'text-neutral-400 hover:text-white'
-              }`}
-            >
-              {cur}
-            </button>
-          ))}
-        </div>
+        {/* Reloj de fecha/hora Colombia: usa la hora real del dispositivo. */}
+        <ColombiaClock />
 
         {/* User Account Dropdown */}
         <div className="relative" ref={userMenuRef}>
@@ -160,6 +162,33 @@ export const Header: React.FC = () => {
                 </span>
               </div>
 
+              {/* Conservamos las preferencias sin recargar la barra superior. */}
+              <button
+                type="button"
+                onClick={() => { setIsUserMenuOpen(false); setIsPaletteModalOpen(true); }}
+                className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-neutral-300 transition-colors hover:bg-white/[0.07] hover:text-white"
+              >
+                <Palette className="h-4 w-4 text-[var(--gold-primary)]" />
+                <span>Paleta de Colores</span>
+              </button>
+              <div className="flex items-center justify-between gap-3 px-3 py-2.5 text-neutral-300">
+                <span>Moneda</span>
+                <div role="group" aria-label="Seleccionar moneda" className="flex rounded-full border border-white/[0.1] bg-black/40 p-0.5">
+                  {(['COP', 'USD'] as CurrencyType[]).map(cur => (
+                    <button
+                      key={cur}
+                      type="button"
+                      aria-pressed={currency === cur}
+                      onClick={() => setCurrency(cur)}
+                      className={`rounded-full px-2.5 py-1 font-mono text-[10px] font-semibold transition-colors ${currency === cur
+                        ? 'bg-gradient-to-b from-[#f3c048] to-[#c9931b] text-black'
+                        : 'text-neutral-400 hover:text-white'}`}
+                    >
+                      {cur}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div className="pt-1.5 border-t border-white/[0.08]">
                 <button
                   onClick={() => {
