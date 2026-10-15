@@ -16,7 +16,7 @@ async function setup(role='owner'){
   limited:async()=>{},
   requireTenant:async(_db,id,_user,roles)=>{
    if(id!==tenant)throw new HttpProblem(403,'Sin acceso a esta empresa');
-   assert.ok(roles.includes(role));
+   if(!roles.includes(role))throw new HttpProblem(403,'Sin permiso para modificar este recurso');
    return role;
   },
   service:{storage:{from:(bucket)=>({

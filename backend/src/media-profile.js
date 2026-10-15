@@ -11,7 +11,7 @@ const shopProfile=z.object({
  email:z.union([z.literal(''),z.email().max(254)]).optional(),
  latitude:z.number().min(-90).max(90).nullable().optional(),
  longitude:z.number().min(-180).max(180).nullable().optional(),
- openingHours:z.object({days:z.string().max(80),open:z.string().regex(/^([01]\\d|2[0-3]):[0-5]\\d$/),close:z.string().regex(/^([01]\\d|2[0-3]):[0-5]\\d$/)}).strict().optional(),
+ openingHours:z.object({days:z.string().max(80),open:z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),close:z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/)}).strict().optional(),
  socialLinks:z.object({instagram:z.string().max(120),whatsapp:z.string().max(40)}).strict().optional()
 }).strict().superRefine((data,ctx)=>{
  if((data.latitude===undefined)!==(data.longitude===undefined))
