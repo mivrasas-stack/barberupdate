@@ -126,10 +126,12 @@ export async function registerRoutes(app,{config,db,security}) {
         // Serialize slot reservation with work-hour and time-off changes.
         await tx.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[tenant+':schedule:'+x.barberId]);
         // One PostgreSQL round trip validates tenant + active barber + service,
-        // computes authoritative duration/price and inserts the reservation.
+        // computes authoritative duration/price and inserts an ALREADY CONFIRMED reservation.
+        // Keep DB's legacy default for existing rows/other flows; new customer bookings
+        // must not require an employee's confirmation.
         // The database exclusion constraint and schedule trigger remain authoritative.
         const inserted=await tx.query(
-          "INSERT INTO public.appointments(tenant_id,barber_id,service_id,customer_user_id,customer_name,customer_phone,created_by,starts_at,ends_at,price_minor,notes,idempotency_key,request_hash) SELECT $1,b.id,s.id,$4,$5,$6,$4,$7::timestamptz,$7::timestamptz + s.duration_minutes * interval '1 minute',s.price_minor,$8,$9,$10 FROM public.services s JOIN public.tenants t ON t.id=s.tenant_id AND t.status='active' JOIN public.barbers b ON b.tenant_id=s.tenant_id AND b.id=$2 AND b.status='active' WHERE s.tenant_id=$1 AND s.id=$3 AND s.is_active=true RETURNING *",
+          "INSERT INTO public.appointments(tenant_id,barber_id,service_id,customer_user_id,customer_name,customer_phone,created_by,starts_at,ends_at,price_minor,notes,idempotency_key,request_hash,status) SELECT $1,b.id,s.id,$4,$5,$6,$4,$7::timestamptz,$7::timestamptz + s.duration_minutes * interval '1 minute',s.price_minor,$8,$9,$10,'confirmed' FROM public.services s JOIN public.tenants t ON t.id=s.tenant_id AND t.status='active' JOIN public.barbers b ON b.tenant_id=s.tenant_id AND b.id=$2 AND b.status='active' WHERE s.tenant_id=$1 AND s.id=$3 AND s.is_active=true RETURNING *",
           [tenant,x.barberId,x.serviceId,req.actor.id,x.customerName,x.customerPhone,startsAt,x.notes,key,requestHash]);
         if(!inserted.rowCount) failure(404,'Servicio o barbero no disponible');
         return {row:inserted.rows[0],repeated:false};
