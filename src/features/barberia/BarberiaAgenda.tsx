@@ -597,35 +597,18 @@ export const BarberiaAgenda: React.FC = () => {
                                 </span>
                               </div>
 
-                              {/* Status Action Buttons */}
-                              {apt.status === 'waiting' && (
-                                <button
-                                  onClick={() => setInspectingId(apt.id)}
-                                  className="px-3 py-1.5 rounded-lg bg-[var(--gold-primary)] text-black font-bold text-xs flex items-center gap-1 shadow-sm"
-                                  title="Iniciar corte en la silla"
-                                >
-                                  <Play className="w-3.5 h-3.5" />
-                                  <span>Ver cita</span>
+                              {/* One tap from the agenda: no confirmation or check-in step. */}
+                              {['pending','confirmed','waiting'].includes(apt.status) && (
+                                <button type="button" disabled={statusBusy}
+                                  onClick={() => void handleStatus(apt,'in_service')}
+                                  className="px-3 py-2 rounded-lg bg-[var(--gold-primary)] text-black font-bold text-xs flex items-center gap-1 disabled:opacity-40">
+                                  <Play className="w-3.5 h-3.5"/> Iniciar corte
                                 </button>
                               )}
-
                               {apt.status === 'in_service' && (
-                                <button
-                                  onClick={() => setInspectingId(apt.id)}
-                                  className="px-3 py-1.5 rounded-lg bg-emerald-500 text-black font-bold text-xs flex items-center gap-1 shadow-sm"
-                                  title="Finalizar corte y registrar cobro en caja"
-                                >
-                                  <Check className="w-3.5 h-3.5" />
-                                  <span>Ver cita</span>
-                                </button>
-                              )}
-
-                              {apt.status === 'confirmed' && (
-                                <button
-                                  onClick={() => setInspectingId(apt.id)}
-                                  className="px-3 py-1.5 rounded-lg bg-[#282828] hover:bg-[var(--gold-primary)] hover:text-black font-semibold text-xs text-white"
-                                >
-                                  Finalizar
+                                <button type="button" onClick={() => {setCompletingApt(apt);setInspectingId(null)}}
+                                  className="px-3 py-2 rounded-lg bg-emerald-500 text-black font-bold text-xs">
+                                  Cobrar y finalizar
                                 </button>
                               )}
 
@@ -693,16 +676,16 @@ export const BarberiaAgenda: React.FC = () => {
                       </span>
                     </td>
                     <td className="py-3 px-4 text-right">
-                      {!['completed','cancelled','no_show'].includes(apt.status) ? (
-                        <button
-                          onClick={() => setInspectingId(apt.id)}
-                          className="px-2.5 py-1 rounded bg-[var(--gold-primary)] text-black font-bold text-xs"
-                        >
-                          Ver detalle
-                        </button>
-                      ) : (
-                        <span className="text-neutral-500 text-[11px]">—</span>
-                      )}
+                      <div className="flex flex-wrap justify-end gap-2">
+                        {['pending','confirmed','waiting'].includes(apt.status)&&
+                          <button type="button" disabled={statusBusy} onClick={()=>void handleStatus(apt,'in_service')}
+                            className="rounded-lg bg-[var(--gold-primary)] px-3 py-2 text-xs font-bold text-black disabled:opacity-40">Iniciar corte</button>}
+                        {apt.status==='in_service'&&
+                          <button type="button" onClick={()=>setCompletingApt(apt)}
+                            className="rounded-lg bg-emerald-500 px-3 py-2 text-xs font-bold text-black">Cobrar y finalizar</button>}
+                        <button type="button" onClick={()=>setInspectingId(apt.id)}
+                          className="rounded-lg border border-[#393939] px-3 py-2 text-xs font-semibold text-neutral-200">Ver detalle</button>
+                      </div>
                     </td>
                   </tr>
                 );
