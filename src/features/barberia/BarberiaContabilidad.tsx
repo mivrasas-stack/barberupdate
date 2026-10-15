@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { barberStore } from '../../services/store';
 import {isLiveBackend,recordTransaction,closeCash,refreshLiveData} from '../../services/liveBackend';
 import { formatCurrency, formatDate, exportToCSV } from '../../utils/formatters';
+import {CopAmountInput} from '../../components/common/CopAmountInput';
 import { Transaction, PaymentMethod, CashClosing } from '../../types';
 import {
   Wallet,
@@ -30,14 +31,14 @@ export const BarberiaContabilidad: React.FC = () => {
 
   // Form states for Expense
   const [expenseConcept, setExpenseConcept] = useState('');
-  const [expenseAmount, setExpenseAmount] = useState(0);
+  const [expenseAmount, setExpenseAmount] = useState<number|null>(null);
   const [expenseCategory, setExpenseCategory] = useState<Transaction['category']>('inventory_purchase');
   const [expensePaymentMethod, setExpensePaymentMethod] = useState<PaymentMethod>('cash');
   const [expenseNotes, setExpenseNotes] = useState('');
 
   // Form states for Cash Closing
-  const [openingCash, setOpeningCash] = useState(200000); // 200.000 base
-  const [cashCounted, setCashCounted] = useState(0);
+  const [openingCash, setOpeningCash] = useState<number|null>(null);
+  const [cashCounted, setCashCounted] = useState<number|null>(null);
   const [closingNotes, setClosingNotes] = useState('');
 
   const shopId = currentShop?.id || 'shop-1';
@@ -69,18 +70,22 @@ export const BarberiaContabilidad: React.FC = () => {
     .filter(t => t.type === 'expense' && t.paymentMethod === 'cash')
     .reduce((acc, t) => acc + t.amount, 0);
 
-  const theoreticalCashBalance = openingCash + cashIncome - cashExpenses;
+  const openingCashValue=openingCash??0;
+  const countedCashValue=cashCounted??0;
+  const theoreticalCashBalance = openingCashValue + cashIncome - cashExpenses;
 
   const handleCreateExpense = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!expenseConcept || expenseAmount <= 0) return;
+    if (!expenseConcept || expenseAmount===null || expenseAmount < 100) {
+      addToast('Introduce un gasto de al menos $100 COP','error');return;
+    }
     if(isLiveBackend){
       try{
         await recordTransaction(shopId,{type:'expense',category:expenseCategory,concept:expenseConcept,
           amount:expenseAmount,paymentMethod:expensePaymentMethod,notes:expenseNotes});
         await refreshLiveData();
         addToast('Gasto registrado en el backend','success');
-        setIsExpenseModalOpen(false);setExpenseConcept('');setExpenseAmount(0);setExpenseNotes('');
+        setIsExpenseModalOpen(false);setExpenseConcept('');setExpenseAmount(null);setExpenseNotes('');
       }catch(error){addToast(error instanceof Error?error.message:'Error guardando gasto','error');}
       return;
     }
@@ -98,19 +103,20 @@ export const BarberiaContabilidad: React.FC = () => {
     addToast(`Gasto registrado: ${expenseConcept} (${formatCurrency(expenseAmount, currency)})`, 'success');
     setIsExpenseModalOpen(false);
     setExpenseConcept('');
-    setExpenseAmount(0);
+    setExpenseAmount(null);
     setExpenseNotes('');
   };
 
   const handlePerformCashClosing = async (e: React.FormEvent) => {
     e.preventDefault();
+    if(cashCounted===null){addToast('Introduce el efectivo contado para cerrar la caja','error');return;}
     const diff = cashCounted - theoreticalCashBalance;
     if(isLiveBackend){
       try{
         await closeCash(shopId,{
           id:'',businessId:shopId,date:new Date().toISOString().slice(0,10),
           openedAt:'',closedAt:'',responsibleName:'',
-          openingCash,cashIncome,electronicIncome,expensesPaidFromCash:cashExpenses,
+          openingCash:openingCashValue,cashIncome,electronicIncome,expensesPaidFromCash:cashExpenses,
           withdrawals:0,theoreticalCash:theoreticalCashBalance,actualCashCounted:cashCounted,
           difference:diff,notes:closingNotes,status:'closed'
         });
@@ -127,7 +133,7 @@ export const BarberiaContabilidad: React.FC = () => {
       openedAt: '08:00',
       closedAt: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }),
       responsibleName: 'Mateo Restrepo (Administrador)',
-      openingCash,
+      openingCash:openingCashValue,
       cashIncome,
       electronicIncome,
       expensesPaidFromCash: cashExpenses,
@@ -299,7 +305,7 @@ export const BarberiaContabilidad: React.FC = () => {
               <div className="mt-4 pt-4 border-t border-neutral-800 flex items-center justify-between">
                 <div>
                   <span className="text-[10px] uppercase font-bold text-neutral-500 block">Base de Apertura</span>
-                  <span className="text-sm font-mono font-bold text-white">{formatCurrency(openingCash, currency)}</span>
+                  <span className="text-sm font-mono font-bold text-white">{formatCurrency(openingCashValue, currency)}</span>
                 </div>
                 <button
                   onClick={() => setIsCashClosingModalOpen(true)}
@@ -429,14 +435,8 @@ export const BarberiaContabilidad: React.FC = () => {
 
               <div>
                 <label className="text-neutral-400 block mb-1">Valor (COP)</label>
-                <input
-                  type="number"
-                  required
-                  min={100}
-                  value={expenseAmount}
-                  onChange={e => setExpenseAmount(Number(e.target.value))}
-                  className="w-full bg-[#181818] border border-[#2a2a2a] rounded-lg px-3 py-2 text-white font-mono"
-                />
+                <CopAmountInput value={expenseAmount} onChange={setExpenseAmount} required ariaLabel="Valor del gasto en COP"
+                  className="bg-[#181818] border border-[#2a2a2a] rounded-lg px-3 py-2 text-white font-mono" />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -522,6 +522,11 @@ export const BarberiaContabilidad: React.FC = () => {
             </div>
 
             <form onSubmit={handlePerformCashClosing} className="py-4 space-y-4 text-xs">
+              <div>
+                <label className="text-neutral-300 block mb-1 font-semibold">Base inicial de caja (COP)</label>
+                <CopAmountInput value={openingCash} onChange={setOpeningCash} ariaLabel="Base inicial de caja en COP"
+                  className="bg-[#181818] border border-[#2a2a2a] rounded-xl px-4 py-2.5 text-base font-mono" />
+              </div>
               <div className="p-3 bg-[#181818] rounded-xl border border-neutral-800 space-y-2">
                 <div className="flex justify-between text-neutral-400">
                   <span>Base Inicial en Caja:</span>
@@ -547,19 +552,15 @@ export const BarberiaContabilidad: React.FC = () => {
                 <label className="text-neutral-300 block mb-1 font-semibold">
                   Dinero Real Contado en Gaveta (Efectivo Físico):
                 </label>
-                <input
-                  type="number"
-                  required
-                  value={cashCounted}
-                  onChange={e => setCashCounted(Number(e.target.value))}
-                  className="w-full bg-[#181818] border border-[var(--gold-primary)] rounded-xl px-4 py-2.5 text-base font-mono font-bold text-white"
-                />
+                <CopAmountInput value={cashCounted} onChange={setCashCounted} required ariaLabel="Efectivo físico contado en COP"
+                  className="bg-[#181818] border border-[var(--gold-primary)] rounded-xl px-4 py-2.5 text-base font-mono font-bold text-white" />
                 <div className="mt-2 flex items-center justify-between text-[11px]">
                   <span className="text-neutral-400">Diferencia:</span>
-                  <span className={`font-mono font-bold ${cashCounted - theoreticalCashBalance === 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
-                    {cashCounted - theoreticalCashBalance === 0
-                      ? 'Sin diferencia (Cuadre Exacto)'
-                      : formatCurrency(cashCounted - theoreticalCashBalance, currency)}
+                  <span className={`font-mono font-bold ${cashCounted!==null&&countedCashValue - theoreticalCashBalance === 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                    {cashCounted===null?'Ingresa el efectivo contado'
+                      :cashCounted - theoreticalCashBalance === 0
+                        ? 'Sin diferencia (Cuadre Exacto)'
+                        : formatCurrency(cashCounted - theoreticalCashBalance, currency)}
                   </span>
                 </div>
               </div>

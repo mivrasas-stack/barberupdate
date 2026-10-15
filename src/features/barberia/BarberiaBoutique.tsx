@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { barberStore } from '../../services/store';
 import { ImageUploader } from './ImageUploader';
 import { formatCurrency } from '../../utils/formatters';
+import {CopAmountInput} from '../../components/common/CopAmountInput';
 import { Product, ProductCategory } from '../../types';
 import {isLiveBackend, addProduct, adjustStock, setProductVisibility, refreshLiveData, backendRequest} from '../../services/liveBackend';
 import {
@@ -29,18 +30,18 @@ export const BarberiaBoutique: React.FC = () => {
   // Modals
   const [isNewProductModalOpen, setIsNewProductModalOpen] = useState(false);
   const [adjustingProduct, setAdjustingProduct] = useState<Product | null>(null);
-  const [adjustQuantity, setAdjustQuantity] = useState(1);
+  const [adjustQuantity, setAdjustQuantity] = useState<number|null>(null);
   const [adjustReason, setAdjustReason] = useState('Reposición de proveedor');
 
   // Form states for New Product
   const [newProdName, setNewProdName] = useState('');
   const [newProdDesc, setNewProdDesc] = useState('');
   const [newProdPhoto, setNewProdPhoto] = useState('');
-  const [newProdPrice, setNewProdPrice] = useState(50000);
-  const [newProdCost, setNewProdCost] = useState(25000);
-  const [newProdStock, setNewProdStock] = useState(10);
-  const [newProdMinStock, setNewProdMinStock] = useState(4);
-  const [newProdSku, setNewProdSku] = useState('SKU-NEW-01');
+  const [newProdPrice, setNewProdPrice] = useState<number|null>(null);
+  const [newProdCost, setNewProdCost] = useState<number|null>(null);
+  const [newProdStock, setNewProdStock] = useState<number|null>(null);
+  const [newProdMinStock, setNewProdMinStock] = useState<number|null>(null);
+  const [newProdSku, setNewProdSku] = useState('');
 
   const shopId = currentShop?.id || 'shop-1';
 
@@ -57,15 +58,21 @@ export const BarberiaBoutique: React.FC = () => {
 
   const handleCreateProduct = async (e: React.FormEvent) => {
     e.preventDefault();
+    if(newProdPrice===null||newProdPrice<=0||!Number.isSafeInteger(newProdPrice)
+      ||(newProdCost!==null&&(!Number.isSafeInteger(newProdCost)||newProdCost<0))
+      ||(newProdStock!==null&&(!Number.isInteger(newProdStock)||newProdStock<0))
+      ||(newProdMinStock!==null&&(!Number.isInteger(newProdMinStock)||newProdMinStock<0))){
+      addToast('Revisa los importes COP y las cantidades del producto','error');return;
+    }
     if(isLiveBackend){
       try{
-        await addProduct(shopId,{name:newProdName,sku:newProdSku,price:newProdPrice,stock:newProdStock,
-          description:newProdDesc,photo:newProdPhoto,category:activeCategory,cost:newProdCost,
-          minStock:newProdMinStock,isVisibleInWaitingRoom:true});
+        await addProduct(shopId,{name:newProdName,sku:newProdSku,price:newProdPrice,stock:newProdStock??0,
+          description:newProdDesc,photo:newProdPhoto,category:activeCategory,cost:newProdCost??0,
+          minStock:newProdMinStock??0,isVisibleInWaitingRoom:true});
         await refreshLiveData();
         addToast('Producto creado en el backend', 'success');
         setIsNewProductModalOpen(false);
-        setNewProdName('');setNewProdDesc('');
+        setNewProdName('');setNewProdDesc('');setNewProdPrice(null);setNewProdCost(null);setNewProdStock(null);setNewProdMinStock(null);
       }catch(e){addToast(e instanceof Error?e.message:'No se pudo crear el producto','error');}
       return;
     }
@@ -76,9 +83,9 @@ export const BarberiaBoutique: React.FC = () => {
       photo: newProdPhoto,
       category: activeCategory,
       price: newProdPrice,
-      cost: newProdCost,
-      stock: newProdStock,
-      minStock: newProdMinStock,
+      cost: newProdCost??0,
+      stock: newProdStock??0,
+      minStock: newProdMinStock??0,
       sku: newProdSku,
       isActive: true,
       isVisibleInWaitingRoom: true,
@@ -87,6 +94,7 @@ export const BarberiaBoutique: React.FC = () => {
     setIsNewProductModalOpen(false);
     setNewProdName('');
     setNewProdDesc('');
+    setNewProdPrice(null);setNewProdCost(null);setNewProdStock(null);setNewProdMinStock(null);
   };
 
   const updateProductPhoto=async(id:string,url:string)=>{
@@ -99,7 +107,7 @@ export const BarberiaBoutique: React.FC = () => {
 
   const handleAdjustStock = async (isAddition: boolean) => {
     if (!adjustingProduct) return;
-    if(!Number.isInteger(adjustQuantity)||adjustQuantity<1||adjustQuantity>100000){addToast('Introduce una cantidad entera de 1 a 100.000 unidades','error');return;}
+    if(adjustQuantity===null||!Number.isInteger(adjustQuantity)||adjustQuantity<1||adjustQuantity>100000){addToast('Introduce una cantidad entera de 1 a 100.000 unidades','error');return;}
     if(!adjustReason.trim()){addToast('Indica el motivo del movimiento de inventario','error');return;}
     if(isLiveBackend){
       try{
@@ -307,7 +315,7 @@ export const BarberiaBoutique: React.FC = () => {
                 <button
                   onClick={() => {
                     setAdjustingProduct(prod);
-                    setAdjustQuantity(1);
+                    setAdjustQuantity(null);
                   }}
                   className="w-full py-1.5 rounded-lg bg-[#202020] hover:bg-[#282828] text-xs font-semibold text-neutral-200 hover:text-white transition-colors text-center"
                 >
@@ -344,8 +352,9 @@ export const BarberiaBoutique: React.FC = () => {
                 <input
                   type="number"
                   min={1}
-                  value={adjustQuantity}
-                  onChange={e => setAdjustQuantity(Number(e.target.value))}
+                  value={adjustQuantity??''}
+                  placeholder="0"
+                  onChange={e => setAdjustQuantity(e.target.value===''?null:Number(e.target.value))}
                   className="w-full bg-[#181818] border border-[#2a2a2a] rounded-lg px-3 py-2 text-white font-mono"
                 />
               </div>
@@ -424,23 +433,13 @@ export const BarberiaBoutique: React.FC = () => {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-neutral-400 block mb-1">Precio de Venta (COP)</label>
-                  <input
-                    type="number"
-                    required
-                    value={newProdPrice}
-                    onChange={e => setNewProdPrice(Number(e.target.value))}
-                    className="w-full bg-[#181818] border border-[#2a2a2a] rounded-lg px-3 py-2 text-white font-mono"
-                  />
+                  <CopAmountInput value={newProdPrice} onChange={setNewProdPrice} required ariaLabel="Precio de venta en COP"
+                    className="bg-[#181818] border border-[#2a2a2a] rounded-lg px-3 py-2 text-white font-mono" />
                 </div>
                 <div>
                   <label className="text-neutral-400 block mb-1">Costo Adquisición (COP)</label>
-                  <input
-                    type="number"
-                    required
-                    value={newProdCost}
-                    onChange={e => setNewProdCost(Number(e.target.value))}
-                    className="w-full bg-[#181818] border border-[#2a2a2a] rounded-lg px-3 py-2 text-white font-mono"
-                  />
+                  <CopAmountInput value={newProdCost} onChange={setNewProdCost} ariaLabel="Costo de adquisición en COP"
+                    className="bg-[#181818] border border-[#2a2a2a] rounded-lg px-3 py-2 text-white font-mono" />
                 </div>
               </div>
 
@@ -449,8 +448,9 @@ export const BarberiaBoutique: React.FC = () => {
                   <label className="text-neutral-400 block mb-1">Stock Inicial</label>
                   <input
                     type="number"
-                    value={newProdStock}
-                    onChange={e => setNewProdStock(Number(e.target.value))}
+                    value={newProdStock??''}
+                    placeholder="0"
+                    onChange={e => setNewProdStock(e.target.value===''?null:Number(e.target.value))}
                     className="w-full bg-[#181818] border border-[#2a2a2a] rounded-lg px-3 py-2 text-white font-mono"
                   />
                 </div>
@@ -458,8 +458,9 @@ export const BarberiaBoutique: React.FC = () => {
                   <label className="text-neutral-400 block mb-1">Stock Mínimo</label>
                   <input
                     type="number"
-                    value={newProdMinStock}
-                    onChange={e => setNewProdMinStock(Number(e.target.value))}
+                    value={newProdMinStock??''}
+                    placeholder="0"
+                    onChange={e => setNewProdMinStock(e.target.value===''?null:Number(e.target.value))}
                     className="w-full bg-[#181818] border border-[#2a2a2a] rounded-lg px-3 py-2 text-white font-mono"
                   />
                 </div>
