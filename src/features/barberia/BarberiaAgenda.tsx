@@ -521,7 +521,7 @@ export const BarberiaAgenda: React.FC = () => {
                         if (apt.status === 'in_service') cardBg = 'bg-[var(--gold-primary)]/10 border-[var(--gold-primary)]/50';
                         if (apt.status === 'waiting') cardBg = 'bg-amber-500/10 border-amber-500/40';
                         if (apt.status === 'completed') cardBg = 'bg-emerald-500/5 border-emerald-500/30';
-                        if (apt.status === 'cancelled') cardBg = 'bg-red-500/5 border-red-500/20 opacity-60';
+                        if (['cancelled','no_show'].includes(apt.status)) cardBg = 'bg-red-500/5 border-red-500/20 opacity-60';
 
                         return (
                           <div
@@ -572,7 +572,7 @@ export const BarberiaAgenda: React.FC = () => {
 
                               {apt.status === 'in_service' && (
                                 <button
-                                  onClick={() => handleAdvanceStatus(apt)}
+                                  onClick={() => setInspectingId(apt.id)}
                                   className="px-3 py-1.5 rounded-lg bg-emerald-500 text-black font-bold text-xs flex items-center gap-1 shadow-sm"
                                   title="Finalizar corte y registrar cobro en caja"
                                 >
@@ -583,14 +583,14 @@ export const BarberiaAgenda: React.FC = () => {
 
                               {apt.status === 'confirmed' && (
                                 <button
-                                  onClick={() => handleAdvanceStatus(apt)}
+                                  onClick={() => setInspectingId(apt.id)}
                                   className="px-3 py-1.5 rounded-lg bg-[#282828] hover:bg-[var(--gold-primary)] hover:text-black font-semibold text-xs text-white"
                                 >
                                   Finalizar
                                 </button>
                               )}
 
-                              {apt.status !== 'completed' && apt.status !== 'cancelled' && (
+                              {!['completed','cancelled','no_show'].includes(apt.status) && (
                                 <button
                                   onClick={() => setInspectingId(apt.id)}
                                   className="p-1.5 rounded-lg text-neutral-500 hover:text-red-400"
@@ -654,9 +654,9 @@ export const BarberiaAgenda: React.FC = () => {
                       </span>
                     </td>
                     <td className="py-3 px-4 text-right">
-                      {apt.status !== 'completed' && apt.status !== 'cancelled' ? (
+                      {!['completed','cancelled','no_show'].includes(apt.status) ? (
                         <button
-                          onClick={() => handleAdvanceStatus(apt)}
+                          onClick={() => setInspectingId(apt.id)}
                           className="px-2.5 py-1 rounded bg-[var(--gold-primary)] text-black font-bold text-xs"
                         >
                           Ver detalle
