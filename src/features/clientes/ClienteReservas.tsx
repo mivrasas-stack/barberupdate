@@ -319,7 +319,10 @@ export const ClienteReservas: React.FC = () => {
                   }`}
                 >
                   <div className="flex items-center gap-3 mb-3">
-                    <img src={barber.photo} alt={barber.name} className="w-12 h-12 rounded-xl object-cover border border-neutral-700" />
+                    {barber.photo?<img src={barber.photo} alt={barber.name} className="w-12 h-12 rounded-xl object-cover border border-neutral-700" />:
+                      <div className="w-12 h-12 rounded-xl border border-neutral-700 bg-[#202020] flex items-center justify-center">
+                        <User className="w-5 h-5 text-neutral-400"/>
+                      </div>}
                     <div>
                       <h3 className="text-sm font-bold text-white">{barber.name}</h3>
                       <div className="flex items-center gap-1 text-amber-400 text-xs font-mono">
@@ -328,7 +331,8 @@ export const ClienteReservas: React.FC = () => {
                       </div>
                     </div>
                   </div>
-                  <p className="text-xs text-neutral-400 line-clamp-2">{barber.bio}</p>
+                  <p className="text-xs text-neutral-400 line-clamp-2">{barber.bio||'Barbero profesional'}</p>
+                  {(barber.experienceYears||0)>0&&<p className="text-[11px] text-neutral-400 mt-1">{barber.experienceYears} años de experiencia</p>}
                   <div className="mt-3 pt-2 border-t border-neutral-800 text-[11px] text-[var(--gold-primary)] font-medium">
                     {barber.specialties.join(' · ')}
                   </div>
