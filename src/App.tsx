@@ -117,14 +117,14 @@ const AppContent: React.FC = () => {
     );
   }
 
-  // --- Area 3: Barberos Independientes ---
+  // --- Area 3: Barberos de la barbería ---
   if (activeRoute.startsWith('/barbero/')) {
     const subRoute = activeRoute.split('/')[3] || 'inicio';
     let child = <BarberoInicio />;
     if (subRoute === 'dashboard') child = <BarberoDashboard />;
     else if (subRoute === 'inicio') child = <BarberoInicio />;
     else if (subRoute === 'agenda') child = <BarberoAgenda />;
-    else if (subRoute === 'contabilidad') child = <BarberiaContabilidad />; // Reusing accounting module for independent cash
+    else if (subRoute === 'contabilidad') child = <BarberiaContabilidad />; // módulo compartido existente
     else if (subRoute === 'clientes') child = <BarberiaClientes />;
     else if (subRoute === 'boutique') child = <BarberiaBoutique />;
     else if (subRoute === 'servicios') child = <BarberiaServicios />;
