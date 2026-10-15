@@ -4,6 +4,18 @@ import {formatCurrency} from '../../utils/formatters';
 import {isLiveBackend,listTenantCustomers,type TenantCustomer} from '../../services/liveBackend';
 import {Search,UserRound,RefreshCw,Users} from 'lucide-react';
 
+function CustomerAvatar({avatar,name}:{avatar:string;name:string}){
+ const [failed,setFailed]=useState(false);
+ useEffect(()=>setFailed(false),[avatar]);
+ return avatar&&!failed?
+  <img src={avatar} alt={'Foto de '+name} onError={()=>setFailed(true)}
+   className="w-9 h-9 shrink-0 rounded-full border border-neutral-700 object-cover"/>:
+  <div aria-label={'Sin fotografía de '+name}
+   className="w-9 h-9 shrink-0 flex items-center justify-center rounded-full border border-neutral-700 bg-[#272727]">
+   <UserRound className="w-4 h-4 text-neutral-400"/>
+  </div>;
+}
+
 /** One customer per account and tenant, including QR links without appointments. */
 export const BarberiaClientes:React.FC=()=>{
  const {currentShop,state,currency}=useApp();
@@ -110,12 +122,7 @@ export const BarberiaClientes:React.FC=()=>{
       {filtered.map(customer=><tr key={customer.id} className="hover:bg-[#191919]">
        <td className="px-4 py-3">
         <div className="flex items-center gap-3">
-         {customer.avatar?
-          <img src={customer.avatar} alt={'Foto de '+customer.name} className="w-9 h-9 shrink-0 rounded-full border border-neutral-700 object-cover"
-           onError={e=>{e.currentTarget.style.display='none';e.currentTarget.nextElementSibling?.classList.remove('hidden');}}/>:null}
-         <div className={`w-9 h-9 shrink-0 items-center justify-center rounded-full border border-neutral-700 bg-[#272727] ${customer.avatar?'hidden':'flex'}`}>
-          <UserRound className="w-4 h-4 text-neutral-400"/>
-         </div>
+         <CustomerAvatar avatar={customer.avatar} name={customer.name}/>
          <div className="min-w-[110px]">
           <div className="font-bold text-white">{customer.name}</div>
           {customer.email&&<div className="text-[11px] text-neutral-400">{customer.email}</div>}
