@@ -77,7 +77,8 @@ export async function registerCustomerLinkRoutes(app,{db,security}){
          GROUP BY a.customer_user_id
        )
        SELECT c.user_id,c.linked_at,c.linked_by_qr,
-         cp.full_name,cp.phone,
+         coalesce(cp.full_name,booking_profile.customer_name) AS full_name,
+         coalesce(cp.phone,booking_profile.customer_phone) AS phone,
          coalesce(v.completed_visits,0)::integer AS completed_visits,
          coalesce(v.total_spent,0)::bigint AS total_spent,
          v.last_service_at,
@@ -88,6 +89,11 @@ export async function registerCustomerLinkRoutes(app,{db,security}){
          coalesce(loyalty.points,0)::integer AS points
        FROM customers c
        LEFT JOIN public.customer_profiles cp ON cp.user_id=c.user_id
+       LEFT JOIN LATERAL (
+         SELECT a3.customer_name,a3.customer_phone FROM public.appointments a3
+         WHERE a3.tenant_id=$1 AND a3.customer_user_id=c.user_id
+         ORDER BY a3.starts_at DESC LIMIT 1
+       ) booking_profile ON true
        LEFT JOIN visits v ON v.customer_user_id=c.user_id
        LEFT JOIN public.loyalty_accounts loyalty ON loyalty.tenant_id=$1 AND loyalty.user_id=c.user_id
        ORDER BY c.linked_by_qr DESC,c.linked_at DESC NULLS LAST,c.user_id
