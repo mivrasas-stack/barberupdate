@@ -13,7 +13,7 @@ export function endOfBooking(value, duration, now=Date.now()) {
   if (!Number.isInteger(duration) || duration<5 || duration>600) failure(400,'Duracion fuera de rango');
   return new Date(ms+duration*60000).toISOString();
 }
-const tenantSchema = z.object({ name:word(120),slug,currency:z.enum(['COP','USD','EUR']).default('COP'),timeZone:word(80).default('America/Bogota') }).strict();
+const tenantSchema = z.object({ name:word(120),slug,currency:z.literal('COP').default('COP'),timeZone:word(80).default('America/Bogota') }).strict();
 const bookingSchema = z.object({ barberId:id,serviceId:id,startsAt:z.iso.datetime({offset:true}),customerName:word(120),customerPhone:word(32),notes:z.string().max(2000).default('') }).strict();
 
 export async function registerRoutes(app,{config,db,security}) {

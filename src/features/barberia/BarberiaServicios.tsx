@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Service, ServiceCategory } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
+import { CopAmountInput } from '../../components/common/CopAmountInput';
 import { Scissors, Plus, Clock, Users, X, Edit2, CheckCircle2 } from 'lucide-react';
 import {isLiveBackend, addService, editService, refreshLiveData} from '../../services/liveBackend';
 
@@ -12,8 +13,8 @@ export const BarberiaServicios: React.FC = () => {
 
   const [formName, setFormName] = useState('');
   const [formDesc, setFormDesc] = useState('');
-  const [formPrice, setFormPrice] = useState(45000);
-  const [formDuration, setFormDuration] = useState(45);
+  const [formPrice, setFormPrice] = useState<number|null>(null);
+  const [formDuration, setFormDuration] = useState(0);
   const [formCategory, setFormCategory] = useState<ServiceCategory>('haircut');
 
   const shopId = currentShop?.id || 'shop-1';
@@ -24,8 +25,8 @@ export const BarberiaServicios: React.FC = () => {
     setEditingService(null);
     setFormName('');
     setFormDesc('');
-    setFormPrice(45000);
-    setFormDuration(45);
+    setFormPrice(null);
+    setFormDuration(0);
     setFormCategory('haircut');
     setIsModalOpen(true);
   };
@@ -42,6 +43,9 @@ export const BarberiaServicios: React.FC = () => {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if(formPrice===null||formPrice<0||!Number.isSafeInteger(formPrice)||formDuration<5||formDuration>600||formDuration%5!==0){
+      addToast('Ingresa un precio en COP y una duración válida (mínimo 5 minutos)','error');return;
+    }
     if(isLiveBackend){
       try{
         const payload={name:formName,description:formDesc,price:formPrice,
@@ -185,13 +189,8 @@ export const BarberiaServicios: React.FC = () => {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-neutral-400 block mb-1">Precio (COP)</label>
-                  <input
-                    type="number"
-                    required
-                    value={formPrice}
-                    onChange={e => setFormPrice(Number(e.target.value))}
-                    className="w-full bg-[#181818] border border-[#2a2a2a] rounded-lg px-3 py-2 text-white font-mono"
-                  />
+                  <CopAmountInput required ariaLabel="Precio del servicio en COP" value={formPrice} onChange={setFormPrice}
+                    className="bg-[#181818] border border-[#2a2a2a] rounded-lg px-3 py-2 text-white font-mono" />
                 </div>
 
                 <div>
@@ -200,7 +199,9 @@ export const BarberiaServicios: React.FC = () => {
                     type="number"
                     required
                     step={5}
-                    value={formDuration}
+                    min={5}
+                    placeholder="0"
+                    value={formDuration || ''}
                     onChange={e => setFormDuration(Number(e.target.value))}
                     className="w-full bg-[#181818] border border-[#2a2a2a] rounded-lg px-3 py-2 text-white font-mono"
                   />
