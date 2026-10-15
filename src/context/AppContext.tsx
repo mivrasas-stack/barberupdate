@@ -180,7 +180,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       barberStore.hydrateFromBackend({users:[data.user],barbershops:data.shops,barbers:data.barbers,
         services:data.services,products:data.products,appointments:data.appointments,
-        transactions:data.transactions,orders:data.orders,plans:data.plans,cashClosings:data.cashClosings});
+        transactions:data.transactions,orders:data.orders,plans:data.plans,cashClosings:data.cashClosings,reviews:data.reviews,loyalty:data.loyalty,loyaltyBalances:data.loyaltyBalances,rewards:data.rewards,redemptions:data.redemptions});
       setCurrentUser(data.user);
       setCachedUser(data.user);
       if(data.user.role==='owner')navigate(data.shops[0]?'/barberia/'+data.shops[0].slug+'/inicio':'/clientes/inicio');
@@ -199,7 +199,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if(!alive)return;
       barberStore.hydrateFromBackend({users:[data.user],barbershops:data.shops,barbers:data.barbers,
         services:data.services,products:data.products,appointments:data.appointments,
-        transactions:data.transactions,orders:data.orders,plans:data.plans,cashClosings:data.cashClosings});
+        transactions:data.transactions,orders:data.orders,plans:data.plans,cashClosings:data.cashClosings,reviews:data.reviews,loyalty:data.loyalty,loyaltyBalances:data.loyaltyBalances,rewards:data.rewards,redemptions:data.redemptions});
       setCurrentUser(data.user);
       setCachedUser(data.user);
       const currentHash = window.location.hash.slice(1);
