@@ -250,7 +250,7 @@ export function mapAppointment(r:Db,tenant:string,services:Service[],zone='Ameri
     durationMinutes:service?.durationMinutes||30,price:money(r,'price_minor'),
     discount:0,finalPrice:money(r,'price_minor'),
     status:txt(r,'status','pending') as Appointment['status'],
-    notes:txt(r,'notes'),createdAt:txt(r,'created_at',new Date().toISOString())
+    notes:txt(r,'notes'),cancellationReason:txt(r,'cancellation_reason')||undefined,createdAt:txt(r,'created_at',new Date().toISOString())
   };
 }
 export function mapTransaction(r:Db,tenant:string):Transaction{
@@ -479,9 +479,25 @@ export async function addBooking(tenant:string,data:{barberId:string;serviceId:s
      startsAt:selected.starts_at,customerName:data.customerName,customerPhone:data.customerPhone,
      notes:data.notes||''})},idempotencyKey);
 }
-export async function updateBooking(tenant:string,id:string,status:string){
+export type AppointmentPaymentReceipt={
+ appointmentId:string;customerName:string;serviceName:string;startsAt:string;
+ completed:boolean;totalMinor:number;currency:string;paymentMethod:string;
+ transactionId:string|null;receivedAt:string;recordedBy:string|null;
+ reference:string;verification:string
+};
+export async function finishAndPayAppointment(tenant:string,id:string,
+ method:'cash'|'nequi'|'daviplata'|'transfer'|'debit'|'credit',reference=''):Promise<AppointmentPaymentReceipt>{
+ return backendRequest<AppointmentPaymentReceipt>(
+  '/tenants/'+encodeURIComponent(tenant)+'/appointments/'+encodeURIComponent(id)+'/finish-and-pay',
+  {method:'POST',body:JSON.stringify({method,reference,confirmReceived:true})});
+}
+export async function fetchAppointmentReceipt(tenant:string,id:string):Promise<AppointmentPaymentReceipt>{
+ return backendRequest<AppointmentPaymentReceipt>(
+  '/tenants/'+encodeURIComponent(tenant)+'/appointments/'+encodeURIComponent(id)+'/payment-receipt');
+}
+export async function updateBooking(tenant:string,id:string,status:string,reason?:string){
  return backendRequest<Db>('/tenants/'+tenant+'/appointments/'+id+'/status',
-  {method:'PATCH',body:JSON.stringify({status})});
+  {method:'PATCH',body:JSON.stringify({status,...(reason?{reason}:{})})});
 }
 export async function addOrder(tenant:string,name:string,items:{productId:string;quantity:number}[]){
  const key='o'+crypto.randomUUID().replace(/-/g,'');
