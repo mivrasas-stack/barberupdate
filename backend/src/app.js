@@ -17,6 +17,24 @@ import { registerMediaProfileRoutes } from './media-profile.js';
 import {registerWhatsAppRoutes} from './whatsapp-routes.js';
 import {registerPlatformIntegrationRoutes} from './platform-integrations.js';
 
+/**
+ * Translate database rules without exposing raw PostgreSQL messages to clients.
+ * A closed accounting day is intentionally immutable, and is not a scheduling collision.
+ */
+export function describeApiError(err) {
+  const status = err.statusCode >= 400 && err.statusCode < 600
+    ? err.statusCode
+    : (['23P01','23505','23514'].includes(err.code) ? 409 : err.code === '23503' ? 400 : 500);
+  if (status >= 500) return {status, message:'Error interno o dependencia no disponible'};
+  if (err.code === '23514' && err.message === 'This business day has already been closed')
+    return {status, message:'El cierre de caja de hoy ya fue realizado. No se pueden registrar gastos ni ingresos adicionales en este dia.'};
+  if (err.code === '23P01') return {status, message:'Conflicto: horario o recurso no disponible'};
+  if (err.code === '23505') return {status, message:'Conflicto: el registro ya existe'};
+  if (err.code === '23514') return {status, message:'La operacion fue rechazada por una regla de negocio'};
+  if (err.code === '23503') return {status, message:'No se puede completar la operacion porque faltan datos relacionados'};
+  return {status, message:err.message};
+}
+
 export async function buildApp(env = process.env) {
   const config = configFromEnv(env);
   const app = Fastify({ logger: { level: env.LOG_LEVEL || 'info', redact: ['req.headers.authorization', 'req.headers.cookie', 'res.headers.set-cookie'] }, bodyLimit: 1024 * 1024, trustProxy: (_address, hop) => hop === 0 });
@@ -33,9 +51,8 @@ export async function buildApp(env = process.env) {
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   });
   app.setErrorHandler((err, req, reply) => {
-    const status = err.statusCode && err.statusCode >= 400 && err.statusCode < 600 ? err.statusCode : (err.code === '23P01' || err.code === '23505' || err.code === '23514' ? 409 : err.code === '23503' ? 400 : 500);
+    const {status,message}=describeApiError(err);
     if (status >= 500) req.log.error({ err }, 'request failed');
-    const message = status >= 500 ? 'Error interno o dependencia no disponible' : status === 409 ? 'Conflicto: horario o recurso no disponible' : err.message;
     reply.code(status).send({ error: message, requestId: req.id });
   });
   app.get('/api/v1/health/live', async () => ({ status: 'ok', version: '0.1.0' }));
