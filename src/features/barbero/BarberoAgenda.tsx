@@ -180,7 +180,7 @@ export const BarberoAgenda: React.FC = () => {
         };
       }
       setPayTarget(null);setReceipt(saved);
-      addToast('Corte finalizado. Ingreso contabilizado una sola vez.','success');
+      addToast(saved.totalMinor>0?'Corte finalizado. Ingreso contabilizado una sola vez.':'Corte de cortesía finalizado, sin generar ingreso.','success');
     }catch(err){addToast(err instanceof Error?err.message:'No fue posible confirmar el cobro','error');}
     finally{setActionBusy(false);}
   };
@@ -718,8 +718,8 @@ export const BarberoAgenda: React.FC = () => {
          <select id="quick-cancel-reason" value={cancelReason} onChange={e=>setCancelReason(e.target.value)}
           className="w-full rounded-xl border border-[#353535] bg-[#202020] p-3 text-sm text-white">
           <option value="Cliente no asistió a la cita">Cliente no asistió</option>
-          <option value="Cancelada a solicitud del cliente">Canceló el cliente</option>
-          <option value="Imprevisto o cierre de la barbería">Imprevisto de la barbería</option>
+          {cancelKind==='cancelled'&&<option value="Cancelada a solicitud del cliente">Canceló el cliente</option>}
+          {cancelKind==='cancelled'&&<option value="Imprevisto o cierre de la barbería">Imprevisto de la barbería</option>}
           <option value="Otro motivo">Otro motivo</option>
          </select>
          {cancelReason==='Otro motivo'&&
