@@ -122,3 +122,38 @@ test('La cabecera móvil no modifica el logo ni pierde la fecha y hora', async (
   const fits=await header.evaluate(node=>node.scrollWidth<=node.clientWidth+1);
   expect(fits).toBe(true);
 });
+
+
+test('Cliente edita datos de perfil sin preferencias de corte predefinidas',async({page})=>{
+  await page.goto('/login');
+  await page.getByLabel('Correo electrónico').fill('camilo.torres@gmail.com');
+  await page.getByRole('button',{name:/iniciar sesión/i}).click();
+  await page.evaluate(()=>{location.hash='#/clientes/perfil';});
+  await expect(page.getByRole('heading',{name:'Mi Perfil de Cliente'})).toBeVisible();
+  await expect(page.getByLabel('Estilo habitual')).toHaveValue('');
+  await expect(page.getByLabel('Preferencia de barba')).toHaveValue('');
+  await expect(page.getByText('Degradado medio con navaja (Skin Fade)')).toHaveCount(0);
+  await page.getByLabel('Nombre y apellidos').fill('Cliente Actualizado QA');
+  await page.getByLabel('Estilo habitual').fill('Corte clásico');
+  await page.getByRole('button',{name:'Guardar mi perfil'}).click();
+  await expect(page.getByRole('banner')).toContainText('Cliente Actualizado QA');
+});
+
+test('Agendamiento recupera calendario de tres columnas sin profesionales independientes',async({page})=>{
+  await page.goto('/login');
+  await page.getByLabel('Correo electrónico').fill('camilo.torres@gmail.com');
+  await page.getByRole('button',{name:/iniciar sesión/i}).click();
+  await page.evaluate(()=>{location.hash='#/clientes/citas/nueva';});
+  await expect(page.getByText('Paso 1: Elige tu Barbería')).toBeVisible();
+  await expect(page.getByText('Barberos Independientes')).toHaveCount(0);
+  await page.getByRole('button',{name:/Continuar a Servicios/i}).click();
+  await page.locator('button:has(h3)').first().click();
+  await page.getByRole('button',{name:'Continuar',exact:true}).click();
+  await page.locator('button:has(h3)').first().click();
+  await page.getByRole('button',{name:'Elegir Horario'}).click();
+  await expect(page.getByText('Paso 4: Fecha & Franja Horaria')).toBeVisible();
+  await expect(page.getByRole('button',{name:'Mes siguiente'})).toBeVisible();
+  await expect(page.getByLabel('Horarios disponibles por hora')).toBeVisible();
+  await expect(page.getByText('Servicio seleccionado')).toBeVisible();
+  await expect(page.getByText('Quién te atiende')).toBeVisible();
+});
