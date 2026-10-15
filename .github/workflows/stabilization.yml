@@ -6,6 +6,8 @@ on:
   pull_request:
     paths:
       - 'src/**'
+      - 'landing/**'
+      - 'tests/e2e/**'
       - 'backend/**'
       - 'package*.json'
       - '.github/workflows/stabilization.yml'
