@@ -252,12 +252,12 @@ export const ClienteInicio: React.FC = () => {
       {/* Verified, persistent affiliations — not inferred from appointments or mock data. */}
       <section data-testid="linked-businesses" className="rounded-3xl border border-white/[0.08] bg-[#151515] p-5 sm:p-6">
         <div className="flex justify-between items-center mb-4 gap-4">
-          <div><h2 className="text-lg font-extrabold text-white">Mis Barberías y Barberos Vinculados</h2>
+          <div><h2 className="text-lg font-extrabold text-white">Mis Barberías Vinculadas</h2>
           <p className="text-xs text-neutral-400">Negocios que vinculaste escaneando su QR</p></div>
           <button onClick={()=>navigate('/clientes/vincular')} className="text-xs rounded-xl px-3 py-2 bg-[var(--gold-primary)] text-black font-bold">+ Vincular QR</button>
         </div>
         {linkedLoading?<p className="text-xs text-neutral-400">Cargando vínculos...</p>:
-         linkedBusinesses.length===0?<p className="text-xs text-neutral-400">Todavía no tienes barberías o profesionales vinculados.</p>:
+         linkedBusinesses.length===0?<p className="text-xs text-neutral-400">Todavía no tienes barberías vinculadas.</p>:
          <div className="grid sm:grid-cols-2 gap-3">{linkedBusinesses.filter(link=>link.business_kind==='barbershop').map(link=>
           <button key={link.tenant_id} onClick={()=>navigate('/clientes/citas/nueva')}
            className="p-4 rounded-2xl bg-[#1e1e1e] border border-neutral-700 text-left hover:border-[var(--gold-primary)]">
