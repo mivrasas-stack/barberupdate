@@ -422,8 +422,8 @@ export async function getAvailabilitySlots(tenant:string,barberId:string,service
  const response=await fetch(apiOrigin+'/public/tenants/'+encodeURIComponent(tenant)+'/availability?'+params.toString(),{cache:'no-store'});
  const json=await response.json().catch(()=>({}));
  if(!response.ok)throw Error(json.error||'No fue posible consultar la disponibilidad.');
- const list=Array.isArray(json.slots)?json.slots:[];
- return [...new Set(list.map((s:{starts_at:string})=>dayParts(s.starts_at,zone).time))].sort();
+ const list:{starts_at:string}[]=Array.isArray(json.slots)?json.slots:[];
+ return [...new Set<string>(list.map(s=>dayParts(s.starts_at,zone).time))].sort();
 }
 export async function addBooking(tenant:string,data:{barberId:string;serviceId:string;date:string;startTime:string;customerName:string;customerPhone:string;notes?:string},zone='America/Bogota'){
  // Obtain a server-computed instant instead of constructing a misleading UTC timestamp in the browser.
