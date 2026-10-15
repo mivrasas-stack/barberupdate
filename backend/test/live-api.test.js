@@ -141,6 +141,7 @@ test('BarberOS E2E: Auth, schedule, bookings, orders, cleanup',
     const bookingKey='booking-'+randomBytes(12).toString('hex');
     const booked=await call('POST',prefix+'/bookings',details,bookingKey);
     check(booked,201,'Book appointment');
+    assert.equal(booked.data.status,'confirmed','The client booking must appear confirmed immediately');
     check(await call('POST',prefix+'/closed-days',{date:day,reason:'Has existing bookings'}),
       409,'Cannot close a date with active appointments');
     const replay=await call('POST',prefix+'/bookings',details,bookingKey);
