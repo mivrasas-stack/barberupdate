@@ -722,7 +722,7 @@ export const BarberiaAgenda: React.FC = () => {
           {inspectingApt.cancellationReason&&<div className="sm:col-span-2">
             <dt className="text-neutral-500">Motivo de cancelación o ausencia</dt>
             <dd className="mt-1 text-rose-300">{inspectingApt.cancellationReason}</dd>
-          </div>
+          </div>}
          </dl>
          <div className="space-y-3 border-t border-[#303030] pt-4">
           {['pending','confirmed','waiting'].includes(inspectingApt.status)&&<button disabled={statusBusy} onClick={()=>void handleStatus(inspectingApt,'in_service')}
