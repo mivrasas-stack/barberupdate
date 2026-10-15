@@ -197,3 +197,52 @@ test('Al seleccionar una cita se abre su ficha sin cambiar el estado y permite i
   await modal.getByRole('button',{name:'Cerrar detalle'}).click();
   await expect(modal).toHaveCount(0);
 });
+
+
+test('Barbero inicia, confirma un cobro y consulta su comprobante en pocos toques',async({page})=>{
+ await page.clock.install({time:new Date('2026-10-13T20:40:00Z')});
+ await page.goto('/login');
+ await page.getByLabel('Correo electrónico').fill('santi@barberclub.co');
+ await page.getByRole('button',{name:/iniciar sesión/i}).click();
+ await page.evaluate(()=>{location.hash='#/barbero/shop-1/agenda';});
+ await expect(page.getByRole('heading',{name:/Agenda Semanal de/i})).toBeVisible();
+ await page.getByRole('button',{name:'Lista',exact:true}).click();
+ const row=page.getByRole('row').filter({hasText:'Guillermo Ospina'});
+ await expect(row).toContainText('waiting');
+ await row.getByRole('button',{name:'Iniciar corte'}).click();
+ await expect(row).toContainText('in_service');
+ await row.getByRole('button',{name:'Cobrar y finalizar'}).click();
+ const payment=page.getByRole('dialog',{name:'Cobrar y finalizar corte'});
+ await expect(payment).toBeVisible();
+ await expect(payment.getByText(/45.000/)).toBeVisible();
+ await payment.getByRole('button',{name:'Efectivo'}).click();
+ await payment.getByRole('button',{name:/Confirmar pago recibido y finalizar/}).click();
+ const receipt=page.getByRole('dialog',{name:'Comprobante del corte'});
+ await expect(receipt).toBeVisible();
+ await expect(receipt).toContainText('Guillermo Ospina');
+ await expect(receipt).toContainText('cash');
+ await expect(receipt).toContainText('Movimiento contable');
+ await receipt.getByRole('button',{name:'Listo'}).click();
+ await expect(row).toContainText('completed');
+ await row.getByRole('button',{name:'Comprobante'}).click();
+ await expect(page.getByRole('dialog',{name:'Comprobante del corte'})).toBeVisible();
+});
+
+test('Barbero registra ausencia con motivo y conserva el historial de la cita',async({page})=>{
+ await page.clock.install({time:new Date('2026-10-14T00:40:00Z')});
+ await page.goto('/login');
+ await page.getByLabel('Correo electrónico').fill('santi@barberclub.co');
+ await page.getByRole('button',{name:/iniciar sesión/i}).click();
+ await page.evaluate(()=>{location.hash='#/barbero/shop-1/agenda';});
+ await expect(page.getByRole('heading',{name:/Agenda Semanal de/i})).toBeVisible();
+ await page.getByRole('button',{name:'Lista',exact:true}).click();
+ const row=page.getByRole('row').filter({hasText:'Esteban Cárdenas'});
+ await expect(row).toContainText('pending');
+ await row.getByRole('button',{name:'No llegó'}).click();
+ const modal=page.getByRole('dialog',{name:'Cliente no llegó'});
+ await expect(modal.getByLabel('Motivo')).toHaveValue('Cliente no asistió a la cita');
+ await modal.getByRole('button',{name:'Confirmar ausencia'}).click();
+ await expect(modal).toHaveCount(0);
+ await expect(row).toContainText('no_show');
+ await expect(row).toContainText('Cliente no asistió');
+});
