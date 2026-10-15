@@ -31,6 +31,7 @@ interface AppContextType {
   loginAs: (user: User) => void;
   loginWithCredentials: (email: string, password: string, requestedRole?: UserRole) => Promise<void>;
   logout: () => void;
+  updateCurrentUserProfile: (fields: Pick<User,'name'|'email'|'phone'>) => void;
   switchRolePersona: (role: UserRole) => void;
 
   // Active Context Entities
@@ -211,6 +212,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return ()=>{alive=false;};
   },[]);
 
+  const updateCurrentUserProfile = (fields: Pick<User,'name'|'email'|'phone'>) => {
+    if (!currentUser) return;
+    const updated = {...currentUser,...fields};
+    setCurrentUser(updated);
+    setCachedUser(updated);
+  };
+
   const logout = () => {
     if(isLiveBackend){void signOut().catch(()=>clearSession());barberStore.clearRemoteSession();}
     setCachedUser(null);
@@ -315,6 +323,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         loginAs,
         loginWithCredentials,
         logout,
+        updateCurrentUserProfile,
         switchRolePersona,
         currentShop,
         setCurrentShopSlug,
