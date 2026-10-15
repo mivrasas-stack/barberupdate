@@ -27,18 +27,18 @@ function requireMaster(config){
   catch{failure(503,'Falta configurar PLATFORM_SECRETS_KEY en el servidor');}
 }
 function configuredFor(provider,row){
-  if(!row)failure(409,'Guarda primero las credenciales');
+  if(!row)failure(422,'Guarda primero las credenciales');
   const spec=integrationSpec(provider);
-  for(const k of spec.required)if(!row.secrets[k])failure(409,'Falta configurar '+k);
-  if(provider==='whatsapp'&&!row.settings.phoneNumberId)failure(409,'Falta el Phone Number ID');
-  if(provider==='email'&&!row.settings.fromEmail)failure(409,'Falta el remitente verificado');
-  if(provider==='openai'&&!row.settings.model)failure(409,'Falta el modelo');
+  for(const k of spec.required)if(!row.secrets[k])failure(422,'Falta configurar '+k);
+  if(provider==='whatsapp'&&!row.settings.phoneNumberId)failure(422,'Falta el Phone Number ID');
+  if(provider==='email'&&!row.settings.fromEmail)failure(422,'Falta el remitente verificado');
+  if(provider==='openai'&&!row.settings.model)failure(422,'Falta el modelo');
 }
 async function providerFetch(url,options={}){
   let res;
   try{res=await fetch(url,{...options,signal:AbortSignal.timeout(10000)});}
-  catch{failure(502,'El proveedor no respondió. Comprueba conectividad y configuración');}
-  if(!res.ok)failure(502,'El proveedor rechazó la prueba (HTTP '+res.status+'). Comprueba credenciales y permisos');
+  catch{failure(422,'El proveedor no respondió. Comprueba conectividad y configuración');}
+  if(!res.ok)failure(422,'El proveedor rechazó la prueba (HTTP '+res.status+'). Comprueba credenciales y permisos');
   return res.json().catch(()=>({}));
 }
 export async function registerPlatformIntegrationRoutes(app,{config,db,security}){
@@ -81,7 +81,7 @@ export async function registerPlatformIntegrationRoutes(app,{config,db,security}
         return {ok:true,detail:'OpenAI validó la clave y el modelo. No se generaron respuestas ni cargos por tokens.'};
       }
       // An email test sends only to the authenticated platform admin, never a supplied recipient.
-      if(!req.actor.email||!z.email().safeParse(req.actor.email).success)failure(409,'El superadmin necesita un correo verificado');
+      if(!req.actor.email||!z.email().safeParse(req.actor.email).success)failure(422,'El superadmin necesita un correo verificado');
       await providerFetch('https://api.resend.com/emails',{
         method:'POST',
         headers:{Authorization:'Bearer '+row.secrets.apiKey,'Content-Type':'application/json'},

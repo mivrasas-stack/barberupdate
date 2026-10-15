@@ -60,10 +60,11 @@ export async function resolveWhatsAppIntegration(db,config){
   if(!row)return config;
   return {...config,
     whatsappSendEnabled:config.whatsappSendEnabled&&row.enabled,
-    whatsappAccessToken:row.secrets.accessToken||config.whatsappAccessToken,
-    whatsappAppSecret:row.secrets.appSecret||config.whatsappAppSecret,
-    whatsappWebhookVerifyToken:row.secrets.webhookVerifyToken||config.whatsappWebhookVerifyToken,
-    whatsappPhoneNumberId:row.settings.phoneNumberId||config.whatsappPhoneNumberId,
+    // Once an admin config exists, never fall back to stale ENV credentials.
+    whatsappAccessToken:row.secrets.accessToken||'',
+    whatsappAppSecret:row.secrets.appSecret||'',
+    whatsappWebhookVerifyToken:row.secrets.webhookVerifyToken||'',
+    whatsappPhoneNumberId:row.settings.phoneNumberId||'',
     whatsappGraphVersion:row.settings.graphVersion||config.whatsappGraphVersion
   };
 }

@@ -27,3 +27,37 @@ test('platform integration endpoints require actual platform_admins membership',
  assert.equal(save.statusCode,403);
  await app.close();
 });
+
+test('admin can save credential without echoing it, then preserve it on settings-only edit',async()=>{
+ const key=randomBytes(32).toString('base64');
+ const records=new Map();
+ const db={
+  async query(sql,args=[]){
+   if(sql.includes('platform_admins'))return {rowCount:1,rows:[{ok:1}]};
+   if(sql.includes('SELECT secrets FROM'))return records.has(args[0])?{rowCount:1,rows:[{secrets:records.get(args[0]).secrets}]}:{rowCount:0,rows:[]};
+   if(sql.includes('SELECT enabled,settings,secrets'))return records.has(args[0])?{rowCount:1,rows:[records.get(args[0])]}:{rowCount:0,rows:[]};
+   if(sql.includes('INSERT INTO public.platform_integrations')){
+    records.set(args[0],{enabled:args[1],settings:JSON.parse(args[2]),secrets:JSON.parse(args[3]),updated_at:new Date().toISOString()});
+    return {rowCount:1,rows:[]};
+   }
+   throw Error('Unexpected SQL in test');
+  },
+  async transaction(fn){return fn(this);}
+ };
+ const app=Fastify();
+ const security={authenticated:async req=>{req.actor={id:'admin',email:'admin@example.com'};},limited:async()=>{}};
+ await registerPlatformIntegrationRoutes(app,{config:{platformSecretsKey:key},db,security});
+ const payload={enabled:true,settings:{model:'gpt-4.1-mini',systemPrompt:'Testing'},secrets:{apiKey:'sk-secret-never-expose'}};
+ const first=await app.inject({method:'PUT',url:'/api/v1/platform/integrations/openai',payload});
+ assert.equal(first.statusCode,200,first.body);
+ assert.equal(first.json().credentials.apiKey,true);
+ assert.equal(first.body.includes('sk-secret-never-expose'),false);
+ const second=await app.inject({method:'PUT',url:'/api/v1/platform/integrations/openai',payload:{...payload,secrets:{}}});
+ assert.equal(second.statusCode,200,second.body);
+ const listing=await app.inject({method:'GET',url:'/api/v1/platform/integrations'});
+ assert.equal(listing.statusCode,200,listing.body);
+ assert.equal(listing.json().openai.credentials.apiKey,true);
+ assert.equal(listing.body.includes('sk-secret-never-expose'),false);
+ assert.equal(JSON.stringify(records.get('openai')).includes('sk-secret-never-expose'),false);
+ await app.close();
+});
