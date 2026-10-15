@@ -72,11 +72,11 @@ export const ClienteLayout: React.FC<{ children: React.ReactNode }> = ({ childre
           {/* Customer Badge with Loyalty Points */}
           <div className="p-3 mb-4 bg-gradient-to-br from-[#1a1a1a] to-[#141414] rounded-2xl border border-[#2a2a2a] shadow-lg">
             <div className="flex items-center gap-2.5">
-              <img
-                src={currentUser?.avatar || '/branding/barbernow-logo.png'}
-                alt={currentUser?.name || 'Cliente'}
-                className="w-10 h-10 rounded-full object-cover border-2 border-[var(--gold-primary)] shrink-0"
-              />
+              {currentUser?.avatar
+                ? <img src={currentUser.avatar} alt="Mi fotografía de perfil" className="w-10 h-10 rounded-full object-cover border-2 border-[var(--gold-primary)] shrink-0"/>
+                : <div className="w-10 h-10 rounded-full bg-[#252525] border-2 border-[var(--gold-primary)] flex items-center justify-center shrink-0">
+                    <User className="w-5 h-5 text-neutral-400"/>
+                  </div>}
               <div className="truncate">
                 <h3 className="text-xs font-bold text-white truncate">{currentUser?.name || 'Cliente'}</h3>
                 <span className="text-[10px] text-neutral-400">Cliente</span>
