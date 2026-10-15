@@ -157,3 +157,43 @@ test('Agendamiento recupera calendario de tres columnas sin profesionales indepe
   await expect(page.getByText('Servicio seleccionado')).toBeVisible();
   await expect(page.getByText('Quién te atiende')).toBeVisible();
 });
+
+
+test('Agenda del dueño inicia el jueves actual y avanza automáticamente al viernes colombiano',async({page})=>{
+  await page.clock.install({time:new Date('2026-10-16T04:59:30Z')}); // jueves 15, 23:59:30 Bogotá
+  await page.goto('/login');
+  await page.getByLabel('Correo electrónico').fill('contacto@barberclub.co');
+  await page.getByRole('button',{name:/iniciar sesión/i}).click();
+  await page.evaluate(()=>{location.hash='#/barberia/shop-1/agenda';});
+  await expect(page.getByRole('heading',{name:/Agenda Global/i})).toBeVisible();
+  await expect(page.getByTestId('agenda-day-2026-10-15')).toBeVisible();
+  await expect(page.getByTestId('agenda-day-2026-10-16')).toBeVisible();
+  await page.clock.fastForward(90_000);
+  await expect(page.getByTestId('agenda-day-2026-10-16')).toBeVisible();
+  await expect(page.getByTestId('agenda-day-2026-10-15')).toHaveCount(0);
+  await page.getByRole('button',{name:'Hoy',exact:true}).click();
+  await expect(page.locator('input[type="date"]').first()).toHaveValue('2026-10-16');
+});
+
+test('Al seleccionar una cita se abre su ficha sin cambiar el estado y permite iniciar o registrar ausencia',async({page})=>{
+  await page.clock.install({time:new Date('2026-10-15T15:00:00Z')});
+  await page.goto('/login');
+  await page.getByLabel('Correo electrónico').fill('contacto@barberclub.co');
+  await page.getByRole('button',{name:/iniciar sesión/i}).click();
+  await page.evaluate(()=>{location.hash='#/barberia/shop-1/agenda';});
+  await expect(page.getByRole('heading',{name:/Agenda Global/i})).toBeVisible();
+  await page.locator('input[type="date"]').first().fill('2026-10-13');
+  await page.getByRole('button',{name:'Lista',exact:true}).click();
+  const row=page.getByRole('row').filter({hasText:'Mauricio Gómez'});
+  await expect(row).toContainText('confirmed');
+  await row.getByRole('button',{name:'Ver detalle'}).click();
+  const modal=page.getByRole('dialog',{name:'Detalle de la cita'});
+  await expect(modal).toBeVisible();
+  await expect(modal).toContainText('Mauricio Gómez');
+  await expect(modal).toContainText('confirmed');
+  await expect(modal.getByRole('button',{name:'Iniciar corte'})).toBeVisible();
+  await expect(modal.getByRole('button',{name:'El cliente no asistió'})).toBeEnabled();
+  await expect(row).toContainText('confirmed'); // Opening the details is read-only.
+  await modal.getByRole('button',{name:'Cerrar detalle'}).click();
+  await expect(modal).toHaveCount(0);
+});

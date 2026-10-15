@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, {useEffect,useState} from 'react';
+import {useRollingAgendaDate,rollingAgendaDays,shiftAgendaDate} from '../../utils/agendaDates';
 import { useApp } from '../../context/AppContext';
 import { barberStore } from '../../services/store';
 import {isLiveBackend,addBooking,updateBooking,refreshLiveData} from '../../services/liveBackend';
@@ -26,7 +27,9 @@ import {
 export const BarberiaAgenda: React.FC = () => {
   const { currentShop, currentUser, state, currency, addToast } = useApp();
   const [viewType, setViewType] = useState<'day' | 'week' | 'list'>('week');
-  const [selectedDate, setSelectedDate] = useState('2026-10-13');
+  const {today,selectedDate,setSelectedDate,goToday}=useRollingAgendaDate();
+  const [inspectingId,setInspectingId]=useState<string|null>(null);
+  const [statusBusy,setStatusBusy]=useState(false);
   const [selectedBarberId, setSelectedBarberId] = useState<string>(
     currentUser?.role === 'barber_employee' && currentUser?.barberId ? currentUser.barberId : 'all'
   );
@@ -57,35 +60,11 @@ export const BarberiaAgenda: React.FC = () => {
   const barbers = state.barbers.filter(b => b.businessId === shopId);
   const services = state.services.filter(s => s.businessId === shopId);
 
-  // Calculate 7 days of the active week (Monday to Sunday)
-  const getDaysOfWeek = (baseDateStr: string) => {
-    const base = new Date(baseDateStr + 'T12:00:00');
-    const dayOfWeek = base.getDay();
-    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    const monday = new Date(base);
-    monday.setDate(base.getDate() + diffToMonday);
+  // Seven consecutive days starting at today, not a fixed Monday-to-Sunday demo week.
+  const weekDays=rollingAgendaDays(selectedDate,today);
 
-    const days = [];
-    const dayNames = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
-    const shortNames = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
-
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(monday);
-      d.setDate(monday.getDate() + i);
-      const iso = d.toISOString().split('T')[0];
-      days.push({
-        date: iso,
-        dayName: dayNames[i],
-        shortName: shortNames[i],
-        dayNumber: d.getDate(),
-        monthName: d.toLocaleString('es-CO', { month: 'short' }),
-        isToday: iso === '2026-10-13',
-      });
-    }
-    return days;
-  };
-
-  const weekDays = getDaysOfWeek(selectedDate);
+  // Refresh the authoritative backend when crossing midnight in Colombia.
+  useEffect(()=>{if(isLiveBackend)void refreshLiveData().catch(()=>{});},[today]);
 
   // Filtered appointments
   const appointments = state.appointments.filter(a => {
@@ -176,23 +155,31 @@ export const BarberiaAgenda: React.FC = () => {
     setWalkInCustPhone('');
   };
 
-  const handleAdvanceStatus = (apt: Appointment) => {
-    if(isLiveBackend){
-      const next=apt.status==='pending'?'confirmed':apt.status==='confirmed'?'waiting':apt.status==='waiting'?'in_service':null;
-      if(next){
-        void updateBooking(shopId,apt.id,next).then(refreshLiveData)
-          .then(()=>addToast('Estado de cita actualizado en la API','success'))
-          .catch(e=>addToast(e instanceof Error?e.message:'Error al actualizar','error'));
-      }else if(apt.status==='in_service'){setCompletingApt(apt);}
-      return;
+  const inspectingApt=state.appointments.find(a=>a.id===inspectingId&&a.businessId===shopId)||null;
+  const isAbsentEligible=(apt:Appointment)=>
+    Date.parse(apt.date+'T'+apt.startTime+':00-05:00')<=Date.now()-15*60_000;
+  const handleStatus=async(apt:Appointment,status:AppointmentStatus)=>{
+    if(status==='no_show'&&!isAbsentEligible(apt)){
+      addToast('Espera 15 minutos desde la hora de la cita antes de registrar ausencia.','error');return;
     }
-    if (apt.status === 'waiting') {
-      barberStore.updateAppointmentStatus(apt.id, 'in_service');
-      addToast(`Servicio iniciado: ${apt.customerName} pasó a la silla`, 'info');
-    } else if (apt.status === 'in_service' || apt.status === 'confirmed' || apt.status === 'pending') {
-      // Open modal to choose payment method and complete
-      setCompletingApt(apt);
-    }
+    if((status==='cancelled'||status==='no_show')&&
+      !window.confirm(status==='cancelled'
+        ?'¿Cancelar esta cita? El horario volverá a estar disponible cuando aún sea futuro.'
+        :'¿Confirmas que el cliente no asistió? Se liberará cualquier franja aún reservable.'))return;
+    if(statusBusy)return;
+    setStatusBusy(true);
+    try{
+      if(isLiveBackend){
+        await updateBooking(shopId,apt.id,status);
+        await refreshLiveData();
+      }else barberStore.updateAppointmentStatus(apt.id,status);
+      addToast(status==='in_service'?'Corte iniciado':
+        status==='no_show'?'Ausencia registrada':
+        status==='cancelled'?'Cita cancelada':status==='waiting'?'Llegada registrada':
+        status==='confirmed'?'Reserva confirmada':'Estado actualizado','success');
+      setInspectingId(null);
+    }catch(error){addToast(error instanceof Error?error.message:'Error al actualizar la cita','error');}
+    finally{setStatusBusy(false);}
   };
 
   const handleConfirmCompletion = () => {
@@ -209,16 +196,6 @@ export const BarberiaAgenda: React.FC = () => {
     setCompletingApt(null);
   };
 
-  const handleCancelApt = (id: string) => {
-    if(isLiveBackend){
-      void updateBooking(shopId,id,'cancelled').then(refreshLiveData)
-        .then(()=>addToast('Cita cancelada en la API','info'))
-        .catch(e=>addToast(e instanceof Error?e.message:'No se pudo cancelar','error'));
-      return;
-    }
-    barberStore.updateAppointmentStatus(id, 'cancelled');
-    addToast('Cita cancelada', 'info');
-  };
 
   return (
     <div className="space-y-6">
@@ -262,9 +239,7 @@ export const BarberiaAgenda: React.FC = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={() => {
-              const d = new Date(selectedDate + 'T12:00:00');
-              d.setDate(d.getDate() - 1);
-              setSelectedDate(d.toISOString().split('T')[0]);
+              setSelectedDate(shiftAgendaDate(selectedDate,-1));
             }}
             className="p-1.5 rounded-lg bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-white"
           >
@@ -280,9 +255,7 @@ export const BarberiaAgenda: React.FC = () => {
 
           <button
             onClick={() => {
-              const d = new Date(selectedDate + 'T12:00:00');
-              d.setDate(d.getDate() + 1);
-              setSelectedDate(d.toISOString().split('T')[0]);
+              setSelectedDate(shiftAgendaDate(selectedDate,1));
             }}
             className="p-1.5 rounded-lg bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-white"
           >
@@ -290,7 +263,7 @@ export const BarberiaAgenda: React.FC = () => {
           </button>
 
           <button
-            onClick={() => setSelectedDate('2026-10-13')}
+            onClick={goToday}
             className="px-2.5 py-1.5 rounded-lg bg-[#202020] text-neutral-300 text-[11px] font-semibold hover:text-white"
           >
             Hoy
@@ -339,6 +312,7 @@ export const BarberiaAgenda: React.FC = () => {
             <option value="confirmed">Confirmadas</option>
             <option value="completed">Finalizadas</option>
             <option value="cancelled">Canceladas</option>
+            <option value="no_show">No asistió</option>
           </select>
 
           {/* View switcher */}
@@ -383,10 +357,11 @@ export const BarberiaAgenda: React.FC = () => {
                 </div>
 
                 {weekDays.map(day => {
-                  const dayAptsCount = appointments.filter(a => a.date === day.date && a.status !== 'cancelled').length;
+                  const dayAptsCount = appointments.filter(a => a.date === day.date && !['cancelled','no_show'].includes(a.status)).length;
                   return (
                     <div
                       key={day.date}
+                      data-testid={`agenda-day-${day.date}`}
                       className={`p-3 text-center border-r border-white/[0.08] last:border-r-0 transition-colors ${
                         day.isToday ? 'bg-[var(--gold-primary)]/[0.08] ring-1 ring-inset ring-[var(--gold-primary)]/30' : ''
                       }`}
@@ -457,7 +432,7 @@ export const BarberiaAgenda: React.FC = () => {
                                   return (
                                     <div
                                       key={apt.id}
-                                      onClick={() => handleAdvanceStatus(apt)}
+                                      onClick={() => setInspectingId(apt.id)}
                                       className={`p-2.5 rounded-2xl border ${badgeColor} backdrop-blur-md shadow-md transition-all duration-200 hover:scale-[1.03] active:scale-[0.98] cursor-pointer text-left group/card`}
                                     >
                                       <div className="flex items-center justify-between text-[10px] font-mono">
@@ -547,7 +522,7 @@ export const BarberiaAgenda: React.FC = () => {
                         if (apt.status === 'in_service') cardBg = 'bg-[var(--gold-primary)]/10 border-[var(--gold-primary)]/50';
                         if (apt.status === 'waiting') cardBg = 'bg-amber-500/10 border-amber-500/40';
                         if (apt.status === 'completed') cardBg = 'bg-emerald-500/5 border-emerald-500/30';
-                        if (apt.status === 'cancelled') cardBg = 'bg-red-500/5 border-red-500/20 opacity-60';
+                        if (['cancelled','no_show'].includes(apt.status)) cardBg = 'bg-red-500/5 border-red-500/20 opacity-60';
 
                         return (
                           <div
@@ -587,38 +562,38 @@ export const BarberiaAgenda: React.FC = () => {
                               {/* Status Action Buttons */}
                               {apt.status === 'waiting' && (
                                 <button
-                                  onClick={() => handleAdvanceStatus(apt)}
+                                  onClick={() => setInspectingId(apt.id)}
                                   className="px-3 py-1.5 rounded-lg bg-[var(--gold-primary)] text-black font-bold text-xs flex items-center gap-1 shadow-sm"
                                   title="Iniciar corte en la silla"
                                 >
                                   <Play className="w-3.5 h-3.5" />
-                                  <span>Iniciar Servicio</span>
+                                  <span>Ver cita</span>
                                 </button>
                               )}
 
                               {apt.status === 'in_service' && (
                                 <button
-                                  onClick={() => handleAdvanceStatus(apt)}
+                                  onClick={() => setInspectingId(apt.id)}
                                   className="px-3 py-1.5 rounded-lg bg-emerald-500 text-black font-bold text-xs flex items-center gap-1 shadow-sm"
                                   title="Finalizar corte y registrar cobro en caja"
                                 >
                                   <Check className="w-3.5 h-3.5" />
-                                  <span>Finalizar & Cobrar</span>
+                                  <span>Ver cita</span>
                                 </button>
                               )}
 
                               {apt.status === 'confirmed' && (
                                 <button
-                                  onClick={() => handleAdvanceStatus(apt)}
+                                  onClick={() => setInspectingId(apt.id)}
                                   className="px-3 py-1.5 rounded-lg bg-[#282828] hover:bg-[var(--gold-primary)] hover:text-black font-semibold text-xs text-white"
                                 >
                                   Finalizar
                                 </button>
                               )}
 
-                              {apt.status !== 'completed' && apt.status !== 'cancelled' && (
+                              {!['completed','cancelled','no_show'].includes(apt.status) && (
                                 <button
-                                  onClick={() => handleCancelApt(apt.id)}
+                                  onClick={() => setInspectingId(apt.id)}
                                   className="p-1.5 rounded-lg text-neutral-500 hover:text-red-400"
                                   title="Cancelar cita"
                                 >
@@ -680,12 +655,12 @@ export const BarberiaAgenda: React.FC = () => {
                       </span>
                     </td>
                     <td className="py-3 px-4 text-right">
-                      {apt.status !== 'completed' && apt.status !== 'cancelled' ? (
+                      {!['completed','cancelled','no_show'].includes(apt.status) ? (
                         <button
-                          onClick={() => handleAdvanceStatus(apt)}
+                          onClick={() => setInspectingId(apt.id)}
                           className="px-2.5 py-1 rounded bg-[var(--gold-primary)] text-black font-bold text-xs"
                         >
-                          Avanzar
+                          Ver detalle
                         </button>
                       ) : (
                         <span className="text-neutral-500 text-[11px]">—</span>
@@ -697,6 +672,54 @@ export const BarberiaAgenda: React.FC = () => {
             </tbody>
           </table>
         </div>
+      )}
+
+      {/* A click must never mutate a booking without an explicit action. */}
+      {inspectingApt&&(
+       <div role="presentation" className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+        <section role="dialog" aria-modal="true" aria-labelledby="agenda-detail-heading"
+         className="w-full max-w-lg overflow-y-auto max-h-[90vh] rounded-3xl border border-[#343434] bg-[#151515] p-5 sm:p-6 shadow-2xl">
+         <div className="flex items-center justify-between border-b border-[#303030] pb-4">
+          <h2 id="agenda-detail-heading" className="text-lg font-bold text-white">Detalle de la cita</h2>
+          <button type="button" aria-label="Cerrar detalle" onClick={()=>setInspectingId(null)} className="p-2 text-neutral-400 hover:text-white"><X className="w-5 h-5"/></button>
+         </div>
+         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-5 text-xs">
+          {([
+           ['Cliente',inspectingApt.customerName],
+           ['Teléfono',inspectingApt.customerPhone||'No registrado'],
+           ['Servicio',inspectingApt.serviceName],
+           ['Barbero',state.barbers.find(b=>b.id===inspectingApt.barberId)?.name||'Sin asignar'],
+           ['Fecha',inspectingApt.date],
+           ['Hora',inspectingApt.startTime+' – '+inspectingApt.endTime],
+           ['Duración',inspectingApt.durationMinutes+' minutos'],
+           ['Estado',inspectingApt.status],
+           ['Valor',formatCurrency(inspectingApt.finalPrice,currency)]
+          ] as [string,string][]).map(([label,value])=>
+           <div key={label}><dt className="text-neutral-500">{label}</dt><dd className="mt-1 font-semibold text-white break-words">{value}</dd></div>
+          )}
+          {inspectingApt.notes&&<div className="sm:col-span-2"><dt className="text-neutral-500">Notas del cliente</dt><dd className="mt-1 text-neutral-200 whitespace-pre-wrap">{inspectingApt.notes}</dd></div>}
+         </dl>
+         <div className="space-y-3 border-t border-[#303030] pt-4">
+          {inspectingApt.status==='pending'&&<button disabled={statusBusy} onClick={()=>void handleStatus(inspectingApt,'confirmed')} className="w-full rounded-xl bg-[var(--gold-primary)] px-4 py-3 text-xs font-bold text-black disabled:opacity-50">Confirmar cita</button>}
+          {inspectingApt.status==='confirmed'&&<button disabled={statusBusy} onClick={()=>void handleStatus(inspectingApt,'waiting')} className="w-full rounded-xl border border-amber-500/50 px-4 py-3 text-xs font-bold text-amber-300 disabled:opacity-50">Registrar llegada del cliente</button>}
+          {['confirmed','waiting'].includes(inspectingApt.status)&&<button disabled={statusBusy} onClick={()=>void handleStatus(inspectingApt,'in_service')} className="w-full rounded-xl bg-[var(--gold-primary)] px-4 py-3 text-xs font-bold text-black disabled:opacity-50"><Play className="mr-1 inline h-4 w-4"/>Iniciar corte</button>}
+          {inspectingApt.status==='in_service'&&<button disabled={statusBusy} onClick={()=>{setCompletingApt(inspectingApt);setInspectingId(null)}} className="w-full rounded-xl bg-emerald-500 px-4 py-3 text-xs font-bold text-black disabled:opacity-50">Finalizar servicio</button>}
+          {['pending','confirmed','waiting'].includes(inspectingApt.status)&&(
+           <div className="flex flex-col sm:flex-row gap-2">
+            {['confirmed','waiting'].includes(inspectingApt.status)&&
+             <button disabled={statusBusy||!isAbsentEligible(inspectingApt)} onClick={()=>void handleStatus(inspectingApt,'no_show')}
+              title={!isAbsentEligible(inspectingApt)?'Disponible 15 minutos después de la hora reservada':''}
+              className="flex-1 rounded-xl border border-orange-500/40 p-3 text-xs font-bold text-orange-300 disabled:opacity-35">El cliente no asistió</button>}
+            <button disabled={statusBusy} onClick={()=>void handleStatus(inspectingApt,'cancelled')}
+             className="flex-1 rounded-xl border border-rose-500/40 p-3 text-xs font-bold text-rose-300 disabled:opacity-50">Cancelar cita y liberar horario</button>
+           </div>
+          )}
+          {['completed','cancelled','no_show'].includes(inspectingApt.status)&&
+           <p className="text-xs text-neutral-400">Esta cita ya está cerrada. Su historial se conserva.</p>}
+          <p className="text-[11px] text-neutral-500">Al cancelar o marcar ausencia, PostgreSQL libera el bloqueo de ese horario. Solo los turnos futuros pueden reservarse de nuevo.</p>
+         </div>
+        </section>
+       </div>
       )}
 
       {/* Modal: Nueva Cita Programada */}
