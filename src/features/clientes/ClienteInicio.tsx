@@ -26,7 +26,7 @@ export const ClienteInicio: React.FC = () => {
   const {items:linkedBusinesses,loading:linkedLoading}=useCustomerLinks(currentUser?.id);
 
   const customerId = currentUser?.id || 'usr-client-1';
-  const loyalty = state.loyalty[customerId] || (!isLiveBackend ? state.loyalty['usr-client-1'] : undefined) || {points: isLiveBackend?0:420};
+  const loyalty = state.loyalty[customerId] || (!isLiveBackend ? state.loyalty['usr-client-1'] : undefined) || {points: 0};
 
   // Next appointment
   const customerAppointments = state.appointments.filter(a => a.customerId === customerId || (!isLiveBackend&&a.customerName?.includes('Camilo')));
@@ -47,7 +47,7 @@ export const ClienteInicio: React.FC = () => {
     {
       id: 'citas',
       title: 'Agendar Cita',
-      desc: 'Reserva tu próximo turno en 3 pasos: elige a tu barbero preferido, servicio, fecha y hora disponible.',
+      desc: 'Elige barbería, servicio, profesional y un horario disponible en el calendario.',
       icon: Calendar,
       gradient: 'from-blue-500 to-indigo-600',
       badge: 'Agendamiento Rápido',
@@ -60,7 +60,7 @@ export const ClienteInicio: React.FC = () => {
       desc: 'Sigue tu turno en tiempo real desde tu móvil, tiempo de espera estimado y pide café o bebidas al mostrador.',
       icon: Coffee,
       gradient: 'from-emerald-500 to-teal-600',
-      badge: 'Turno en Vivo',
+      badge: 'Sala de espera',
       badgeColor: 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20',
       path: '/clientes/sala-espera',
     },
@@ -100,7 +100,7 @@ export const ClienteInicio: React.FC = () => {
       desc: 'Guarda tus preferencias de corte (número de máquina, degradado, tipo de barba) y actualiza tus datos.',
       icon: User,
       gradient: 'from-amber-600 to-orange-700',
-      badge: 'Preferencia Fade',
+      badge: 'Editar preferencias',
       badgeColor: 'text-amber-400 bg-amber-400/10 border-amber-400/20',
       path: '/clientes/perfil',
     },
@@ -129,7 +129,7 @@ export const ClienteInicio: React.FC = () => {
               <div>
                 <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/[0.06] border border-white/[0.1] text-[11px] font-semibold text-neutral-300">
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  <span>Cliente Miembro Gold</span>
+                  <span>Cliente registrado</span>
                 </div>
                 <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight mt-0.5">
                   ¡Hola, {currentUser?.name?.split(' ')[0] || 'Camilo'}! 👋
@@ -212,13 +212,13 @@ export const ClienteInicio: React.FC = () => {
                 </div>
                 <div>
                   <span className="text-[10px] uppercase font-bold tracking-widest text-[var(--gold-primary)] block">
-                    Apple Pass Card
+                    Puntos de fidelidad
                   </span>
-                  <h3 className="text-sm font-black text-white">Barber Club VIP</h3>
+                  <h3 className="text-sm font-black text-white">Mis puntos</h3>
                 </div>
               </div>
               <span className="px-2 py-0.5 rounded-full bg-[var(--gold-primary)]/20 border border-[var(--gold-primary)]/40 text-[10px] font-bold text-[var(--gold-primary)]">
-                Nivel Oro
+                Mi saldo
               </span>
             </div>
 
@@ -226,18 +226,18 @@ export const ClienteInicio: React.FC = () => {
               <span className="text-[10px] uppercase tracking-wider text-neutral-400 block font-medium">Puntos Acumulados</span>
               <div className="flex items-baseline gap-2 mt-1">
                 <span className="text-3xl font-black text-[var(--gold-primary)] font-mono">{loyalty.points ?? 0}</span>
-                <span className="text-xs text-neutral-400 font-medium">/ 500 para corte gratis</span>
+                <span className="text-xs text-neutral-400 font-medium">puntos disponibles</span>
               </div>
 
               {/* Progress bar */}
               <div className="w-full bg-neutral-800 h-2 rounded-full mt-2.5 overflow-hidden">
                 <div
                   className="bg-gradient-to-r from-amber-400 to-[var(--gold-primary)] h-full rounded-full transition-all duration-500"
-                  style={{ width: `${Math.min(100, ((loyalty.points ?? 0) / 500) * 100)}%` }}
+                  style={{ width: '0%' }}
                 />
               </div>
               <span className="text-[10px] text-neutral-400 block mt-1.5 text-right font-mono">
-                Faltan {Math.max(0, 500 - (loyalty.points ?? 0))} pts
+                Consulta las recompensas publicadas por tu barbería
               </span>
             </div>
           </div>
@@ -258,10 +258,10 @@ export const ClienteInicio: React.FC = () => {
         </div>
         {linkedLoading?<p className="text-xs text-neutral-400">Cargando vínculos...</p>:
          linkedBusinesses.length===0?<p className="text-xs text-neutral-400">Todavía no tienes barberías o profesionales vinculados.</p>:
-         <div className="grid sm:grid-cols-2 gap-3">{linkedBusinesses.map(link=>
+         <div className="grid sm:grid-cols-2 gap-3">{linkedBusinesses.filter(link=>link.business_kind==='barbershop').map(link=>
           <button key={link.tenant_id} onClick={()=>navigate('/clientes/citas/nueva')}
            className="p-4 rounded-2xl bg-[#1e1e1e] border border-neutral-700 text-left hover:border-[var(--gold-primary)]">
-           <span className="text-[10px] uppercase text-[var(--gold-primary)]">{link.business_kind==='independent'?'Barbero independiente':'Barbería'}</span>
+           <span className="text-[10px] uppercase text-[var(--gold-primary)]">Barbería</span>
            <h3 className="text-white font-bold mt-1">{link.barber_name||link.name}</h3>
            <span className="text-neutral-400 text-xs">Agendar cita →</span>
           </button>)}</div>}
