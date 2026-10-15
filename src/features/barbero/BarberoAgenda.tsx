@@ -1,6 +1,6 @@
 import React, {useEffect,useState} from 'react';
 import {rollingAgendaDays,shiftAgendaDate,useRollingAgendaDate,todayInBogota} from '../../utils/agendaDates';
-import {isLiveBackend,addBooking,updateBooking,refreshLiveData} from '../../services/liveBackend';
+import {isLiveBackend,addBooking,updateBooking,refreshLiveData,finishAndPayAppointment,fetchAppointmentReceipt,type AppointmentPaymentReceipt} from '../../services/liveBackend';
 import { useApp } from '../../context/AppContext';
 import { barberStore } from '../../services/store';
 import { formatCurrency } from '../../utils/formatters';
@@ -39,7 +39,15 @@ export const BarberoAgenda: React.FC = () => {
   // Modals
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
   const [inspectingApt, setInspectingApt] = useState<Appointment | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('nequi');
+  const [paymentMethod,setPaymentMethod]=useState<Exclude<PaymentMethod,'split'>|''>('');
+  const [paymentReference,setPaymentReference]=useState('');
+  const [payTarget,setPayTarget]=useState<Appointment|null>(null);
+  const [receipt,setReceipt]=useState<AppointmentPaymentReceipt|null>(null);
+  const [cancelTarget,setCancelTarget]=useState<Appointment|null>(null);
+  const [cancelKind,setCancelKind]=useState<'no_show'|'cancelled'>('no_show');
+  const [cancelReason,setCancelReason]=useState('Cliente no asistió a la cita');
+  const [extraReason,setExtraReason]=useState('');
+  const [receiptBusy,setReceiptBusy]=useState(false);
 
   // New appointment form state
   const [formCustName, setFormCustName] = useState('');
@@ -140,24 +148,103 @@ export const BarberoAgenda: React.FC = () => {
     Date.parse(apt.date+'T'+apt.startTime+':00-05:00')<=Date.now()-15*60_000;
   const changeStatus=async(apt:Appointment,status:AppointmentStatus)=>{
     if(!barber.businessId||actionBusy)return;
-    if(status==='no_show'&&!noShowAllowed(apt)){
-      addToast('Solo puedes registrar ausencia 15 minutos después de la hora de la cita.','error');return;
+    setActionBusy(true);
+    try{
+      if(isLiveBackend){await updateBooking(barber.businessId,apt.id,status);await refreshLiveData();}
+      else barberStore.updateAppointmentStatus(apt.id,status);
+      addToast(status==='in_service'?'Corte iniciado':'Estado actualizado','success');
+      setInspectingApt(null);
+    }catch(err){addToast(err instanceof Error?err.message:'No se pudo actualizar la cita','error');}
+    finally{setActionBusy(false);}
+  };
+  const beginPayment=(apt:Appointment)=>{
+    setInspectingApt(null);setPaymentMethod('');setPaymentReference('');setPayTarget(apt);
+  };
+  const confirmPayment=async()=>{
+    if(!payTarget||!barber.businessId||!paymentMethod||actionBusy)return;
+    setActionBusy(true);
+    try{
+      let saved:AppointmentPaymentReceipt;
+      if(isLiveBackend){
+        saved=await finishAndPayAppointment(barber.businessId,payTarget.id,paymentMethod,paymentReference.trim());
+        await refreshLiveData();
+      }else{
+        barberStore.updateAppointmentStatus(payTarget.id,'completed',paymentMethod);
+        const txn=barberStore.getState().transactions.find(t=>t.referenceId===payTarget.id&&t.type==='income');
+        saved={
+          appointmentId:payTarget.id,customerName:payTarget.customerName,serviceName:payTarget.serviceName,
+          startsAt:payTarget.date+'T'+payTarget.startTime+':00-05:00',completed:true,
+          totalMinor:payTarget.finalPrice,currency:'COP',paymentMethod,transactionId:txn?.id||null,
+          receivedAt:txn?.date||new Date().toISOString(),recordedBy:null,
+          reference:paymentReference,verification:'Demostración: este cobro no es un pago real.'
+        };
+      }
+      setPayTarget(null);setReceipt(saved);
+      addToast('Corte finalizado. Ingreso contabilizado una sola vez.','success');
+    }catch(err){addToast(err instanceof Error?err.message:'No fue posible confirmar el cobro','error');}
+    finally{setActionBusy(false);}
+  };
+  const viewReceipt=async(apt:Appointment)=>{
+    if(actionBusy)return;
+    setInspectingApt(null);
+    if(!isLiveBackend){
+      const txn=barberStore.getState().transactions.find(t=>t.referenceId===apt.id&&t.type==='income');
+      if(!txn){addToast('No hay un pago asociado a esta cita','info');return;}
+      setReceipt({appointmentId:apt.id,customerName:apt.customerName,serviceName:apt.serviceName,
+       startsAt:apt.date+'T'+apt.startTime+':00-05:00',completed:true,totalMinor:txn.amount,currency:'COP',
+       paymentMethod:txn.paymentMethod,transactionId:txn.id,receivedAt:txn.date,recordedBy:null,
+       reference:txn.notes||'',verification:'Comprobante de demostración'});return;
     }
-    if(['cancelled','no_show'].includes(status)&&!window.confirm(status==='no_show'
-      ?'¿Confirmas que el cliente no asistió?'
-      :'¿Cancelar la cita y liberar su horario para futuras reservas?'))return;
+    setReceiptBusy(true);
+    try{setReceipt(await fetchAppointmentReceipt(apt.businessId||barber.businessId,apt.id));}
+    catch(err){addToast(err instanceof Error?err.message:'No se pudo cargar el comprobante','error');}
+    finally{setReceiptBusy(false);}
+  };
+  const beginCancellation=(apt:Appointment,kind:'no_show'|'cancelled')=>{
+    setInspectingApt(null);
+    setCancelTarget(apt);setCancelKind(kind);setExtraReason('');
+    setCancelReason(kind==='no_show'?'Cliente no asistió a la cita':'Cancelada a solicitud del cliente');
+  };
+  const confirmCancellation=async()=>{
+    if(!cancelTarget||actionBusy||!barber.businessId)return;
+    const reason=(cancelReason==='Otro motivo'?extraReason.trim():cancelReason).slice(0,250);
+    if(reason.length<3){addToast('Selecciona o escribe un motivo válido.','error');return;}
+    if(cancelKind==='no_show'&&!noShowAllowed(cancelTarget)){
+      addToast('La ausencia se puede registrar 15 minutos después del inicio previsto.','error');return;
+    }
     setActionBusy(true);
     try{
       if(isLiveBackend){
-        await updateBooking(barber.businessId,apt.id,status);
+        await updateBooking(barber.businessId,cancelTarget.id,cancelKind,reason);
         await refreshLiveData();
-      }else barberStore.updateAppointmentStatus(apt.id,status,paymentMethod);
-      addToast(status==='in_service'?'Corte iniciado':status==='completed'?'Servicio finalizado':
-       status==='no_show'?'Ausencia registrada':status==='cancelled'?'Cita cancelada':'Estado actualizado','success');
-      setInspectingApt(null);
-    }catch(err){addToast(err instanceof Error?err.message:'No se pudo cambiar el estado','error');}
+      }else{
+        barberStore.updateAppointmentStatus(cancelTarget.id,cancelKind);
+        barberStore.setAppointmentCancellationReason(cancelTarget.id,reason);
+      }
+      addToast(cancelKind==='no_show'?'Ausencia registrada; horario liberado':'Cita cancelada; horario liberado','success');
+      setCancelTarget(null);
+    }catch(err){addToast(err instanceof Error?err.message:'No se pudo cancelar la cita','error');}
     finally{setActionBusy(false);}
   };
+  const quickActions=(apt:Appointment)=>(
+    <div className="mt-2 flex flex-wrap gap-1.5">
+     {['pending','confirmed','waiting'].includes(apt.status)&&
+      <button disabled={actionBusy} onClick={()=>void changeStatus(apt,'in_service')}
+       className="flex-1 rounded-lg bg-[var(--gold-primary)] px-2 py-2 text-[11px] font-extrabold text-black disabled:opacity-40">Iniciar corte</button>}
+     {apt.status==='in_service'&&
+      <button disabled={actionBusy} onClick={()=>beginPayment(apt)}
+       className="flex-1 rounded-lg bg-emerald-500 px-2 py-2 text-[11px] font-bold text-black disabled:opacity-40">Cobrar y finalizar</button>}
+     {['pending','confirmed','waiting'].includes(apt.status)&&
+      <button disabled={actionBusy||!noShowAllowed(apt)} onClick={()=>beginCancellation(apt,'no_show')}
+       title={!noShowAllowed(apt)?'Disponible después de 15 minutos de espera':''}
+       className="rounded-lg border border-orange-500/40 px-2 py-2 text-[11px] text-orange-300 disabled:opacity-35">No llegó</button>}
+     {apt.status==='completed'&&
+      <button disabled={receiptBusy} onClick={()=>void viewReceipt(apt)}
+       className="rounded-lg border border-emerald-500/40 px-2 py-2 text-[11px] text-emerald-300 disabled:opacity-40">Comprobante</button>}
+     {['cancelled','no_show'].includes(apt.status)&&
+      <span className="text-[10px] text-neutral-400">{apt.cancellationReason||'Cita cerrada'}</span>}
+    </div>
+  );
 
 
   return (
@@ -408,8 +495,8 @@ export const BarberoAgenda: React.FC = () => {
                                   }
 
                                   return (
+                                    <div key={apt.id} className="space-y-1.5">
                                     <button
-                                      key={apt.id}
                                       onClick={() => setInspectingApt(apt)}
                                       className={`w-full text-left p-2.5 rounded-2xl border ${badgeColor} backdrop-blur-md shadow-md transition-all duration-200 hover:scale-[1.03] active:scale-[0.98] cursor-pointer block group/card`}
                                     >
@@ -429,6 +516,8 @@ export const BarberoAgenda: React.FC = () => {
                                         {formatCurrency(apt.finalPrice, currency)}
                                       </div>
                                     </button>
+                                    {quickActions(apt)}
+                                    </div>
                                   );
                                 })}
                               </div>
@@ -540,12 +629,10 @@ export const BarberoAgenda: React.FC = () => {
                     </span>
                   </td>
                   <td className="py-3 px-4 text-right">
-                    <button
-                      onClick={() => setInspectingApt(apt)}
-                      className="px-2.5 py-1 rounded bg-[#252525] hover:bg-[var(--gold-primary)] hover:text-black text-neutral-200 text-xs font-semibold"
-                    >
-                      Ver Detalle
-                    </button>
+                    <div className="flex flex-col gap-1.5">
+                      <button onClick={()=>setInspectingApt(apt)} className="px-2.5 py-1 rounded bg-[#252525] text-neutral-200 text-xs font-semibold">Ver detalle</button>
+                      {quickActions(apt)}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -554,57 +641,114 @@ export const BarberoAgenda: React.FC = () => {
         </div>
       )}
 
-      {/* State changes require an explicit action, not just opening a card. */}
+      {/* Fast workflow: one tap to start from a card, one payment confirmation to close. */}
       {inspectingApt&&(
-       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
-        <section role="dialog" aria-modal="true" aria-labelledby="barber-appointment-heading"
-         className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl border border-[#303030] bg-[#151515] p-5 sm:p-6">
-         <div className="flex justify-between items-center border-b border-[#303030] pb-3">
-          <h2 id="barber-appointment-heading" className="text-lg font-bold text-white">Detalle de la cita</h2>
-          <button aria-label="Cerrar detalle" onClick={()=>setInspectingApt(null)} className="p-2 text-neutral-400 hover:text-white"><X className="w-5 h-5"/></button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3 backdrop-blur-sm">
+          <section role="dialog" aria-modal="true" aria-labelledby="quick-detail-heading"
+           className="w-full max-w-md max-h-[90vh] overflow-auto rounded-2xl border border-[#343434] bg-[#151515] p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 id="quick-detail-heading" className="text-lg font-bold text-white">Cita · {inspectingApt.customerName}</h2>
+              <button type="button" aria-label="Cerrar detalle" onClick={()=>setInspectingApt(null)} className="p-2 text-neutral-400"><X className="w-5 h-5"/></button>
+            </div>
+            <div className="rounded-xl bg-[#222] p-4 text-sm space-y-2">
+              <p className="text-white font-bold">{inspectingApt.serviceName}</p>
+              <p className="text-neutral-300">{inspectingApt.date} · {inspectingApt.startTime} · {inspectingApt.durationMinutes} min</p>
+              <p className="text-[var(--gold-primary)] font-bold">{formatCurrency(inspectingApt.finalPrice,currency)}</p>
+              <p className="text-xs text-neutral-400">Estado: {inspectingApt.status} · {inspectingApt.customerPhone}</p>
+              {inspectingApt.notes&&<p className="text-xs text-neutral-300">Notas: {inspectingApt.notes}</p>}
+              {inspectingApt.cancellationReason&&<p className="text-xs text-rose-300">Motivo: {inspectingApt.cancellationReason}</p>}
+            </div>
+            {quickActions(inspectingApt)}
+            {['pending','confirmed','waiting'].includes(inspectingApt.status)&&
+              <button onClick={()=>beginCancellation(inspectingApt,'cancelled')}
+               className="w-full rounded-xl border border-rose-500/40 p-3 text-xs font-semibold text-rose-300">Cancelar cita con motivo</button>}
+          </section>
+        </div>
+      )}
+      {payTarget&&(
+       <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 p-3 backdrop-blur-sm">
+        <section role="dialog" aria-modal="true" aria-labelledby="quick-payment-heading" className="w-full max-w-md rounded-2xl border border-[#343434] bg-[#151515] p-5 space-y-4">
+         <div className="flex items-center justify-between">
+          <h2 id="quick-payment-heading" className="text-lg font-extrabold text-white">Cobrar y finalizar corte</h2>
+          <button type="button" onClick={()=>setPayTarget(null)} aria-label="Cerrar cobro" className="p-2 text-neutral-400"><X className="w-5 h-5"/></button>
          </div>
-         <dl className="grid sm:grid-cols-2 gap-4 py-5 text-xs">
+         <div className="rounded-xl border border-[var(--gold-primary)]/30 bg-[#222] p-4">
+          <p className="text-xs text-neutral-400">{payTarget.customerName} · {payTarget.serviceName}</p>
+          <p className="mt-2 text-3xl font-black text-[var(--gold-primary)]">{formatCurrency(payTarget.finalPrice,currency)}</p>
+         </div>
+         <p className="text-xs font-bold text-neutral-300">¿Cómo recibiste el pago?</p>
+         <div role="group" aria-label="Método de pago" className="grid grid-cols-2 sm:grid-cols-3 gap-2">
           {([
-           ['Cliente',inspectingApt.customerName],
-           ['Teléfono',inspectingApt.customerPhone||'No registrado'],
-           ['Servicio',inspectingApt.serviceName],
-           ['Fecha',inspectingApt.date],
-           ['Horario',inspectingApt.startTime+' – '+inspectingApt.endTime],
-           ['Duración',inspectingApt.durationMinutes+' minutos'],
-           ['Estado',inspectingApt.status],
-           ['Importe',formatCurrency(inspectingApt.finalPrice,currency)]
-          ] as [string,string][]).map(([title,value])=>
-           <div key={title}><dt className="text-neutral-500">{title}</dt><dd className="mt-1 font-bold text-white">{value}</dd></div>
+           ['cash','Efectivo'],['nequi','Nequi'],['daviplata','Daviplata'],
+           ['transfer','Transferencia'],['debit','Débito'],['credit','Crédito']
+          ] as const).map(([id,name])=>
+           <button key={id} type="button" aria-pressed={paymentMethod===id}
+            onClick={()=>setPaymentMethod(id)}
+            className={`rounded-xl border px-2 py-3 text-xs font-semibold ${paymentMethod===id?
+              'bg-[var(--gold-primary)] text-black border-[var(--gold-primary)]':
+              'border-[#353535] text-neutral-300 bg-[#202020]'}`}>{name}</button>
           )}
-          {inspectingApt.notes&&<div className="sm:col-span-2"><dt className="text-neutral-500">Notas</dt><dd className="mt-1 whitespace-pre-wrap text-neutral-200">{inspectingApt.notes}</dd></div>}
-         </dl>
-         <div className="space-y-3 border-t border-[#303030] pt-4">
-          {inspectingApt.status==='pending'&&<button disabled={actionBusy} onClick={()=>void changeStatus(inspectingApt,'confirmed')}
-           className="w-full rounded-xl bg-[var(--gold-primary)] p-3 text-xs font-bold text-black disabled:opacity-40">Confirmar cita</button>}
-          {inspectingApt.status==='confirmed'&&<button disabled={actionBusy} onClick={()=>void changeStatus(inspectingApt,'waiting')}
-           className="w-full rounded-xl border border-amber-500/40 p-3 text-xs font-bold text-amber-300 disabled:opacity-40">Registrar llegada</button>}
-          {['confirmed','waiting'].includes(inspectingApt.status)&&<button disabled={actionBusy} onClick={()=>void changeStatus(inspectingApt,'in_service')}
-           className="w-full rounded-xl bg-[var(--gold-primary)] p-3 text-xs font-bold text-black disabled:opacity-40"><Scissors className="mr-1 inline h-4 w-4"/>Iniciar corte</button>}
-          {inspectingApt.status==='in_service'&&<>
-           {!isLiveBackend&&<div className="space-y-2 text-xs">
-            <p className="text-neutral-400">Método de pago:</p>
-            <div className="flex flex-wrap gap-2">{(['cash','nequi','daviplata','transfer'] as const).map(method=>
-             <button key={method} onClick={()=>setPaymentMethod(method)} className={`rounded-lg border px-3 py-1.5 ${paymentMethod===method?'border-[var(--gold-primary)] text-[var(--gold-primary)]':'border-neutral-700 text-neutral-300'}`}>{method}</button>)}</div>
-           </div>}
-           <button disabled={actionBusy} onClick={()=>void changeStatus(inspectingApt,'completed')}
-            className="w-full rounded-xl bg-emerald-500 p-3 text-xs font-bold text-black disabled:opacity-40">Finalizar corte</button>
-           {isLiveBackend&&<p className="text-[11px] text-neutral-400">Para registrar un pago real, utiliza el módulo de caja.</p>}
-          </>}
-          {['pending','confirmed','waiting'].includes(inspectingApt.status)&&
-           <div className="flex flex-col sm:flex-row gap-2">
-            {['confirmed','waiting'].includes(inspectingApt.status)&&<button disabled={actionBusy||!noShowAllowed(inspectingApt)} onClick={()=>void changeStatus(inspectingApt,'no_show')}
-             title={!noShowAllowed(inspectingApt)?'Disponible tras 15 minutos de espera':''}
-             className="flex-1 rounded-xl border border-orange-500/40 p-3 text-xs text-orange-300 font-bold disabled:opacity-35">Cliente no asistió</button>}
-            <button disabled={actionBusy} onClick={()=>void changeStatus(inspectingApt,'cancelled')}
-             className="flex-1 rounded-xl border border-rose-500/40 p-3 text-xs text-rose-300 font-bold disabled:opacity-40">Cancelar cita</button>
-           </div>}
-          {['completed','cancelled','no_show'].includes(inspectingApt.status)&&<p className="text-xs text-neutral-400">Esta cita ya está cerrada.</p>}
          </div>
+         {paymentMethod&&paymentMethod!=='cash'&&<div>
+          <label htmlFor="quick-ref" className="text-xs text-neutral-400">Referencia de pago (opcional)</label>
+          <input id="quick-ref" maxLength={120} value={paymentReference} onChange={e=>setPaymentReference(e.target.value)}
+           placeholder="Comprobante o referencia bancaria"
+           className="mt-1 w-full rounded-xl border border-[#353535] bg-[#202020] px-3 py-2.5 text-sm text-white"/>
+         </div>}
+         <button disabled={!paymentMethod||actionBusy} onClick={()=>void confirmPayment()}
+          className="w-full rounded-xl bg-emerald-500 p-4 text-sm font-extrabold text-black disabled:opacity-40">
+          {actionBusy?'Registrando...':'Confirmar pago recibido y finalizar'}
+         </button>
+         <p className="text-[11px] text-neutral-400">Al confirmar declaras que recibiste el dinero. Se registrará un único ingreso en Contabilidad y se cerrará la cita. No es una verificación bancaria.</p>
+        </section>
+       </div>
+      )}
+      {cancelTarget&&(
+       <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 p-3 backdrop-blur-sm">
+        <section role="dialog" aria-modal="true" aria-labelledby="quick-cancel-heading" className="w-full max-w-md rounded-2xl border border-[#343434] bg-[#151515] p-5 space-y-4">
+         <div className="flex items-center justify-between">
+          <h2 id="quick-cancel-heading" className="text-lg font-bold text-white">{cancelKind==='no_show'?'Cliente no llegó':'Cancelar cita'}</h2>
+          <button type="button" onClick={()=>setCancelTarget(null)} aria-label="Cerrar cancelación" className="p-2 text-neutral-400"><X className="w-5 h-5"/></button>
+         </div>
+         <p className="text-xs text-neutral-400">{cancelTarget.customerName} · {cancelTarget.serviceName} · {cancelTarget.startTime}</p>
+         <label htmlFor="quick-cancel-reason" className="text-xs font-semibold text-neutral-200">Motivo</label>
+         <select id="quick-cancel-reason" value={cancelReason} onChange={e=>setCancelReason(e.target.value)}
+          className="w-full rounded-xl border border-[#353535] bg-[#202020] p-3 text-sm text-white">
+          <option value="Cliente no asistió a la cita">Cliente no asistió</option>
+          <option value="Cancelada a solicitud del cliente">Canceló el cliente</option>
+          <option value="Imprevisto o cierre de la barbería">Imprevisto de la barbería</option>
+          <option value="Otro motivo">Otro motivo</option>
+         </select>
+         {cancelReason==='Otro motivo'&&
+          <textarea autoFocus maxLength={250} value={extraReason} onChange={e=>setExtraReason(e.target.value)}
+           placeholder="Escribe el motivo" rows={2}
+           className="w-full rounded-xl border border-[#353535] bg-[#202020] p-3 text-sm text-white"/>}
+         <button disabled={actionBusy||(cancelReason==='Otro motivo'&&extraReason.trim().length<3)}
+          onClick={()=>void confirmCancellation()}
+          className="w-full rounded-xl bg-orange-500 p-3.5 text-sm font-bold text-black disabled:opacity-40">
+          {actionBusy?'Guardando...':cancelKind==='no_show'?'Confirmar ausencia':'Confirmar cancelación'}
+         </button>
+         <p className="text-[11px] text-neutral-400">Se conserva el motivo en el historial y se libera el bloqueo para las franjas que sigan siendo futuras.</p>
+        </section>
+       </div>
+      )}
+      {receipt&&(
+       <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/85 p-3 backdrop-blur-sm">
+        <section role="dialog" aria-modal="true" aria-labelledby="payment-receipt-heading" className="w-full max-w-md rounded-2xl border border-emerald-500/40 bg-[#151515] p-5 space-y-4">
+         <div className="flex justify-between items-center">
+          <h2 id="payment-receipt-heading" className="text-lg font-bold text-emerald-300">Comprobante del corte</h2>
+          <button aria-label="Cerrar comprobante" onClick={()=>setReceipt(null)} className="p-2 text-neutral-400"><X className="w-5 h-5"/></button>
+         </div>
+         <div className="rounded-xl bg-[#202020] p-4 space-y-3 text-xs">
+          <p className="font-bold text-white">{receipt.customerName} · {receipt.serviceName}</p>
+          <p className="text-neutral-400">Servicio: {new Intl.DateTimeFormat('es-CO',{timeZone:'America/Bogota',dateStyle:'medium',timeStyle:'short'}).format(new Date(receipt.startsAt))}</p>
+          <p className="text-neutral-300">Método: <strong className="uppercase text-white">{receipt.paymentMethod==='courtesy'?'Cortesía':receipt.paymentMethod}</strong></p>
+          <p className="text-3xl font-extrabold text-emerald-300">{formatCurrency(receipt.totalMinor,currency)}</p>
+          <p className="text-neutral-400">Registrado: {new Intl.DateTimeFormat('es-CO',{timeZone:'America/Bogota',dateStyle:'short',timeStyle:'short'}).format(new Date(receipt.receivedAt))}</p>
+          <p className="break-all font-mono text-[10px] text-neutral-500">Movimiento contable: {receipt.transactionId||'Sin cobro (cortesía)'}</p>
+          <p className="text-[11px] text-neutral-400">{receipt.verification}</p>
+         </div>
+         <button onClick={()=>setReceipt(null)} className="w-full rounded-xl bg-[var(--gold-primary)] p-3 text-xs font-bold text-black">Listo</button>
         </section>
        </div>
       )}
