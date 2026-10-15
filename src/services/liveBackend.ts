@@ -217,7 +217,6 @@ export function tokenUser(id:string,email:string,tenants:Db[],platformRole?:stri
  const t=tenants[0];
  const role=txt(t||{},'role');
  const userRole:UserRole=platformRole==='superadmin'?'superadmin':
-    role==='owner'&&txt(t||{},'business_kind')==='independent'?'barber_independent':
     role==='owner'||role==='manager'?'owner':role==='barber'?'barber_employee':'client';
  return {id,name:email.split('@')[0],email,phone:'',role:userRole,avatar:'',
    businessId:t?.id as string|undefined,createdAt:new Date().toISOString(),
@@ -248,8 +247,7 @@ export async function loadAccount():Promise<{
      backendRequest<Db[]>(prefix+'/services'),
      backendRequest<Db[]>(prefix+'/products')
    ]);
-   barbers=bs.map(b=>({...mapBarber(b,tenant),isIndependent:user.role==='barber_independent'}));
-   if(user.role==='barber_independent')user.barberId=txt(bs.find(b=>txt(b,'user_id')===me.id)||{},'id')||undefined;
+   barbers=bs.map(b=>mapBarber(b,tenant));
    if(user.role==='barber_employee')user.barberId=txt(bs.find(b=>txt(b,'user_id')===me.id)||{},'id')||undefined;
    services=ss.map(s=>mapService(s,tenant));
    products=ps.map(x=>mapProduct(x,tenant));
@@ -291,7 +289,7 @@ export async function loadAccount():Promise<{
        backendRequest<{barbers:Db[];services:Db[]}>('/public/tenants/'+slug+'/catalog'),
        backendRequest<Db[]>('/public/tenants/'+id+'/products')
      ]);
-     return {id,barbers:catalog.barbers.map(b=>({...mapBarber(b,id),isIndependent:txt(t,'business_kind')==='independent'})),
+     return {id,barbers:catalog.barbers.map(b=>({...mapBarber(b,id),isIndependent:false})),
        services:catalog.services.map(s=>mapService(s,id)),
        products:p.map(x=>mapProduct(x,id))};
    }));
@@ -324,7 +322,7 @@ export async function loadAccount():Promise<{
  return {user,shops:shopRows,barbers,services,products,appointments,transactions,orders,plans:plans.map(mapPlan),cashClosings,
    reviews,loyalty,loyaltyBalances,rewards,redemptions};
 }
-function userRolePrivileged(role:UserRole){return role==='owner'||role==='superadmin'||role==='barber_independent';}
+function userRolePrivileged(role:UserRole){return role==='owner'||role==='superadmin';}
 export async function addService(tenant:string,data:{name:string;description:string;price:number;durationMinutes:number;category:string;earnsLoyaltyPoints:boolean}){
  const r=await backendRequest<Db>('/tenants/'+tenant+'/services',{method:'POST',body:JSON.stringify({
    name:data.name,description:data.description,priceMinor:Math.round(data.price),
