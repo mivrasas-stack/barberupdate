@@ -46,3 +46,36 @@ test('Login móvil conserva fotografía y formulario sin cortes horizontales', a
   expect(horizontalOverflow).toBe(false);
   await page.screenshot({path:'test-results/barbernow-login-mobile.png',fullPage:true});
 });
+
+
+test('Landing BarberNow revela portada y secciones durante el scroll', async ({page}) => {
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto('/');
+  const hero = page.locator('.hero h1');
+  await expect(page.locator('html')).toHaveClass(/bn-motion/);
+  await expect(hero).toHaveClass(/bn-reveal/);
+  await expect(hero).toHaveClass(/bn-visible/, {timeout:5000});
+  const about = page.locator('.about h2');
+  await about.scrollIntoViewIfNeeded();
+  await expect(about).toHaveClass(/bn-visible/, {timeout:5000});
+  const cta = page.locator('.cta h2');
+  await cta.scrollIntoViewIfNeeded();
+  await expect(cta).toHaveClass(/bn-visible/, {timeout:5000});
+  const logo = page.locator('.nav .brand-logo');
+  await expect(logo).toHaveAttribute('src','/branding/barbernow-logo.png');
+  expect(await logo.evaluate(img => {
+    const styles = getComputedStyle(img);
+    return styles.backgroundColor === 'rgba(0, 0, 0, 0)' &&
+      styles.borderTopWidth === '0px' && styles.borderRadius === '0px';
+  })).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+test('Landing respeta la preferencia de movimiento reducido', async ({page}) => {
+  await page.emulateMedia({reducedMotion:'reduce'});
+  await page.goto('/');
+  await expect(page.locator('html')).not.toHaveClass(/bn-motion/);
+  await expect(page.locator('.hero h1')).toBeVisible();
+  await expect(page.locator('.about h2')).not.toHaveClass(/bn-reveal/);
+});

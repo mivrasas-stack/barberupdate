@@ -126,3 +126,54 @@ form?.addEventListener('submit',ev=>{
  }
  window.scrollTo({top:0,behavior:'smooth'});
 });
+
+
+/**
+ * Movimiento de la landing de referencia: entrada escalonada de portada,
+ * revelado progresivo de secciones al hacer scroll y llegada suave al pie.
+ * No altera textos, dimensiones, rutas ni el logo de BarberNow.
+ * En dispositivos con movimiento reducido, todo permanece visible.
+ */
+function enableLandingMotion() {
+ if (!('IntersectionObserver' in window) || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+ const groups = [
+  ['.hero', ['.eyebrow','h1','.description','.hero-buttons','.small-promote','.discover']],
+  ['.about', ['.eyebrow','h2','p','.stats','.button','.about-picture']],
+  ['.cta', ['.cta-tag','h2','p','.button','.note']],
+  ['.pro-hero', ['.pro-label','h1','p','.actions','.subpoints']],
+  ['.pro-features', ['.section-title','.section-subtitle','.feature-card']],
+  ['.affiliation', ['.pro-label','.section-title','.step']],
+  ['.plans', ['.section-title','.section-subtitle','.plan']],
+  ['.pro-end', ['h2','p','.button']],
+  ['.directory', ['.back-link','.directory-icon','.eyebrow','h1','.copy','.directory-alert']],
+  ['.register', ['.register-top','.steps-note','.register-card']],
+  ['.footer', ['.footer-grid > div','.footer-bottom']]
+ ];
+ const targets = [];
+ for (const [parentSelector, childSelectors] of groups) {
+  const parent = app.querySelector(parentSelector);
+  if (!parent) continue;
+  let sequence = 0;
+  for (const selector of childSelectors) {
+   for (const element of parent.querySelectorAll(selector)) {
+    if (element.classList.contains('bn-reveal')) continue;
+    element.classList.add('bn-reveal');
+    element.style.setProperty('--bn-delay', Math.min(sequence++, 6) * 85 + 'ms');
+    targets.push(element);
+   }
+  }
+ }
+ if (!targets.length) return;
+ // Las clases se aplican antes del primer fotograma; jamás se oculta el
+ // contenido cuando el navegador no admite IntersectionObserver.
+ document.documentElement.classList.add('bn-motion');
+ const observer = new IntersectionObserver(entries => {
+  for (const entry of entries) {
+   if (!entry.isIntersecting) continue;
+   entry.target.classList.add('bn-visible');
+   observer.unobserve(entry.target);
+  }
+ }, {threshold:0.08, rootMargin:'0px 0px -5% 0px'});
+ targets.forEach(element => observer.observe(element));
+}
+enableLandingMotion();
