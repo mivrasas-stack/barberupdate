@@ -7,7 +7,7 @@ import { Scissors, Plus, Clock, Users, X, Edit2, CheckCircle2, Gift } from 'luci
 import {isLiveBackend, addService, editService, createReward, editReward, fulfillRedemption, refreshLiveData} from '../../services/liveBackend';
 
 export const BarberiaServicios: React.FC = () => {
-  const { currentShop, state, currency, addToast } = useApp();
+  const { currentShop, currentUser, state, currency, addToast } = useApp();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
 
@@ -155,9 +155,9 @@ export const BarberiaServicios: React.FC = () => {
       <div role="tablist" aria-label="Servicios y recompensas" className="flex flex-wrap gap-2 border-b border-[#242424] pb-3">
         <button role="tab" aria-selected={tab==='services'} onClick={()=>setTab('services')}
           className={`px-4 py-2 rounded-xl text-xs font-bold ${tab==='services'?'bg-[var(--gold-primary)] text-black':'bg-[#202020] text-neutral-300'}`}>Servicios & Tarifas</button>
-        <button role="tab" aria-selected={tab==='rewards'} onClick={()=>setTab('rewards')}
+        {currentUser?.role==='owner' && <button role="tab" aria-selected={tab==='rewards'} onClick={()=>setTab('rewards')}
           className={`px-4 py-2 rounded-xl text-xs font-bold ${tab==='rewards'?'bg-[var(--gold-primary)] text-black':'bg-[#202020] text-neutral-300'}`}>
-          Recompensas y canjes</button>
+          Recompensas y canjes</button>}
       </div>
 
       <div className={tab==='services'?'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4':'hidden'}>
