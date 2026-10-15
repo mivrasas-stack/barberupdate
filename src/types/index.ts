@@ -133,6 +133,7 @@ export interface Appointment {
     electronicProvider?: string;
   };
   status: AppointmentStatus;
+  cancellationReason?: string;
   notes?: string;
   isWalkIn?: boolean; // Llegada sin cita previa
   walkInQueueTime?: string;
