@@ -79,3 +79,46 @@ test('Landing respeta la preferencia de movimiento reducido', async ({page}) => 
   await expect(page.locator('.hero h1')).toBeVisible();
   await expect(page.locator('.about h2')).not.toHaveClass(/bn-reveal/);
 });
+
+
+test('Cabecera BarberNow conserva el logo, no muestra rutas de cliente y enseña fecha y hora de Colombia', async ({page}) => {
+  // 05:41 UTC corresponde a las 00:41 en Colombia.
+  await page.clock.install({time:new Date('2026-10-15T05:41:00Z')});
+  await page.setViewportSize({width:1708,height:900});
+  await page.goto('/login');
+  await page.getByLabel('Correo electrónico').fill('camilo.torres@gmail.com');
+  await page.getByRole('button',{name:/iniciar sesión/i}).click();
+  const header=page.getByRole('banner');
+  await expect(header).toBeVisible();
+  const logo=header.locator('img[src="/branding/barbernow-logo.png"]');
+  await expect(logo).toBeVisible();
+  expect(await logo.evaluate(img=>img.complete&&img.naturalWidth>0)).toBe(true);
+  await expect(header).not.toContainText('Portal Clientes / Inicio');
+  await expect(header).not.toContainText('Portal Clientes');
+  const clock=page.getByTestId('barbernow-header-clock');
+  await expect(clock).toBeVisible();
+  await expect(clock).toHaveAttribute('title',/Colombia.*Bogotá/);
+  await expect(clock).toContainText(/15 oct/i);
+  await expect(clock).toContainText(/12:41/);
+  await page.clock.fastForward(61000);
+  await expect(clock).toContainText(/12:42/);
+  const account=header.getByRole('button',{name:/Camilo Andrés Torres/});
+  await account.click();
+  await expect(header.getByRole('button',{name:'Paleta de Colores'})).toBeVisible();
+  await expect(header.getByRole('group',{name:'Seleccionar moneda'})).toBeVisible();
+});
+
+test('La cabecera móvil no modifica el logo ni pierde la fecha y hora', async ({page}) => {
+  await page.setViewportSize({width:390,height:844});
+  await page.goto('/login');
+  await page.getByLabel('Correo electrónico').fill('camilo.torres@gmail.com');
+  await page.getByRole('button',{name:/iniciar sesión/i}).click();
+  const header=page.getByRole('banner');
+  await expect(header.locator('img[src="/branding/barbernow-logo.png"]')).toBeVisible();
+  await expect(page.getByTestId('barbernow-header-clock')).toBeVisible();
+  await expect(page.getByTestId('barbernow-header-clock')).toContainText(/\d{1,2}:\d{2}/);
+  await expect(page.getByTestId('barbernow-header-clock')).toContainText(/\d{1,2} [a-z]{3}/i);
+  await expect(header).not.toContainText('Portal Clientes');
+  const fits=await header.evaluate(node=>node.scrollWidth<=node.clientWidth+1);
+  expect(fits).toBe(true);
+});
