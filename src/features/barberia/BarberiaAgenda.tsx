@@ -719,6 +719,10 @@ export const BarberiaAgenda: React.FC = () => {
            <div key={label}><dt className="text-neutral-500">{label}</dt><dd className="mt-1 font-semibold text-white break-words">{value}</dd></div>
           )}
           {inspectingApt.notes&&<div className="sm:col-span-2"><dt className="text-neutral-500">Notas del cliente</dt><dd className="mt-1 text-neutral-200 whitespace-pre-wrap">{inspectingApt.notes}</dd></div>}
+          {inspectingApt.cancellationReason&&<div className="sm:col-span-2">
+            <dt className="text-neutral-500">Motivo de cancelación o ausencia</dt>
+            <dd className="mt-1 text-rose-300">{inspectingApt.cancellationReason}</dd>
+          </div>
          </dl>
          <div className="space-y-3 border-t border-[#303030] pt-4">
           {['pending','confirmed','waiting'].includes(inspectingApt.status)&&<button disabled={statusBusy} onClick={()=>void handleStatus(inspectingApt,'in_service')}
