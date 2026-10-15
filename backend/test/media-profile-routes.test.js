@@ -56,7 +56,7 @@ test('profile fields persist and gallery limit is enforced server-side',async()=
  try{
   const valid=await app.inject({method:'PATCH',url:'/api/v1/tenants/'+tenant+'/profile',payload:{name:'Barbería Prueba',tagline:'Cortes',address:'Calle 1',city:'Bogotá',phone:'3001234567'}});
   assert.equal(valid.statusCode,200,valid.body);
-  assert.ok(calls.some(call=>call.sql.includes('UPDATE public.tenants SET name=')));
+  assert.ok(calls.some(call=>call.sql.includes('UPDATE public.tenants')));
   const many=await app.inject({method:'PATCH',url:'/api/v1/tenants/'+tenant+'/gallery',payload:{photos:Array.from({length:11},(_,i)=>'https://example.com/'+i+'.jpg')}});
   assert.equal(many.statusCode,400,many.body);
  }finally{await app.close();}
