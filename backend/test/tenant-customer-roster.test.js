@@ -41,7 +41,7 @@ async function setup(role='owner'){
    getUserById:async id=>{
     lookups.push(id);
     return {data:{user:{email:id===customer?'client@example.com':'new@example.com',
-      user_metadata:{avatar_url:avatar,full_name:'Perfil real'}}},error:null};
+      user_metadata:id===customer?{avatar_url:avatar,full_name:'Perfil real'}:{}}},error:null};
    }
   }}}
  };
