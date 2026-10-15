@@ -2,7 +2,6 @@ export type UserRole =
   | 'superadmin' 
   | 'owner' 
   | 'barber_employee' 
-  | 'barber_independent' 
   | 'client';
 
 export type CurrencyType = 'COP' | 'USD' | 'EUR';
@@ -15,7 +14,7 @@ export interface User {
   role: UserRole;
   avatar: string;
   businessId?: string; // If owner, barber_employee, or linked client
-  barberId?: string;   // If barber_employee or barber_independent
+  barberId?: string;   // If barber_employee
   createdAt: string;
   lastLogin: string;
   planId?: string;
