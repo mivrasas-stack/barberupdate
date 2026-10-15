@@ -116,8 +116,8 @@ test('La cabecera móvil no modifica el logo ni pierde la fecha y hora', async (
   const header=page.getByRole('banner');
   await expect(header.locator('img[src="/branding/barbernow-logo.png"]')).toBeVisible();
   await expect(page.getByTestId('barbernow-header-clock')).toBeVisible();
-  await expect(page.getByTestId('barbernow-header-clock')).toContainText(/\\d{1,2}:\\d{2}/);
-  await expect(page.getByTestId('barbernow-header-clock')).toContainText(/\\d{1,2} [a-z]{3}/i);
+  await expect(page.getByTestId('barbernow-header-clock')).toContainText(/\d{1,2}:\d{2}/);
+  await expect(page.getByTestId('barbernow-header-clock')).toContainText(/\d{1,2} [a-z]{3}/i);
   await expect(header).not.toContainText('Portal Clientes');
   const fits=await header.evaluate(node=>node.scrollWidth<=node.clientWidth+1);
   expect(fits).toBe(true);
