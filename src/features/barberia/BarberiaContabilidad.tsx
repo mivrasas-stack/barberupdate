@@ -530,7 +530,7 @@ export const BarberiaContabilidad: React.FC = () => {
               <div className="p-3 bg-[#181818] rounded-xl border border-neutral-800 space-y-2">
                 <div className="flex justify-between text-neutral-400">
                   <span>Base Inicial en Caja:</span>
-                  <span className="font-mono text-white">{formatCurrency(openingCash, currency)}</span>
+                  <span className="font-mono text-white">{formatCurrency(openingCashValue, currency)}</span>
                 </div>
                 <div className="flex justify-between text-neutral-400">
                   <span>(+) Ingresos en Efectivo:</span>
