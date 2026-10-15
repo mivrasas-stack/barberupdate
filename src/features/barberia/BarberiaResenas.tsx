@@ -1,66 +1,57 @@
 import React from 'react';
-import { useApp } from '../../context/AppContext';
-import { Star, MessageSquare, UserCheck } from 'lucide-react';
+import {useApp} from '../../context/AppContext';
+import {Star,MessageSquare,UserCheck} from 'lucide-react';
+import {isLiveBackend} from '../../services/liveBackend';
 
-export const BarberiaResenas: React.FC = () => {
-  const { currentShop, state } = useApp();
-  const shopId = currentShop?.id || 'shop-1';
-  const reviews = state.reviews.filter(r => r.businessId === shopId);
-
-  const avgRating = reviews.length
-    ? (reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1)
-    : '5.0';
-
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#242424]">
-        <div>
-          <span className="text-xs font-semibold uppercase tracking-wider text-[var(--gold-primary)]">
-            Reputación & Experiencia
-          </span>
-          <h1 className="text-2xl font-extrabold text-white tracking-tight">Reseñas de Clientes</h1>
-          <p className="text-xs text-neutral-400 mt-1">
-            Opiniones y calificaciones verificadas emitidas por clientes de la barbería
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#141414] border border-[#262626]">
-          <Star className="w-5 h-5 fill-amber-400 text-amber-400" />
-          <span className="text-xl font-bold font-mono text-white">{avgRating}</span>
-          <span className="text-xs text-neutral-400">/ 5 ({reviews.length} valoraciones)</span>
-        </div>
+export const BarberiaResenas:React.FC=()=>{
+ const {currentShop,state}=useApp();
+ const shopId=currentShop?.id||'shop-1';
+ const reviews=state.reviews.filter(r=>r.businessId===shopId);
+ const avg=reviews.length?(reviews.reduce((sum,r)=>sum+r.rating,0)/reviews.length).toFixed(1):'—';
+ const barbers=state.barbers.filter(b=>b.businessId===shopId);
+ return <div className="space-y-6">
+  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#242424]">
+   <div>
+    <span className="text-xs font-semibold uppercase tracking-wider text-[var(--gold-primary)]">Reputación & Experiencia</span>
+    <h1 className="text-2xl font-extrabold text-white">Reseñas & Calificaciones</h1>
+    <p className="mt-1 text-xs text-neutral-400">Opiniones verificadas de clientes que finalizaron un servicio en tu barbería.</p>
+   </div>
+   <div className="flex items-center gap-2 rounded-xl p-3 bg-[#141414] border border-[#262626]">
+    <Star className="w-5 h-5 text-amber-400 fill-amber-400"/>
+    <strong className="text-xl font-mono text-white">{avg}</strong>
+    <span className="text-xs text-neutral-400">/ 5 · {reviews.length} reseñas</span>
+   </div>
+  </div>
+  <div className="bg-[#141414] border border-[#262626] rounded-2xl p-5">
+   <h2 className="text-sm font-bold text-white mb-4">Calificación por barbero</h2>
+   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+    {barbers.map(b=>{
+     const entries=reviews.filter(r=>r.barberId===b.id);
+     const rating=entries.length?(entries.reduce((a,r)=>a+r.rating,0)/entries.length).toFixed(1):'Sin calificación';
+     return <div key={b.id} className="rounded-xl bg-[#181818] border border-[#292929] p-4 flex items-center justify-between gap-3 text-xs">
+      <span className="text-white font-bold">{b.name}</span>
+      <span className="text-amber-400">{rating} {entries.length?'★':''} · {entries.length} reseñas</span>
+     </div>;
+    })}
+    {barbers.length===0&&<p className="text-xs text-neutral-400">No hay barberos registrados.</p>}
+   </div>
+  </div>
+  <div className="space-y-3">
+   {reviews.length===0?<div className="bg-[#141414] border border-[#262626] p-6 rounded-2xl text-xs text-neutral-400">
+    Todavía no hay reseñas verificadas de clientes.</div>:reviews.map(rev=>{
+    const barber=barbers.find(b=>b.id===rev.barberId);
+    const appointment=state.appointments.find(a=>a.id===rev.appointmentId);
+    return <article key={rev.id} className="rounded-2xl border border-[#262626] bg-[#141414] p-5 space-y-2 text-xs">
+     <div className="flex flex-wrap items-center justify-between gap-3">
+      <div>
+       <h3 className="font-bold text-white">{rev.customerName||'Cliente'}</h3>
+       <p className="text-[11px] text-neutral-400">{rev.date} · {barber?.name||'Barbero'}{appointment?.serviceName?' · '+appointment.serviceName:''}</p>
       </div>
-
-      <div className="space-y-3">
-        {reviews.map(rev => {
-          const barber = state.barbers.find(b => b.id === rev.barberId);
-
-          return (
-            <div key={rev.id} className="p-4 rounded-2xl bg-[#141414] border border-[#262626] shadow-xl text-xs space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <img src={rev.customerAvatar} alt={rev.customerName} className="w-9 h-9 rounded-full object-cover border border-neutral-700" />
-                  <div>
-                    <h3 className="font-bold text-white">{rev.customerName}</h3>
-                    <div className="text-[11px] text-neutral-400 font-mono">{rev.date}</div>
-                  </div>
-                </div>
-                <div className="flex items-center text-amber-400 font-mono text-sm">
-                  {'★'.repeat(rev.rating)}
-                </div>
-              </div>
-
-              <p className="text-neutral-300 text-xs italic pl-12">"{rev.comment}"</p>
-
-              {barber && (
-                <div className="pl-12 pt-1 text-[11px] text-neutral-500">
-                  Atendido por: <strong className="text-neutral-300">{barber.name}</strong>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
+      <span className="font-bold text-amber-400">{'★'.repeat(rev.rating)} <span className="text-neutral-500">{rev.rating}/5</span></span>
+     </div>
+     <p className="text-neutral-200 whitespace-pre-wrap">{rev.comment||'Sin comentario adicional'}</p>
+    </article>;
+   })}
+  </div>
+ </div>;
 };
