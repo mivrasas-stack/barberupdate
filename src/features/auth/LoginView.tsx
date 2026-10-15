@@ -5,7 +5,7 @@ import type { UserRole } from '../../types';
 import { isLiveBackend, requestPasswordReset, registerWithEmail } from '../../services/liveBackend';
 
 /**
- * Login only. Reproduces the Barber Paradise visual supplied by the owner.
+ * Login only. Reproduces the BarberNow visual supplied by the owner.
  * No changes to the rest of the application's layouts, palette or components.
  */
 export const LoginView: React.FC = () => {
@@ -67,26 +67,29 @@ export const LoginView: React.FC = () => {
 
   return (
     <main
-      data-testid="barber-paradise-login"
+      data-testid="barbernow-login"
       className="min-h-screen w-full bg-[#080808] text-white lg:flex"
       style={{ fontFamily: "'Inter', 'Montserrat', system-ui, sans-serif" }}
     >
-      {/* Left-side image from the original Barber Paradise /login, with live text overlay. */}
+      {/* Left-side image from the original BarberNow /login, with live text overlay. */}
       <section
-        aria-label="Barber Paradise, exclusividad y estilo"
+        aria-label="BarberNow, exclusividad y estilo"
         className="relative h-[35vh] min-h-[240px] w-full overflow-hidden bg-[#070707] lg:sticky lg:top-0 lg:h-screen lg:w-1/2 lg:min-h-[640px] lg:shrink-0"
       >
         <img
           src="/images/barber-paradise-atmosphere.webp"
-          alt="Barbería Barber Paradise, con sillones de barbero y paredes de ladrillo"
+          alt="Barbería BarberNow, con sillones de barbero y paredes de ladrillo"
           className="absolute inset-0 h-full w-full object-cover object-center grayscale brightness-[0.42]"
           draggable={false}
         />
         <div aria-hidden="true" className="absolute inset-0 bg-gradient-to-r from-black/65 via-black/25 to-black/10" />
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-4 text-center">
-          <strong className="text-[clamp(20px,2.2vw,39px)] font-extrabold tracking-[0.24em] text-white drop-shadow-lg">
-            BARBER PARADISE
-          </strong>
+          <img
+            src="/branding/barbernow-logo.png"
+            alt="BarberNow"
+            className="h-auto w-[min(310px,75vw)] object-contain drop-shadow-lg"
+            draggable={false}
+          />
           <span className="mt-5 text-[clamp(9px,0.9vw,15px)] tracking-[0.08em] text-gray-300">
             EXCLUSIVIDAD Y ESTILO — SAAS MULTI-TENANT
           </span>
@@ -113,7 +116,7 @@ export const LoginView: React.FC = () => {
               </span>
             </h1>
             <p className="mt-[17px] text-[13px] font-normal text-[#aaaaaa]">
-              {mode === 'login' ? 'Ingresa con tus credenciales verificadas.' : 'Únete a la experiencia Barber Paradise.'}
+              {mode === 'login' ? 'Ingresa con tus credenciales verificadas.' : 'Únete a la experiencia BarberNow.'}
             </p>
           </div>
 

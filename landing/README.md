@@ -1,10 +1,10 @@
-# Barber Paradise — réplica independiente de la landing
+# BarberNow — réplica independiente de la landing
 
 **Código:** `C:\MIVRA PROYECTS\UPDATEBARBER\landing`
 **Referencia visual original:** http://127.0.0.1:9002
 **Réplica independiente:** http://127.0.0.1:9102
 
-Esta carpeta contiene exclusivamente una landing autónoma de Barber Paradise:
+Esta carpeta contiene exclusivamente una landing autónoma de BarberNow:
 `index.html`, `app.js`, `styles.css`, fotografías copiadas de la web
 original a `public/assets/` y un test de navegador con Playwright.
 
@@ -20,7 +20,7 @@ original a `public/assets/` y un test de navegador con Playwright.
   almacenar contraseñas dentro de la landing.
 - Menú móvil, navegación, anclas y cambio de tema.
 
-El sitio fuente del puerto 9002 y el frontend operativo de BarberOS del
+El sitio fuente del puerto 9002 y el frontend operativo de BarberNow del
 puerto 3199 NO fueron reemplazados; siguen siendo aplicaciones separadas.
 No se tocaron el backend, la base de datos ni otros servicios de Docker.
 
@@ -35,7 +35,7 @@ npm run dev
 
 Abrir http://127.0.0.1:9102.
 
-Se utiliza Vite del repositorio BarberOS (instalación previa de dependencias
+Se utiliza Vite del repositorio BarberNow (instalación previa de dependencias
 en la raíz requerida), evitando duplicar dependencias y alterar el frontend.
 
 ## Generar una versión estática de entrega
@@ -68,12 +68,12 @@ al original fue cercana: portada escritorio 3513 vs 3491 px; portada móvil
 Los planes y promesas comerciales reproducen lo que muestra el sitio original,
 pero **la contratación/activación comercial real todavía no se ha integrado**.
 El formulario de tres pasos no envía datos personales a un backend ni factura.
-El botón de acceso termina en el login existente de BarberOS en
+El botón de acceso termina en el login existente de BarberNow en
 http://localhost:3000/login. Antes de publicar en Internet debe sustituirse
 esa URL local por el dominio definitivo.
 
 Wompi sigue **desactivado**, reservado EXCLUSIVAMENTE para cobrar
-suscripciones/licencias del SaaS BarberOS mediante esta landing futura.
+suscripciones/licencias del SaaS BarberNow mediante esta landing futura.
 No debe emplearse para cobrar productos, citas o servicios de barberías.
 
 No se afirma identidad píxel por píxel: son una réplica de componentes, textos,

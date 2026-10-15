@@ -1,18 +1,21 @@
 import { test, expect } from '@playwright/test';
 
-test('Login coincide con el diseño dividido Barber Paradise en escritorio', async ({page}) => {
+test('Login coincide con el diseño dividido BarberNow en escritorio', async ({page}) => {
   await page.setViewportSize({width:1903,height:944});
   const errors=[];
   page.on('pageerror',e=>errors.push(e.message));
   await page.goto('/login');
-  const login=page.getByTestId('barber-paradise-login');
+  const login=page.getByTestId('barbernow-login');
   await expect(login).toBeVisible();
   await expect(page.getByRole('heading',{name:/bienvenido\s+de vuelta/i})).toBeVisible();
   await expect(page.getByRole('button',{name:/iniciar sesión/i})).toBeVisible();
   await expect(page.getByLabel('Correo electrónico')).toBeVisible();
   await expect(page.getByLabel('Contraseña')).toBeVisible();
   const hero=login.locator('section').first();
-  const photo=hero.locator('img');
+  const photo=hero.locator('img').first();
+  const brand=hero.locator('img[src="/branding/barbernow-logo.png"]');
+  await expect(brand).toBeVisible();
+  expect(await brand.evaluate(img=>img.complete&&img.naturalWidth>0)).toBe(true);
   await expect(photo).toBeVisible();
   expect(await photo.evaluate(img=>img.complete&&img.naturalWidth>0)).toBe(true);
   const left=await hero.boundingBox();
@@ -25,19 +28,21 @@ test('Login coincide con el diseño dividido Barber Paradise en escritorio', asy
   await expect(page.getByText('Cuentas de Desarrollo')).toHaveCount(0);
   await expect(page.getByRole('button',{name:'Owner',exact:true})).toHaveCount(0);
   expect(errors).toEqual([]);
-  await page.screenshot({path:'test-results/barber-paradise-login-desktop.png',fullPage:true});
+  await page.screenshot({path:'test-results/barbernow-login-desktop.png',fullPage:true});
 });
 
 test('Login móvil conserva fotografía y formulario sin cortes horizontales', async ({page}) => {
   await page.setViewportSize({width:390,height:844});
   await page.goto('/login');
-  await expect(page.getByTestId('barber-paradise-login')).toBeVisible();
+  await expect(page.getByTestId('barbernow-login')).toBeVisible();
   await expect(page.getByRole('button',{name:/iniciar sesión/i})).toBeVisible();
   const photo=page.locator('img[src="/images/barber-paradise-atmosphere.webp"]');
+  const brand=page.locator('img[src="/branding/barbernow-logo.png"]');
+  await expect(brand).toBeVisible();
   await expect(photo).toBeVisible();
   expect(await photo.evaluate(img=>img.complete&&img.naturalWidth>0)).toBe(true);
   const horizontalOverflow=await page.evaluate(()=>
     document.documentElement.scrollWidth>document.documentElement.clientWidth+1);
   expect(horizontalOverflow).toBe(false);
-  await page.screenshot({path:'test-results/barber-paradise-login-mobile.png',fullPage:true});
+  await page.screenshot({path:'test-results/barbernow-login-mobile.png',fullPage:true});
 });

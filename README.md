@@ -1,20 +1,33 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# BarberNow
 
-# Run and deploy your AI Studio app
+![Logo BarberNow](public/branding/barbernow-logo.png)
 
-This contains everything you need to run your app locally.
+BarberNow reúne una landing pública, un portal para propietarios de barberías, profesionales independientes y clientes. La interfaz usa el logo autorizado y un favicon derivado de la misma imagen PNG transparente, sin marcos, recuadros ni fondos añadidos.
 
-View your app in AI Studio: https://ai.studio/apps/06f0dbb4-02ba-4e2b-847e-d1c6cead73bd
+## Inicio local
 
-## Run Locally
+Desde la raíz del repositorio:
 
-**Prerequisites:**  Node.js
+```powershell
+npm ci
+npm run dev
+```
 
+La aplicación sirve la landing y el acceso en el mismo origen. Para usar datos reales se requieren las variables de entorno de Supabase y `VITE_BACKEND_MODE=live`; no se deben publicar claves privadas en el frontend.
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Componentes
+
+- `landing/`: página pública, directorio y profesionales.
+- `src/`: React, rutas de autenticación y portales de trabajo.
+- `backend/`: API y seguridad multiinquilino.
+- `public/branding/barbernow-logo.png`: logo oficial transparente del sistema.
+- `landing/public/branding/barbernow-logo.png`: mismo logo para el despliegue independiente de la landing.
+
+## Validación
+
+```powershell
+npx tsc --noEmit
+npm run build
+```
+
+La vinculación por QR, las rutas técnicas existentes, los servicios de Docker y las tablas de Supabase conservan sus identificadores para no romper la compatibilidad.

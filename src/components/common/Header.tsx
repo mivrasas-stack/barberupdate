@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
-import { Palette, ChevronDown, LogOut, Scissors, User } from 'lucide-react';
+import { Palette, ChevronDown, LogOut, User } from 'lucide-react';
 import { CurrencyType, UserRole } from '../../types';
 
 export const Header: React.FC = () => {
@@ -51,7 +51,7 @@ export const Header: React.FC = () => {
       const part = activeRoute.split('/')[2] || 'inicio';
       return `Portal Clientes / ${capitalize(part)}`;
     }
-    return 'BarberOS';
+    return 'BarberNow';
   };
 
   const capitalize = (str: string) => {
@@ -70,16 +70,18 @@ export const Header: React.FC = () => {
             else if (activeRole === 'barber_independent' || activeRole === 'barber_employee') navigate(`/barbero/${currentBarber?.slug || 'alex-fade'}/inicio`);
             else navigate('/clientes/inicio');
           }}
-          className="flex items-center gap-2.5 text-left group cursor-pointer transition-transform duration-200 active:scale-95"
+          aria-label="BarberNow — inicio" className="flex items-center gap-2 text-left group cursor-pointer transition-transform duration-200 active:scale-95"
         >
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-b from-[#f3c048] to-[#b88928] text-black font-extrabold flex items-center justify-center shadow-[0_2px_10px_rgba(217,163,35,0.4),inset_0_1px_1px_rgba(255,255,255,0.6)] group-hover:shadow-[0_4px_16px_rgba(217,163,35,0.6)] transition-all">
-            <Scissors className="w-4 h-4 rotate-45" />
-          </div>
-          <div>
-            <span className="text-base font-extrabold tracking-tight text-white group-hover:text-[var(--gold-primary)] transition-colors whitespace-nowrap">
-              Barber<span className="text-[var(--gold-primary)]">OS</span>
-            </span>
-          </div>
+          <img
+            src="/branding/barbernow-logo.png"
+            alt=""
+            aria-hidden="true"
+            className="h-10 w-auto shrink-0 object-contain"
+            draggable={false}
+          />
+          <span className="hidden sm:inline text-base font-extrabold tracking-tight text-white group-hover:text-[var(--gold-primary)] transition-colors whitespace-nowrap">
+            BarberNow
+          </span>
         </button>
 
         {/* Separator & Breadcrumb */}

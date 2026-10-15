@@ -4,13 +4,13 @@ test('Landing, Directorio y Profesionales navegan sin cambiar de host',async({pa
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto('/');
  const appOrigin=new URL(page.url()).origin;
- await expect(page).toHaveTitle('BarberParadise');
+ await expect(page).toHaveTitle('BarberNow');
  await expect(page.getByRole('heading',{name:/NO HACEMOS CORTES/i})).toBeVisible();
  await expect(page.locator('.hero-bg')).toHaveCSS('background-image',/hero.webp/);
  await page.getByRole('link',{name:'PROFESIONALES'}).click();
  await expect(page).toHaveURL(new URL('/profesionales',appOrigin).href);
  await expect(page.getByRole('heading',{name:/TU TALENTO.*TU MARCA/i})).toBeVisible();
- await page.getByRole('link',{name:'BARBER PARADISE'}).first().click();
+ await page.getByRole('link',{name:'BarberNow - inicio'}).first().click();
  await expect(page).toHaveURL(new URL('/',appOrigin).href);
  await page.getByRole('link',{name:'DIRECTORIO'}).click();
  await expect(page.getByRole('heading',{name:/BARBERÍAS.*VERIFICADAS/i})).toBeVisible();
@@ -22,7 +22,7 @@ test('Reservar abre login real, muestra foto original y regresa a landing',async
  const appOrigin=new URL(page.url()).origin;
  await page.locator('.hero-buttons a[href="/login"]').click();
  await expect(page).toHaveURL(new URL('/login',appOrigin).href);
- await expect(page.getByTestId('barber-paradise-login')).toBeVisible();
+ await expect(page.getByTestId('barbernow-login')).toBeVisible();
  await expect(page.getByRole('heading',{name:/BIENVENIDO.*DE VUELTA/i})).toBeVisible();
  await expect(page.getByLabel('Correo electrónico')).toBeVisible();
  await expect(page.getByLabel('Contraseña')).toBeVisible();
@@ -50,13 +50,13 @@ test('Planes mantienen parámetros y registro visual de tres pasos',async({page}
  await page.getByPlaceholder('Ej. Bogotá').fill('Bogotá');
  await page.getByRole('button',{name:/CONTINUAR AL PLAN/i}).click();
  await expect(page.getByText('Paso 3 de 3')).toBeVisible();
- await expect(page.getByRole('button',{name:/IR A BARBEROS/i})).toBeVisible();
+ await expect(page.getByRole('button',{name:/IR A BARBERNOW/i})).toBeVisible();
 });
 test('Enlaces antiguos con hash permanecen compatibles',async({page})=>{
  await page.goto('/#/login');
- await expect(page.getByTestId('barber-paradise-login')).toBeVisible();
+ await expect(page.getByTestId('barbernow-login')).toBeVisible();
  await page.goto('/#/clientes/inicio');
- await expect(page.getByTestId('barber-paradise-login')).toBeVisible();
+ await expect(page.getByTestId('barbernow-login')).toBeVisible();
  await page.goto('/login');
  await expect(page.getByLabel('Correo electrónico')).toBeVisible();
 });
@@ -69,7 +69,7 @@ test('Móvil: navegación e imagen sin desbordamiento',async({page})=>{
  await page.getByRole('link',{name:'Directorio',exact:true}).click();
  await expect(page).toHaveURL(new URL('/directorio',appOrigin).href);
  await page.goto('/login');
- await expect(page.getByTestId('barber-paradise-login')).toBeVisible();
+ await expect(page.getByTestId('barbernow-login')).toBeVisible();
  const image=page.locator('img[src="/images/barber-paradise-atmosphere.webp"]');
  await expect.poll(()=>image.evaluate(x=>x.complete&&x.naturalWidth>0)).toBe(true);
  const over=await page.evaluate(()=>document.documentElement.scrollWidth>document.documentElement.clientWidth+1);
@@ -84,12 +84,12 @@ test('Modo real no muestra perfiles ficticios ni recupera un almacén de demostr
    }
  });
  await page.goto('/login');
- await expect(page.getByTestId('barber-paradise-login')).toBeVisible();
+ await expect(page.getByTestId('barbernow-login')).toBeVisible();
  await expect(page.getByText('Cuentas de Desarrollo')).toHaveCount(0);
  await expect(page.getByText('Cambiar Usuario Demo')).toHaveCount(0);
  await expect(page.getByText('Restablecer Datos Demo')).toHaveCount(0);
  await expect(page.getByText('Reiniciar Demo')).toHaveCount(0);
  expect(await page.evaluate(()=>localStorage.getItem('barberos_state_v2'))).toBeNull();
  await page.goto('/login#/admin/inicio');
- await expect(page.getByTestId('barber-paradise-login')).toBeVisible();
+ await expect(page.getByTestId('barbernow-login')).toBeVisible();
 });

@@ -1,5 +1,5 @@
 import React,{useEffect,useState} from 'react';
-import {ArrowRight,CheckCircle2,LockKeyhole,Scissors} from 'lucide-react';
+import {ArrowRight,CheckCircle2,LockKeyhole} from 'lucide-react';
 import {hasSession,signIn,registerWithEmail,linkCustomer,resolveBusinessLink,
  type PublicBusinessLink} from '../../services/liveBackend';
 
@@ -50,9 +50,9 @@ export const PublicJoinView:React.FC=()=>{
  };
  return <main className="min-h-screen bg-[#090909] px-4 py-10 text-white">
   <div className="mx-auto max-w-xl">
-   <a href="/" className="text-[var(--gold-primary)] font-bold text-xs">← Barber Paradise</a>
+   <a href="/" className="text-[var(--gold-primary)] font-bold text-xs">← BarberNow</a>
    <div className="mt-7 border border-[#303030] bg-[#151515] rounded-3xl p-6 sm:p-9 shadow-2xl">
-    <div className="mx-auto w-14 h-14 bg-[var(--gold-primary)] rounded-2xl text-black flex items-center justify-center mb-5"><Scissors className="w-7 h-7"/></div>
+    <img src="/branding/barbernow-logo.png" alt="BarberNow" className="mx-auto mb-5 h-20 w-auto object-contain" draggable={false}/>
     <div className="text-center">
       <p className="text-xs text-[var(--gold-primary)] uppercase font-semibold tracking-widest">Vinculación por código QR</p>
       <h1 className="text-2xl font-black mt-2">{target?.name||'Conectando con tu barbería...'}</h1>
