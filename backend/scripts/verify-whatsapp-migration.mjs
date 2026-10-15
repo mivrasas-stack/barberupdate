@@ -20,6 +20,21 @@ try{
  `);
  const sql=readFileSync(new URL('../../supabase/migrations/20261014000400_whatsapp_templates.sql',import.meta.url),'utf8');
  await pool.query(sql);
+ // Simulate the independently deployed legacy queue, with no pending messages.
+ await pool.query("CREATE TABLE public.whatsapp_deliveries (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), status text NOT NULL DEFAULT 'pending')");
+ await pool.query("CREATE OR REPLACE FUNCTION public.barberos_whatsapp_enqueue() RETURNS trigger LANGUAGE plpgsql AS $ BEGIN INSERT INTO public.whatsapp_deliveries(status) VALUES('pending'); RETURN NEW; END $");
+ await pool.query("CREATE TRIGGER appointments_whatsapp_queue AFTER INSERT ON public.appointments FOR EACH ROW EXECUTE FUNCTION public.barberos_whatsapp_enqueue()");
+ // An unprocessed legacy job must block automatic retirement.
+ await pool.query("INSERT INTO public.whatsapp_deliveries DEFAULT VALUES");
+ const bridgeSql=readFileSync(new URL('../../supabase/migrations/20261015010300_whatsapp_legacy_bridge.sql',import.meta.url),'utf8');
+ await assert.rejects(pool.query(bridgeSql),/Legacy WhatsApp queue has/);
+ await pool.query("DELETE FROM public.whatsapp_deliveries WHERE status='pending'");
+ await pool.query(bridgeSql);
+ const trg=await pool.query("SELECT tgname FROM pg_trigger WHERE tgrelid='public.appointments'::regclass AND NOT tgisinternal");
+ assert.ok(trg.rows.some(x=>x.tgname==='appt_whatsapp_enqueue'),'New queue trigger must remain');
+ assert.ok(!trg.rows.some(x=>x.tgname==='appointments_whatsapp_queue'),'Legacy producer must be retired');
+ const oldCount=await pool.query('SELECT count(*)::int AS n FROM public.whatsapp_deliveries');
+ assert.equal(oldCount.rows[0].n,0);
  const tenant=randomUUID(),user=randomUUID(),appt=randomUUID();
  await pool.query("INSERT INTO public.tenants(id,name,time_zone,status) VALUES($1,'QA Demo','America/Bogota','active')",[tenant]);
  await pool.query("INSERT INTO public.whatsapp_tenant_settings(tenant_id,enabled,templates) VALUES($1,false,$2)",[tenant,JSON.stringify({created:{name:'created_template',params:[]},reminder:{name:'reminder_template',params:[]},rescheduled:{name:'rescheduled_template',params:[]},cancelled:{name:'cancelled_template',params:[]}})]);

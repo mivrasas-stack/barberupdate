@@ -14,7 +14,7 @@ let idleCycles=0;
 let failedCycles=0;
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 async function deliverBatch() {
-  await db.transaction(async tx=>{
+  return db.transaction(async tx=>{
     const {rows}=await tx.query("SELECT id,tenant_id,topic,payload,attempts FROM public.outbox_events WHERE processed_at IS NULL AND next_attempt_at<=now() AND attempts<12 ORDER BY next_attempt_at,id LIMIT 25 FOR UPDATE SKIP LOCKED");
     for(const event of rows) {
       try {
