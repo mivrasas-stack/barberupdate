@@ -207,13 +207,13 @@ export async function registerRoutes(app,{config,db,security}) {
     });
     routes.post('/api/v1/tenants/:tenantId/transactions',async (req,reply)=>{
       const tenant=parseOrThrow(id,req.params.tenantId);await requireTenant(db,tenant,req.actor.id,owners);
-      const x=parseOrThrow(z.object({type:z.enum(['income','expense']),category:word(70),concept:word(250),amountMinor:z.number().int().positive(),paymentMethod:z.enum(['cash','debit','credit','transfer','nequi','daviplata','split'])}).strict(),req.body);
+      const x=parseOrThrow(z.object({type:z.enum(['income','expense']),category:word(70),concept:word(250),amountMinor:z.number().int().positive(),paymentMethod:z.enum(['cash','debit','credit','transfer','nequi','daviplata','split']),notes:z.string().trim().max(1000).default('')}).strict(),req.body);
       const row=await db.transaction(async tx=>{
         const today=await tx.query("SELECT (now() AT TIME ZONE time_zone)::date::text AS local_day FROM public.tenants WHERE id=$1 AND status='active'",[tenant]);
         if(!today.rowCount) failure(404,'Negocio no disponible');
         await tx.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[tenant+':cash:'+today.rows[0].local_day]);
-        return (await tx.query('INSERT INTO public.transactions(tenant_id,type,category,concept,amount_minor,payment_method,created_by) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *',
-          [tenant,x.type,x.category,x.concept,x.amountMinor,x.paymentMethod,req.actor.id])).rows[0];
+        return (await tx.query('INSERT INTO public.transactions(tenant_id,type,category,concept,amount_minor,payment_method,created_by,notes) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',
+          [tenant,x.type,x.category,x.concept,x.amountMinor,x.paymentMethod,req.actor.id,x.notes])).rows[0];
       });
       return reply.code(201).send(row);
     });

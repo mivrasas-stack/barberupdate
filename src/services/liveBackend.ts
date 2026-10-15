@@ -163,7 +163,7 @@ export function mapTransaction(r:Db,tenant:string):Transaction{
     type:txt(r,'type') as Transaction['type'],category:txt(r,'category','other') as Transaction['category'],
     concept:txt(r,'concept'),amount:money(r,'amount_minor'),
     paymentMethod:txt(r,'payment_method','cash') as Transaction['paymentMethod'],
-    date:txt(r,'created_at',new Date().toISOString()),referenceId:txt(r,'reference_id')||undefined};
+    date:txt(r,'created_at',new Date().toISOString()),notes:txt(r,'notes'),referenceId:txt(r,'reference_id')||undefined};
 }
 export function mapOrder(r:Db,tenant:string):Order{
  return {id:txt(r,'id'),businessId:tenant,customerId:txt(r,'customer_user_id'),
@@ -324,11 +324,11 @@ export async function editService(tenant:string,id:string,data:{
   return mapService(r,tenant);
 }
 export async function recordTransaction(tenant:string,data:{
- type:'income'|'expense';category:string;concept:string;amount:number;paymentMethod:string
+ type:'income'|'expense';category:string;concept:string;amount:number;paymentMethod:string;notes?:string
 }){
  const r=await backendRequest<Db>('/tenants/'+tenant+'/transactions',{method:'POST',
    body:JSON.stringify({type:data.type,category:data.category,concept:data.concept,
-     amountMinor:Math.round(data.amount),paymentMethod:data.paymentMethod})});
+     amountMinor:Math.round(data.amount),paymentMethod:data.paymentMethod,notes:data.notes||''})});
  return mapTransaction(r,tenant);
 }
 

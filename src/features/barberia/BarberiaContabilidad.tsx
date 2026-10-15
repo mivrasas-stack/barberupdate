@@ -77,7 +77,7 @@ export const BarberiaContabilidad: React.FC = () => {
     if(isLiveBackend){
       try{
         await recordTransaction(shopId,{type:'expense',category:expenseCategory,concept:expenseConcept,
-          amount:expenseAmount,paymentMethod:expensePaymentMethod});
+          amount:expenseAmount,paymentMethod:expensePaymentMethod,notes:expenseNotes});
         await refreshLiveData();
         addToast('Gasto registrado en el backend','success');
         setIsExpenseModalOpen(false);setExpenseConcept('');setExpenseAmount(0);setExpenseNotes('');
@@ -343,7 +343,10 @@ export const BarberiaContabilidad: React.FC = () => {
                       {txn.type === 'income' ? 'Ingreso' : 'Egreso'}
                     </span>
                   </td>
-                  <td className="py-3 px-4 font-medium text-white">{txn.concept}</td>
+                  <td className="py-3 px-4 font-medium text-white">
+                    <div>{txn.concept}</div>
+                    {txn.notes && <div className="mt-1 max-w-xs break-words text-[11px] font-normal text-neutral-400">{txn.notes}</div>}
+                  </td>
                   <td className="py-3 px-4 text-neutral-400">{txn.category}</td>
                   <td className="py-3 px-4 font-mono text-neutral-300 uppercase text-[11px]">{txn.paymentMethod}</td>
                   <td className={`py-3 px-4 text-right font-mono font-bold ${txn.type === 'income' ? 'text-emerald-400' : 'text-red-400'}`}>
@@ -475,6 +478,7 @@ export const BarberiaContabilidad: React.FC = () => {
                   type="text"
                   value={expenseNotes}
                   onChange={e => setExpenseNotes(e.target.value)}
+                  maxLength={1000}
                   placeholder="Número de factura o recibo..."
                   className="w-full bg-[#181818] border border-[#2a2a2a] rounded-lg px-3 py-2 text-white"
                 />

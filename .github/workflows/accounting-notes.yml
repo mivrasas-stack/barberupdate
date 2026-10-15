@@ -1,0 +1,35 @@
+name: Accounting Notes Migration QA
+on:
+  pull_request:
+    paths: ['backend/**','supabase/migrations/*transaction_notes*','.github/workflows/accounting-notes.yml']
+  push:
+    branches: [main]
+    paths: ['backend/**','supabase/migrations/*transaction_notes*','.github/workflows/accounting-notes.yml']
+permissions:
+  contents: read
+jobs:
+  postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env: {POSTGRES_USER: postgres, POSTGRES_PASSWORD: localtest, POSTGRES_DB: accounting_ci}
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d accounting_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci --ignore-scripts --no-audit
+        working-directory: backend
+      - name: Verify transaction notes migration against disposable PostgreSQL 17
+        env:
+          ACCOUNTING_TEST_DATABASE_URL: postgresql://postgres:localtest@127.0.0.1:5432/accounting_ci
+        run: node backend/scripts/verify-accounting-notes.mjs
