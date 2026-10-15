@@ -1,5 +1,7 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
+import {useCustomerLinks} from '../../services/useCustomerLinks';
+import {isLiveBackend} from '../../services/liveBackend';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import {
   Calendar,
@@ -19,13 +21,14 @@ export const ClienteDashboard: React.FC = () => {
   const { state, currentUser, currency, navigate } = useApp();
 
   const customerId = currentUser?.id || 'usr-client-1';
-  const loyalty = state.loyalty[customerId] || state.loyalty['usr-client-1'] || {
-    points: 420,
-    visitsCount: 8,
-    currentStreak: 3,
-    achievements: [],
-    pointHistory: [],
-  };
+  const loyalty = state.loyalty[customerId] || (!isLiveBackend?state.loyalty['usr-client-1']:undefined);
+  const points = loyalty?.points??0;
+  const {items:linkedBusinesses,loading:linksLoading}=useCustomerLinks(currentUser?.id);
+  const primaryLink=linkedBusinesses.find(l=>l.business_kind==='barbershop');
+  const primaryShop=primaryLink?state.barbershops.find(s=>s.id===primaryLink.tenant_id):null;
+  const matchingRewards=primaryLink?state.rewards.filter(r=>r.tenantId===primaryLink.tenant_id&&r.isActive):[];
+  const nearestReward=[...matchingRewards].sort((a,b)=>a.pointsCost-b.pointsCost)[0];
+  const availablePoints=primaryLink?state.loyaltyBalances[primaryLink.tenant_id]?.points??0:0;
 
   // Find next upcoming appointment
   const myAppointments = state.appointments.filter(a => a.customerId === customerId);
@@ -46,7 +49,7 @@ export const ClienteDashboard: React.FC = () => {
             Bienvenido a tu Experiencia
           </span>
           <h1 className="text-2xl font-extrabold text-white tracking-tight">
-            Hola, {currentUser?.name || 'Camilo'}
+            Hola, {currentUser?.name || 'Cliente'}
           </h1>
           <p className="text-xs text-neutral-400 mt-1">
             Reserva tus cortes favoritos, pide bebidas desde la sala de espera y acumula puntos
@@ -75,7 +78,7 @@ export const ClienteDashboard: React.FC = () => {
               <div>
                 <h2 className="text-xl font-bold text-white">{nextAppointment.serviceName}</h2>
                 <p className="text-xs text-neutral-300 mt-1">
-                  Atendido por <strong className="text-[var(--gold-primary)]">{state.barbers.find(b => b.id === nextAppointment.barberId)?.name}</strong> en <strong className="text-white">Barber Club Bogotá</strong>
+                  Atendido por <strong className="text-[var(--gold-primary)]">{state.barbers.find(b => b.id === nextAppointment.barberId)?.name}</strong> en <strong className="text-white">{state.barbershops.find(s=>s.id===nextAppointment.businessId)?.name||'tu barbería'}</strong>
                 </p>
                 <div className="mt-3 flex items-center gap-4 text-xs font-mono text-neutral-300">
                   <span className="flex items-center gap-1.5">
@@ -162,10 +165,12 @@ export const ClienteDashboard: React.FC = () => {
               <Award className="w-4 h-4 text-[var(--gold-primary)]" />
             </div>
             <div className="text-3xl font-bold font-mono text-[var(--gold-primary)]">
-              {loyalty.points} <span className="text-xs font-normal text-neutral-400 font-sans">puntos</span>
+              {points} <span className="text-xs font-normal text-neutral-400 font-sans">puntos</span>
             </div>
             <p className="text-xs text-neutral-400 mt-2">
-              Te faltan solo 80 puntos para tu próximo corte gratis de cortesía.
+              {nearestReward
+                ? `En ${primaryLink?.name}: faltan ${Math.max(0,nearestReward.pointsCost-availablePoints)} puntos para «${nearestReward.title}».`
+                : 'Las recompensas disponibles dependen de cada barbería vinculada.'}
             </p>
           </div>
 
@@ -182,15 +187,19 @@ export const ClienteDashboard: React.FC = () => {
         <div className="bg-[#141414] border border-[#262626] rounded-2xl p-5 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between text-neutral-400 mb-2">
-              <span className="text-xs font-semibold">Mi Barbería Favorita</span>
+              <span className="text-xs font-semibold">Mi Barbería Vinculada</span>
               <MapPin className="w-4 h-4 text-neutral-400" />
             </div>
-            <h3 className="text-base font-bold text-white">Barber Club Bogotá</h3>
-            <p className="text-xs text-neutral-400 mt-1">Calle 93 # 12-45, Chicó Norte</p>
-            <div className="mt-2 text-xs text-amber-400 flex items-center gap-1 font-mono">
-              <Star className="w-3.5 h-3.5 fill-amber-400" />
-              <span>4.9 (184 reseñas)</span>
-            </div>
+            {linksLoading ? <p className="text-xs text-neutral-400">Cargando tus vinculaciones...</p>
+              : primaryLink ? <>
+                  <h3 className="text-base font-bold text-white">{primaryLink.name}</h3>
+                  {primaryShop?.address&&<p className="text-xs text-neutral-400 mt-1">{primaryShop.address}{primaryShop.city?', '+primaryShop.city:''}</p>}
+                  {primaryShop&&primaryShop.reviewsCount>0&&<div className="mt-2 text-xs text-amber-400 flex items-center gap-1 font-mono">
+                    <Star className="w-3.5 h-3.5 fill-amber-400"/>
+                    <span>{primaryShop.rating.toFixed(1)} ({primaryShop.reviewsCount} reseñas)</span>
+                  </div>}
+                  <p className="text-[11px] text-neutral-500 mt-2">Barbería vinculada mediante QR</p>
+                </> : <p className="text-xs text-neutral-400">Aún no tienes ninguna barbería vinculada. Escanea su QR para agregarla.</p>}
           </div>
 
           <button
