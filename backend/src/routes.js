@@ -183,6 +183,40 @@ export async function registerRoutes(app,{config,db,security}) {
         [tenant,x.name,x.sku,x.priceMinor,x.stock,x.description,x.photoUrl,x.category,x.costMinor,x.minStock,x.waitingRoomVisible]);
       return reply.code(201).send(row.rows[0]);
     });
+    // Inventory editing is owner-only; do not change stock through this endpoint.
+    // Stock movements remain separately audited through /stock.
+    routes.patch('/api/v1/tenants/:tenantId/products/:productId',async req=>{
+      const tenant=parseOrThrow(id,req.params.tenantId),product=parseOrThrow(id,req.params.productId);
+      await requireTenant(db,tenant,req.actor.id,owners);
+      const x=parseOrThrow(z.object({
+        name:word(120),sku:word(80),priceMinor:z.number().int().min(0),
+        description:z.string().max(2000),photoUrl:z.string().max(2048),
+        category:z.enum(['beauty','food_drinks','barbershop_merch']),
+        costMinor:z.number().int().min(0),minStock:z.number().int().min(0)
+      }).strict(),req.body);
+      const row=await db.query(
+        'UPDATE public.products SET name=$3,sku=$4,price_minor=$5,description=$6,photo_url=$7,category=$8,cost_minor=$9,min_stock=$10,updated_at=now() WHERE tenant_id=$1 AND id=$2 AND is_active=true RETURNING *',
+        [tenant,product,x.name,x.sku,x.priceMinor,x.description,x.photoUrl,x.category,x.costMinor,x.minStock]);
+      if(!row.rowCount)failure(404,'Producto activo no encontrado');
+      return row.rows[0];
+    });
+    // Soft delete preserves order_items and inventory_movements for auditing.
+    routes.delete('/api/v1/tenants/:tenantId/products/:productId',async(req,reply)=>{
+      const tenant=parseOrThrow(id,req.params.tenantId),product=parseOrThrow(id,req.params.productId);
+      await requireTenant(db,tenant,req.actor.id,owners);
+      const row=await db.query(
+        'UPDATE public.products SET is_active=false,waiting_room_visible=false,updated_at=now() WHERE tenant_id=$1 AND id=$2 AND is_active=true RETURNING id',
+        [tenant,product]);
+      if(!row.rowCount)failure(404,'Producto activo no encontrado');
+      return reply.code(200).send({id:row.rows[0].id,archived:true});
+    });
+    routes.patch('/api/v1/tenants/:tenantId/products/:productId/restore',async req=>{
+      const tenant=parseOrThrow(id,req.params.tenantId),product=parseOrThrow(id,req.params.productId);
+      await requireTenant(db,tenant,req.actor.id,owners);
+      const row=await db.query('UPDATE public.products SET is_active=true,updated_at=now() WHERE tenant_id=$1 AND id=$2 AND is_active=false RETURNING *',[tenant,product]);
+      if(!row.rowCount)failure(404,'Producto archivado no encontrado');
+      return row.rows[0];
+    });
     routes.post('/api/v1/tenants/:tenantId/products/:productId/stock',async req=>{
       const tenant=parseOrThrow(id,req.params.tenantId),product=parseOrThrow(id,req.params.productId);
       await requireTenant(db,tenant,req.actor.id,owners);
