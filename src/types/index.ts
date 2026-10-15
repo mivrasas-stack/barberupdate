@@ -63,6 +63,8 @@ export interface Barber {
   phone: string;
   email: string;
   specialties: string[];
+  experienceYears?:number;
+  instagramUrl?:string;
   bio: string;
   commissionRate: number; // e.g. 0.50 (50%)
   contractType?: 'commission'|'chair_rental'|'hybrid';

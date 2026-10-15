@@ -105,6 +105,36 @@ export async function saveClientAuthProfile(input:ClientAuthProfile,originalEmai
  const json=await response.json().catch(()=>({}));
  if(!response.ok)throw Error(json.msg||json.error_description||json.message||'No se pudo guardar tu perfil.');
 }
+export async function updateAccountAvatar(url:string):Promise<void>{
+ const jwt=await token();
+ const response=await fetch(supabaseUrl+'/auth/v1/user',{
+  method:'PUT',headers:{apikey:supabasePublicKey,Authorization:'Bearer '+jwt,'Content-Type':'application/json'},
+  body:JSON.stringify({data:{avatar_url:url}})
+ });
+ const result=await response.json().catch(()=>({}));
+ if(!response.ok)throw Error(result.msg||result.message||'No se pudo guardar la foto en tu cuenta.');
+}
+export async function updateAccountContact(input:{name:string;phone:string;email:string;originalEmail:string}):Promise<void>{
+ const jwt=await token();
+ const body:{email?:string;data:{full_name:string;phone:string}}={
+  data:{full_name:input.name.trim(),phone:input.phone.trim()}
+ };
+ if(input.originalEmail.toLowerCase()!==input.email.trim().toLowerCase())
+  body.email=input.email.trim().toLowerCase();
+ const response=await fetch(supabaseUrl+'/auth/v1/user',{
+  method:'PUT',headers:{apikey:supabasePublicKey,Authorization:'Bearer '+jwt,'Content-Type':'application/json'},
+  body:JSON.stringify(body)
+ });
+ const result=await response.json().catch(()=>({}));
+ if(!response.ok)throw Error(result.msg||result.message||'No se pudieron guardar los datos personales.');
+}
+export async function saveProfessionalProfile(tenantId:string,barberId:string,input:{
+ name:string;bio:string;specialties:string[];experienceYears:number;instagramUrl:string;professionalPhone:string
+}){
+ return backendRequest<Db>('/tenants/'+encodeURIComponent(tenantId)+'/barbers/'+encodeURIComponent(barberId)+'/professional-profile',{
+  method:'PATCH',body:JSON.stringify(input)
+ });
+}
 export async function requestPasswordReset(email:string){
   await authCall('recover',{email});
 }
@@ -160,7 +190,9 @@ export function mapShop(r:Db,userId:string):Barbershop{
 export function mapBarber(r:Db,tenant:string):Barber{
   return {
     id:txt(r,'id'),businessId:tenant,slug:txt(r,'slug'),
-    name:txt(r,'name'),photo:txt(r,'photo_url'),phone:'',email:'',specialties:[],
+    name:txt(r,'name'),photo:txt(r,'photo_url'),phone:txt(r,'professional_phone'),email:'',
+    specialties:Array.isArray(r.specialties)?r.specialties.map(v=>String(v)):[],
+    experienceYears:num(r,'experience_years'),instagramUrl:txt(r,'instagram_url'),
     bio:txt(r,'bio'),commissionRate:num(r,'commission_rate'),
      contractType:txt(r,'contract_type','commission') as Barber['contractType'],
      chairRentalFee:money(r,'chair_rental_fee'),
@@ -287,7 +319,12 @@ export async function loadAccount():Promise<{
      backendRequest<Db[]>(prefix+'/products')
    ]);
    barbers=bs.map(b=>mapBarber(b,tenant));
-   if(user.role==='barber_employee')user.barberId=txt(bs.find(b=>txt(b,'user_id')===me.id)||{},'id')||undefined;
+   if(user.role==='barber_employee'){
+     const myBarber=bs.find(b=>txt(b,'user_id')===me.id);
+     user.barberId=txt(myBarber||{},'id')||undefined;
+     // Same professional photo also appears in the global account header.
+     if(myBarber&&txt(myBarber,'photo_url'))user.avatar=txt(myBarber,'photo_url');
+   }
    services=ss.map(s=>mapService(s,tenant));
    products=ps.map(x=>mapProduct(x,tenant));
    const from=new Date(Date.now()-7*86400000).toISOString();

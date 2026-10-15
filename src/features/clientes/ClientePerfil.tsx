@@ -1,6 +1,7 @@
 import React,{useEffect,useState} from 'react';
-import {backendRequest,getClientAuthProfile,isLiveBackend,saveClientAuthProfile,type ClientCutPreferences} from '../../services/liveBackend';
+import {backendRequest,getClientAuthProfile,isLiveBackend,saveClientAuthProfile,updateAccountAvatar,type ClientCutPreferences} from '../../services/liveBackend';
 import {useApp} from '../../context/AppContext';
+import {ProfilePhotoUploader} from '../../components/common/ProfilePhotoUploader';
 import {User,Phone,Mail,Award,Scissors,Save,ShieldCheck,Loader2} from 'lucide-react';
 
 type WhatsappConsent={tenant_id:string;phone_e164:string;consented_at:string;revoked_at:string|null};
@@ -49,6 +50,11 @@ export const ClientePerfil:React.FC=()=>{
  const patchPreference=(key:keyof ClientCutPreferences,value:string)=>{
   setPreferences(current=>({...current,[key]:value}));
  };
+ const onPhotoUploaded=async(url:string)=>{
+   await updateAccountAvatar(url);
+   updateCurrentUserProfile({avatar:url});
+   addToast('Foto de perfil guardada en tu cuenta.','success');
+ };
  const save=async(e:React.FormEvent)=>{
   e.preventDefault();
   const fullName=name.trim(),contact=phone.trim(),mail=email.trim().toLowerCase();
@@ -93,6 +99,12 @@ export const ClientePerfil:React.FC=()=>{
     <p className="text-xs text-neutral-400 truncate">{currentUser?.email}</p>
     <span className="text-xs text-[var(--gold-primary)] font-mono font-semibold">{points} puntos acumulados</span>
    </div>
+  </section>
+  <section className="rounded-2xl border border-[#262626] bg-[#141414] p-5 sm:p-6 space-y-3">
+   <h2 className="text-sm font-bold text-white">Mi fotografía de perfil</h2>
+   <p className="text-xs text-neutral-400">Sube una imagen real desde tu dispositivo. Se mostrará en Mi Panel, el menú y tu cuenta.</p>
+   {isLiveBackend?<ProfilePhotoUploader label="Subir o cambiar mi foto" onSaved={onPhotoUploaded}/>:
+    <p className="text-xs text-amber-300">La carga persistente requiere iniciar sesión en el sistema conectado.</p>}
   </section>
   <form onSubmit={e=>void save(e)} className="space-y-5">
    <section className="rounded-2xl border border-[#262626] bg-[#141414] p-5 sm:p-6 space-y-4">

@@ -433,6 +433,13 @@ class Store {
     this.persist();
   }
 
+  public editBarberPersonal(barberId:string,patch:Partial<Pick<Barber,'name'|'bio'|'specialties'|'experienceYears'|'instagramUrl'|'phone'|'photo'>>):void{
+    const barber=this.state.barbers.find(b=>b.id===barberId);
+    if(!barber)return;
+    Object.assign(barber,patch);
+    this.persist();
+  }
+
   // --- Reviews ---
   public addReview(review: Omit<Review, 'id' | 'date'>): Review {
     const newRev: Review = {

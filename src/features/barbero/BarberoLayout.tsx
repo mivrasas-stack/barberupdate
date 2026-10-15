@@ -65,11 +65,11 @@ export const BarberoLayout: React.FC<{ children: React.ReactNode }> = ({ childre
         <div>
           {/* Barber Header Badge */}
           <div className="px-3.5 py-3 mb-4 bg-white/[0.04] rounded-2xl border border-white/[0.08] flex items-center gap-3 shadow-inner">
-            <img
-              src={currentBarber?.photo}
-              alt={currentBarber?.name}
-              className="w-10 h-10 rounded-2xl object-cover ring-2 ring-[var(--gold-primary)]/70 shrink-0 shadow-md"
-            />
+            {currentBarber?.photo
+              ? <img src={currentBarber.photo} alt="Fotografía profesional" className="w-10 h-10 rounded-2xl object-cover ring-2 ring-[var(--gold-primary)]/70 shrink-0 shadow-md"/>
+              : <div className="w-10 h-10 rounded-2xl bg-[#252525] ring-2 ring-[var(--gold-primary)]/70 flex items-center justify-center shrink-0">
+                  <User className="w-5 h-5 text-neutral-400"/>
+                </div>}
             <div className="truncate">
               <span className="text-[10px] uppercase font-bold tracking-wider text-orange-400 block">
                 Barbero Pro

@@ -121,18 +121,18 @@ export const ClienteInicio: React.FC = () => {
 
           <div className="relative z-10 space-y-4">
             <div className="flex items-center gap-3">
-              <img
-                src={currentUser?.avatar || 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80'}
-                alt={currentUser?.name || 'Cliente'}
-                className="w-14 h-14 rounded-2xl object-cover ring-2 ring-[var(--gold-primary)]/80 shadow-md"
-              />
+              {currentUser?.avatar
+                ? <img src={currentUser.avatar} alt="Mi foto de perfil" className="w-14 h-14 rounded-2xl object-cover ring-2 ring-[var(--gold-primary)]/80 shadow-md"/>
+                : <div aria-label="Aún no has subido foto de perfil" className="w-14 h-14 shrink-0 rounded-2xl bg-[#272727] ring-2 ring-[var(--gold-primary)]/80 flex items-center justify-center">
+                    <User className="w-6 h-6 text-neutral-400"/>
+                  </div>}
               <div>
                 <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/[0.06] border border-white/[0.1] text-[11px] font-semibold text-neutral-300">
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                   <span>Cliente registrado</span>
                 </div>
                 <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight mt-0.5">
-                  ¡Hola, {currentUser?.name?.split(' ')[0] || 'Camilo'}! 👋
+                  ¡Hola, {currentUser?.name?.split(' ')[0] || 'Cliente'}! 👋
                 </h1>
               </div>
             </div>

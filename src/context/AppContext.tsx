@@ -31,7 +31,7 @@ interface AppContextType {
   loginAs: (user: User) => void;
   loginWithCredentials: (email: string, password: string, requestedRole?: UserRole) => Promise<void>;
   logout: () => void;
-  updateCurrentUserProfile: (fields: Pick<User,'name'|'email'|'phone'>) => void;
+  updateCurrentUserProfile: (fields: Partial<Pick<User,'name'|'email'|'phone'|'avatar'>>) => void;
   switchRolePersona: (role: UserRole) => void;
 
   // Active Context Entities
@@ -212,7 +212,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return ()=>{alive=false;};
   },[]);
 
-  const updateCurrentUserProfile = (fields: Pick<User,'name'|'email'|'phone'>) => {
+  const updateCurrentUserProfile = (fields: Partial<Pick<User,'name'|'email'|'phone'|'avatar'>>) => {
     if (!currentUser) return;
     const updated = {...currentUser,...fields};
     setCurrentUser(updated);
