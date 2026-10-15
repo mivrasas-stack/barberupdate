@@ -124,7 +124,7 @@ export const BarberiaAgenda: React.FC = () => {
           startTime:newStartTime,customerName:newCustName,customerPhone:newCustPhone,notes:newNotes});
         await refreshLiveData();
         addToast('Reserva creada en BarberOS','success');
-        setIsNewAptModalOpen(false);setNewCustName('');setNewCustPhone('');
+        setIsNewAptModalOpen(false);setNewCustName('');setNewCustPhone('');setNewDiscount(null);
       }catch(error){addToast(error instanceof Error?error.message:'Error al reservar','error');}
       return;
     }
@@ -157,6 +157,7 @@ export const BarberiaAgenda: React.FC = () => {
     setIsNewAptModalOpen(false);
     setNewCustName('');
     setNewCustPhone('');
+    setNewDiscount(null);
   };
 
   const handleRegisterWalkIn = (e: React.FormEvent) => {

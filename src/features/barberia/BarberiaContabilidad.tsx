@@ -122,7 +122,7 @@ export const BarberiaContabilidad: React.FC = () => {
         });
         await refreshLiveData();
         addToast('Cierre de caja guardado en el backend','success');
-        setIsCashClosingModalOpen(false);setClosingNotes('');
+        setIsCashClosingModalOpen(false);setClosingNotes('');setOpeningCash(null);setCashCounted(null);
       }catch(error){addToast(error instanceof Error?error.message:'No se pudo cerrar caja','error');}
       return;
     }
@@ -146,7 +146,7 @@ export const BarberiaContabilidad: React.FC = () => {
 
     addToast('Cierre de caja guardado con éxito en el historial contable', 'success');
     setIsCashClosingModalOpen(false);
-    setClosingNotes('');
+    setClosingNotes('');setOpeningCash(null);setCashCounted(null);
   };
 
   const handleExportCSV = () => {
