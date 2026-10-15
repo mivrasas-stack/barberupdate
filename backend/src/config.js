@@ -16,5 +16,12 @@ export function configFromEnv(env = process.env) {
     origins,
     rateLimit: Math.max(10, Number(env.RATE_LIMIT_PER_MINUTE || 90)),
     mediaBucket: env.MEDIA_BUCKET || 'barberos-images',
+    platformSecretsKey: env.PLATFORM_SECRETS_KEY || '',
+    whatsappSendEnabled: env.WHATSAPP_SEND_ENABLED === 'true',
+    whatsappAccessToken: env.WHATSAPP_ACCESS_TOKEN || '',
+    whatsappPhoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID || '',
+    whatsappGraphVersion: env.WHATSAPP_GRAPH_VERSION || 'v23.0',
+    whatsappAppSecret: env.WHATSAPP_APP_SECRET || '',
+    whatsappWebhookVerifyToken: env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || '',
   };
 }

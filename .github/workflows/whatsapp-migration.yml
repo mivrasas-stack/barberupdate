@@ -1,0 +1,40 @@
+name: WhatsApp Migration QA
+on:
+  push:
+    branches: [feat/whatsapp-approved-templates-20261014]
+  pull_request:
+    paths:
+      - 'supabase/migrations/*whatsapp*'
+      - 'backend/scripts/verify-whatsapp-migration.mjs'
+      - '.github/workflows/whatsapp-migration.yml'
+permissions:
+  contents: read
+jobs:
+  postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: localtest
+          POSTGRES_DB: whatsapp_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d whatsapp_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci --ignore-scripts --no-audit
+        working-directory: backend
+      - name: Apply and verify WhatsApp migration against disposable PostgreSQL only
+        env:
+          WHATSAPP_TEST_DATABASE_URL: postgresql://postgres:localtest@127.0.0.1:5432/whatsapp_ci
+        run: node backend/scripts/verify-whatsapp-migration.mjs

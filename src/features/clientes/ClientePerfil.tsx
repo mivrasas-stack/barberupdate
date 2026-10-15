@@ -1,9 +1,29 @@
-import React from 'react';
+import React,{useEffect,useState} from 'react';
+import {backendRequest,isLiveBackend} from '../../services/liveBackend';
 import { useApp } from '../../context/AppContext';
 import { User, Phone, Mail, Award, Calendar, Scissors, ShieldCheck } from 'lucide-react';
 
+type WhatsappConsent={tenant_id:string;phone_e164:string;consented_at:string;revoked_at:string|null};
 export const ClientePerfil: React.FC = () => {
-  const { currentUser, state } = useApp();
+  const { currentUser, state,addToast } = useApp();
+  const [consents,setConsents]=useState<WhatsappConsent[]>([]);
+  useEffect(()=>{
+    if(!isLiveBackend||!currentUser)return;
+    let active=true;
+    backendRequest<WhatsappConsent[]>('/me/whatsapp/consents')
+      .then(rows=>{if(active)setConsents(rows)})
+      .catch(()=>{});
+    return()=>{active=false};
+  },[currentUser?.id]);
+  const revokeWhatsapp=async(row:WhatsappConsent)=>{
+    try{
+      await backendRequest('/me/whatsapp/consent',{method:'POST',
+        body:JSON.stringify({tenantId:row.tenant_id,phone:row.phone_e164,consent:false})});
+      setConsents(current=>current.map(item=>
+        item.tenant_id===row.tenant_id&&item.phone_e164===row.phone_e164?{...item,revoked_at:new Date().toISOString()}:item));
+      addToast('Autorización de WhatsApp revocada','success');
+    }catch(err){addToast(err instanceof Error?err.message:'No fue posible revocar la autorización','error');}
+  };
   const customerId = currentUser?.id || 'usr-client-1';
   const loyalty = state.loyalty[customerId] || state.loyalty['usr-client-1'] || { points: 420 };
 
@@ -33,6 +53,16 @@ export const ClientePerfil: React.FC = () => {
         </div>
       </div>
 
+      {isLiveBackend && <section className="bg-[#141414] border border-[#262626] rounded-2xl p-5 space-y-3">
+        <h3 className="text-sm font-bold text-white">Mis autorizaciones de WhatsApp</h3>
+        <p className="text-xs text-neutral-400">Puedes dejar de recibir recordatorios y avisos de citas cuando quieras. Revocar no cancela tus reservas.</p>
+        {!consents.length && <p className="text-xs text-neutral-500">No hay autorizaciones de WhatsApp registradas.</p>}
+        {consents.map(item=><div key={item.tenant_id+item.phone_e164} className="flex items-center justify-between gap-4 border-t border-neutral-800 py-3 text-xs">
+          <span className="text-neutral-300">{item.phone_e164} · {item.revoked_at?'Revocada':'Activa'}</span>
+          {!item.revoked_at && <button type="button" onClick={()=>void revokeWhatsapp(item)}
+            className="text-rose-300 border border-rose-500/30 rounded-lg px-3 py-2 hover:bg-rose-500/10">Revocar</button>}
+        </div>)}
+      </section>}
       <div className="bg-[#141414] border border-[#262626] rounded-2xl p-5 space-y-3 text-xs">
         <h3 className="text-sm font-bold text-white">Preferencias de Corte</h3>
         <p className="text-neutral-400">

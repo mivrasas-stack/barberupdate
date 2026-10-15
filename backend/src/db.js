@@ -8,6 +8,8 @@ export function createDb(config) {
     connectionTimeoutMillis: 5000,
     idleTimeoutMillis: 30000,
     statement_timeout: 10000,
+    idle_in_transaction_session_timeout: 15000,
+    keepAlive: true,
     application_name: 'barberos-api',
   });
   async function transaction(fn) {

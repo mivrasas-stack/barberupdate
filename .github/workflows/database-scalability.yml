@@ -1,0 +1,40 @@
+name: Database Scalability QA
+on:
+  push:
+    branches: [feat/database-scale-foundation-20261015]
+  pull_request:
+    paths:
+      - 'supabase/migrations/*scalability*'
+      - 'backend/scripts/verify-scalability-foundation.mjs'
+      - '.github/workflows/database-scalability.yml'
+permissions:
+  contents: read
+jobs:
+  concurrency:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: localtest
+          POSTGRES_DB: scale_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d scale_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci --ignore-scripts --no-audit
+        working-directory: backend
+      - name: Validate atomic booking, queue and stock operations on isolated DB
+        env:
+          SCALABILITY_TEST_DATABASE_URL: postgresql://postgres:localtest@127.0.0.1:5432/scale_ci
+        run: node backend/scripts/verify-scalability-foundation.mjs
