@@ -29,6 +29,41 @@ export async function registerMediaProfileRoutes(app,{db,security,config}){
  const {authenticated,limited,requireTenant,service}=security;
  app.register(async routes=>{
   routes.addHook('preHandler',async req=>{await authenticated(req);await limited(req);if(!db)failure(503,'Base de datos no disponible');});
+  // Upload avatar as the authenticated account owner. No tenant or role is required.
+  // The file path is derived from req.actor.id, never from client-supplied identity.
+  routes.post('/api/v1/me/avatar',{bodyLimit:6_500_000},async(req,reply)=>{
+   if(!service)failure(503,'Servicio de imágenes no configurado');
+   const x=parseOrThrow(z.object({data:z.string().min(10).max(6_000_000)}).strict(),req.body);
+   const buffer=Buffer.from(x.data,'base64');
+   const type=verifyImage(buffer);
+   const key='avatars/'+req.actor.id+'/'+randomUUID()+'.'+type.ext;
+   const {error}=await service.storage.from(config.mediaBucket).upload(key,buffer,{
+    contentType:type.mime,upsert:false,cacheControl:'3600'
+   });
+   if(error)failure(502,'No se pudo subir la foto de perfil');
+   const {data}=service.storage.from(config.mediaBucket).getPublicUrl(key);
+   return reply.code(201).send({url:data.publicUrl});
+  });
+  // A barber can only edit a profile attached to their own auth user ID.
+  // Contract, payouts, status and schedule fields are intentionally excluded.
+  routes.patch('/api/v1/tenants/:tenantId/barbers/:barberId/professional-profile',async req=>{
+   const tenant=parseOrThrow(id,req.params.tenantId),barber=parseOrThrow(id,req.params.barberId);
+   await requireTenant(db,tenant,req.actor.id,['barber']);
+   const payload=z.object({
+    name:z.string().trim().min(2).max(120),
+    bio:z.string().trim().max(2000),
+    specialties:z.array(z.string().trim().min(2).max(65)).max(8),
+    experienceYears:z.number().int().min(0).max(70),
+    instagramUrl:z.union([z.literal(''),z.string().url().max(160).refine(v=>v.startsWith('https://www.instagram.com/')||v.startsWith('https://instagram.com/'),'Solo se admiten enlaces de Instagram')]),
+    professionalPhone:z.string().trim().max(40)
+   }).strict();
+   const x=parseOrThrow(payload,req.body);
+   const row=await db.query(
+    'UPDATE public.barbers SET name=$4,bio=$5,specialties=$6,experience_years=$7,instagram_url=$8,professional_phone=$9 WHERE tenant_id=$1 AND id=$2 AND user_id=$3 RETURNING *',
+    [tenant,barber,req.actor.id,x.name,x.bio,x.specialties,x.experienceYears,x.instagramUrl,x.professionalPhone]);
+   if(!row.rowCount)failure(403,'No puedes modificar el perfil de otro barbero');
+   return row.rows[0];
+  });
   routes.post('/api/v1/tenants/:tenantId/images', {bodyLimit:6_500_000},async(req,reply)=>{
    const tenant=parseOrThrow(id,req.params.tenantId);
    const role=await requireTenant(db,tenant,req.actor.id,['owner','manager','barber']);
