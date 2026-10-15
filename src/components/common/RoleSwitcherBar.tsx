@@ -21,14 +21,8 @@ export const RoleSwitcherBar: React.FC = () => {
       icon: <Store className="w-3.5 h-3.5 text-yellow-400" />,
     },
     {
-      role: 'barber_independent',
-      label: 'Barbero Independiente',
-      desc: 'Alex "The Blade" Fade - Estudio Propio',
-      icon: <Scissors className="w-3.5 h-3.5 text-orange-400" />,
-    },
-    {
       role: 'barber_employee',
-      label: 'Barbero Asociado',
+      label: 'Barbero',
       desc: 'Santiago Castro - Silla en Barber Club',
       icon: <Users className="w-3.5 h-3.5 text-blue-400" />,
     },
@@ -109,7 +103,7 @@ export const RoleSwitcherBar: React.FC = () => {
                 <RefreshCw className="w-3 h-3 text-blue-400" />
                 <span>Reiniciar Demo</span>
               </button>
-              <span className="text-[10px] font-mono text-neutral-500">BarberOS · Apple UI</span>
+              <span className="text-[10px] font-mono text-neutral-500">BarberNow · Apple UI</span>
             </div>
           </div>
         )}
