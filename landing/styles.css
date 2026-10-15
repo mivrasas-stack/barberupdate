@@ -42,3 +42,43 @@
 .login-bridge-logo{height:108px;max-height:none;margin:0 auto 20px}
 @media(max-width:900px){.nav .brand-logo{height:60px}}
 @media(max-width:560px){.nav .brand-logo{height:58px}.register-top .brand-logo{height:65px}.footer-logo .brand-logo{height:78px}.login-bridge-logo{height:86px}}
+
+
+/*
+ * Animaciones del video de referencia. Son únicamente opacidad y transform:
+ * no modifican tamaño, color, fuente, distribución ni fondo del logo.
+ */
+html.bn-motion .bn-reveal {
+ opacity:0;
+ transform:translate3d(0,24px,0);
+ transition:opacity 800ms cubic-bezier(.22,1,.36,1),
+            transform 800ms cubic-bezier(.22,1,.36,1);
+ transition-delay:var(--bn-delay,0ms);
+}
+html.bn-motion .bn-reveal.bn-visible {
+ opacity:1;
+ transform:translate3d(0,0,0);
+}
+@keyframes bn-hero-enter {
+ from {transform:scale(1.06);opacity:.75}
+ to {transform:scale(1.015);opacity:1}
+}
+html.bn-motion .hero-bg {
+ animation:bn-hero-enter 1700ms cubic-bezier(.22,1,.36,1) both;
+}
+@keyframes bn-discover-hint {
+ 0%,100% {transform:translateY(0)}
+ 50% {transform:translateY(6px)}
+}
+html.bn-motion .discover span {
+ animation:bn-discover-hint 2s ease-in-out 1.6s infinite;
+}
+/* Accesibilidad: sin efectos ni movimientos al solicitar reducir animaciones. */
+@media (prefers-reduced-motion: reduce) {
+ html {scroll-behavior:auto}
+ html.bn-motion .bn-reveal {
+  opacity:1;transform:none;transition:none;
+ }
+ html.bn-motion .hero-bg,
+ html.bn-motion .discover span {animation:none}
+}
