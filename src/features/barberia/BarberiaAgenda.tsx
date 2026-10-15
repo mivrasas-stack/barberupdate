@@ -30,6 +30,9 @@ export const BarberiaAgenda: React.FC = () => {
   const {today,selectedDate,setSelectedDate,goToday}=useRollingAgendaDate();
   const [inspectingId,setInspectingId]=useState<string|null>(null);
   const [statusBusy,setStatusBusy]=useState(false);
+  const [cancelRequest,setCancelRequest]=useState<{appointment:Appointment;status:'cancelled'|'no_show'}|null>(null);
+  const [cancelReason,setCancelReason]=useState('Cancelada a solicitud del cliente');
+  const [customReason,setCustomReason]=useState('');
   const [selectedBarberId, setSelectedBarberId] = useState<string>(
     currentUser?.role === 'barber_employee' && currentUser?.barberId ? currentUser.barberId : 'all'
   );
@@ -160,37 +163,45 @@ export const BarberiaAgenda: React.FC = () => {
   const inspectingApt=state.appointments.find(a=>a.id===inspectingId&&a.businessId===shopId)||null;
   const isAbsentEligible=(apt:Appointment)=>
     Date.parse(apt.date+'T'+apt.startTime+':00-05:00')<=Date.now()-15*60_000;
-  const handleStatus=async(apt:Appointment,status:AppointmentStatus)=>{
-    if(status==='no_show'&&!isAbsentEligible(apt)){
-      addToast('Espera 15 minutos desde la hora de la cita antes de registrar ausencia.','error');return;
-    }
-    if((status==='cancelled'||status==='no_show')&&
-      !window.confirm(status==='cancelled'
-        ?'¿Cancelar esta cita? El horario volverá a estar disponible cuando aún sea futuro.'
-        :'¿Confirmas que el cliente no asistió? Se liberará cualquier franja aún reservable.'))return;
-    let reason:string|undefined;
-    if(['cancelled','no_show'].includes(status)){
-      reason=window.prompt(status==='no_show'?'Motivo de ausencia del cliente:':'Motivo de cancelación:',
-        status==='no_show'?'Cliente no asistió a la cita':'Cancelada a solicitud del cliente')?.trim();
-      if(!reason)return;
-      if(reason.length<3||reason.length>250){addToast('Escribe un motivo de 3 a 250 caracteres.','error');return;}
-    }
+  const handleStatus=async(apt:Appointment,status:'in_service')=>{
     if(statusBusy)return;
     setStatusBusy(true);
     try{
       if(isLiveBackend){
-        await updateBooking(shopId,apt.id,status,reason);
+        await updateBooking(shopId,apt.id,status);
+        await refreshLiveData();
+      }else barberStore.updateAppointmentStatus(apt.id,status);
+      addToast('Corte iniciado','success');
+      setInspectingId(null);
+    }catch(error){addToast(error instanceof Error?error.message:'No se pudo iniciar el corte','error');}
+    finally{setStatusBusy(false);}
+  };
+  const openCancel=(apt:Appointment,status:'cancelled'|'no_show')=>{
+    if(status==='no_show'&&!isAbsentEligible(apt)){
+      addToast('La ausencia puede registrarse 15 minutos después de la cita.','error');return;
+    }
+    setCancelReason(status==='no_show'?'Cliente no asistió a la cita':'Cancelada a solicitud del cliente');
+    setCustomReason('');
+    setInspectingId(null);
+    setCancelRequest({appointment:apt,status});
+  };
+  const confirmCancellation=async()=>{
+    if(!cancelRequest||statusBusy)return;
+    const {appointment,status}=cancelRequest;
+    const reason=cancelReason==='Otro motivo'?customReason.trim():cancelReason;
+    if(reason.length<3||reason.length>250){addToast('Escribe un motivo válido (3 a 250 caracteres).','error');return;}
+    setStatusBusy(true);
+    try{
+      if(isLiveBackend){
+        await updateBooking(shopId,appointment.id,status,reason);
         await refreshLiveData();
       }else{
-        barberStore.updateAppointmentStatus(apt.id,status);
-        if(reason)barberStore.setAppointmentCancellationReason(apt.id,reason);
+        barberStore.updateAppointmentStatus(appointment.id,status);
+        barberStore.setAppointmentCancellationReason(appointment.id,reason);
       }
-      addToast(status==='in_service'?'Corte iniciado':
-        status==='no_show'?'Ausencia registrada':
-        status==='cancelled'?'Cita cancelada':status==='waiting'?'Llegada registrada':
-        status==='confirmed'?'Reserva confirmada':'Estado actualizado','success');
-      setInspectingId(null);
-    }catch(error){addToast(error instanceof Error?error.message:'Error al actualizar la cita','error');}
+      addToast(status==='no_show'?'Ausencia registrada':'Cita cancelada y horario liberado','success');
+      setCancelRequest(null);
+    }catch(error){addToast(error instanceof Error?error.message:'No se pudo cancelar la cita','error');}
     finally{setStatusBusy(false);}
   };
 
@@ -727,17 +738,18 @@ export const BarberiaAgenda: React.FC = () => {
           {inspectingApt.notes&&<div className="sm:col-span-2"><dt className="text-neutral-500">Notas del cliente</dt><dd className="mt-1 text-neutral-200 whitespace-pre-wrap">{inspectingApt.notes}</dd></div>}
          </dl>
          <div className="space-y-3 border-t border-[#303030] pt-4">
-          {inspectingApt.status==='pending'&&<button disabled={statusBusy} onClick={()=>void handleStatus(inspectingApt,'confirmed')} className="w-full rounded-xl bg-[var(--gold-primary)] px-4 py-3 text-xs font-bold text-black disabled:opacity-50">Confirmar cita</button>}
-          {inspectingApt.status==='confirmed'&&<button disabled={statusBusy} onClick={()=>void handleStatus(inspectingApt,'waiting')} className="w-full rounded-xl border border-amber-500/50 px-4 py-3 text-xs font-bold text-amber-300 disabled:opacity-50">Registrar llegada del cliente</button>}
-          {['confirmed','waiting'].includes(inspectingApt.status)&&<button disabled={statusBusy} onClick={()=>void handleStatus(inspectingApt,'in_service')} className="w-full rounded-xl bg-[var(--gold-primary)] px-4 py-3 text-xs font-bold text-black disabled:opacity-50"><Play className="mr-1 inline h-4 w-4"/>Iniciar corte</button>}
+          {['pending','confirmed','waiting'].includes(inspectingApt.status)&&<button disabled={statusBusy} onClick={()=>void handleStatus(inspectingApt,'in_service')}
+           className="w-full rounded-xl bg-[var(--gold-primary)] px-4 py-3 text-xs font-bold text-black disabled:opacity-50">
+            <Play className="mr-1 inline h-4 w-4"/>Iniciar corte
+          </button>}
           {inspectingApt.status==='in_service'&&<button disabled={statusBusy} onClick={()=>{setCompletingApt(inspectingApt);setInspectingId(null)}} className="w-full rounded-xl bg-emerald-500 px-4 py-3 text-xs font-bold text-black disabled:opacity-50">Finalizar servicio</button>}
           {['pending','confirmed','waiting'].includes(inspectingApt.status)&&(
            <div className="flex flex-col sm:flex-row gap-2">
-            {['confirmed','waiting'].includes(inspectingApt.status)&&
-             <button disabled={statusBusy||!isAbsentEligible(inspectingApt)} onClick={()=>void handleStatus(inspectingApt,'no_show')}
+            {['pending','confirmed','waiting'].includes(inspectingApt.status)&&
+             <button disabled={statusBusy||!isAbsentEligible(inspectingApt)} onClick={()=>openCancel(inspectingApt,'no_show')}
               title={!isAbsentEligible(inspectingApt)?'Disponible 15 minutos después de la hora reservada':''}
               className="flex-1 rounded-xl border border-orange-500/40 p-3 text-xs font-bold text-orange-300 disabled:opacity-35">El cliente no asistió</button>}
-            <button disabled={statusBusy} onClick={()=>void handleStatus(inspectingApt,'cancelled')}
+            <button disabled={statusBusy} onClick={()=>openCancel(inspectingApt,'cancelled')}
              className="flex-1 rounded-xl border border-rose-500/40 p-3 text-xs font-bold text-rose-300 disabled:opacity-50">Cancelar cita y liberar horario</button>
            </div>
           )}
@@ -745,6 +757,49 @@ export const BarberiaAgenda: React.FC = () => {
            <p className="text-xs text-neutral-400">Esta cita ya está cerrada. Su historial se conserva.</p>}
           <p className="text-[11px] text-neutral-500">Al cancelar o marcar ausencia, PostgreSQL libera el bloqueo de ese horario. Solo los turnos futuros pueden reservarse de nuevo.</p>
          </div>
+        </section>
+       </div>
+      )}
+
+      {cancelRequest&&(
+       <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/85 p-4 backdrop-blur-sm">
+        <section role="dialog" aria-modal="true" aria-labelledby="barbernow-cancel-heading"
+         className="w-full max-w-md rounded-2xl border border-[#343434] bg-[#151515] p-5 sm:p-6 shadow-2xl space-y-4">
+          <div className="flex items-center justify-between">
+           <h2 id="barbernow-cancel-heading" className="text-lg font-bold text-white">
+            {cancelRequest.status==='no_show'?'Registrar ausencia':'Cancelar cita'}
+           </h2>
+           <button aria-label="Cerrar cancelación" onClick={()=>setCancelRequest(null)} disabled={statusBusy}
+             className="rounded-lg p-2 text-neutral-400 hover:text-white disabled:opacity-50"><X className="h-5 w-5"/></button>
+          </div>
+          <div className="rounded-xl border border-[#343434] bg-[#202020] p-3">
+           <p className="text-sm font-semibold text-white">{cancelRequest.appointment.customerName}</p>
+           <p className="mt-1 text-xs text-neutral-400">{cancelRequest.appointment.serviceName} · {cancelRequest.appointment.date} · {cancelRequest.appointment.startTime}</p>
+          </div>
+          <div>
+           <label htmlFor="barbernow-cancel-reason" className="mb-1.5 block text-xs font-semibold text-neutral-300">Motivo</label>
+           <select id="barbernow-cancel-reason" value={cancelReason} onChange={e=>setCancelReason(e.target.value)}
+            className="w-full rounded-xl border border-[#393939] bg-[#202020] p-3 text-sm text-white">
+            <option value="Cliente no asistió a la cita">Cliente no asistió</option>
+            {cancelRequest.status==='cancelled'&&<option value="Cancelada a solicitud del cliente">Canceló el cliente</option>}
+            {cancelRequest.status==='cancelled'&&<option value="Imprevisto o cierre de la barbería">Imprevisto de la barbería</option>}
+            <option value="Otro motivo">Otro motivo</option>
+           </select>
+           {cancelReason==='Otro motivo'&&<textarea autoFocus aria-label="Escribe el motivo" maxLength={250}
+             rows={2} value={customReason} onChange={e=>setCustomReason(e.target.value)}
+             placeholder="Escribe brevemente qué sucedió..."
+             className="mt-2 w-full rounded-xl border border-[#393939] bg-[#202020] p-3 text-sm text-white"/>}
+          </div>
+          <p className="text-xs text-neutral-400">Se conservará el motivo en el historial y se liberará el horario para reservas futuras.</p>
+          <div className="flex gap-2">
+           <button type="button" disabled={statusBusy} onClick={()=>setCancelRequest(null)}
+            className="flex-1 rounded-xl border border-[#383838] p-3 text-xs font-semibold text-neutral-300 disabled:opacity-40">Volver</button>
+           <button type="button" disabled={statusBusy||(cancelReason==='Otro motivo'&&customReason.trim().length<3)}
+            onClick={()=>void confirmCancellation()}
+            className="flex-1 rounded-xl bg-rose-500 p-3 text-xs font-bold text-black disabled:opacity-40">
+            {statusBusy?'Guardando...':cancelRequest.status==='no_show'?'Registrar ausencia':'Confirmar cancelación'}
+           </button>
+          </div>
         </section>
        </div>
       )}
