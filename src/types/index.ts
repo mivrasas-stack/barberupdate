@@ -90,6 +90,7 @@ export interface Service {
   description: string;
   price: number;
   durationMinutes: number;
+  earnsLoyaltyPoints?: boolean;
   category: ServiceCategory;
   barberIds: string[]; // Allowed barbers (empty means all)
   isActive: boolean;
@@ -254,6 +255,31 @@ export interface Review {
   rating: number; // 1-5
   comment: string;
   date: string;
+}
+
+export interface LoyaltyReward {
+  id: string;
+  tenantId: string;
+  title: string;
+  description: string;
+  pointsCost: number;
+  isActive: boolean;
+  availablePoints?: number;
+}
+export interface LoyaltyBalance {
+  tenantId: string;
+  points: number;
+  visitsCount: number;
+}
+export interface LoyaltyRedemption {
+  id: string;
+  tenantId: string;
+  rewardId: string;
+  title: string;
+  pointsCost: number;
+  status: 'pending'|'fulfilled'|'cancelled';
+  createdAt: string;
+  userId?: string;
 }
 
 export interface Achievement {
