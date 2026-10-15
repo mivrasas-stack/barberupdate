@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="barberGold" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#F3C048" />
+      <stop offset="100%" stop-color="#B88928" />
+    </linearGradient>
+    <linearGradient id="edgeGlow" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.6" />
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.1" />
+    </linearGradient>
+    <filter id="softShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#000000" flood-opacity="0.25" />
+    </filter>
+  </defs>
+
+  <!-- Base Rounded Squircle with BarberNow Signature Gold Gradient -->
+  <rect x="2" y="2" width="60" height="60" rx="16" fill="url(#barberGold)" stroke="#8C6615" stroke-width="1" />
+  
+  <!-- Apple/Liquid-Glass Inner Bevel Highlight -->
+  <rect x="3.5" y="3.5" width="57" height="57" rx="14.5" fill="none" stroke="url(#edgeGlow)" stroke-width="1.2" />
+
+  <!-- Barber Scissors rotated 45deg, matching BarberNow Brand Header -->
+  <g transform="translate(32, 32) scale(1.4) rotate(45) translate(-12, -12)" stroke="#0E0E10" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" fill="none" filter="url(#softShadow)">
+    <circle cx="6" cy="6" r="3" />
+    <path d="M8.12 8.12 12 12" />
+    <path d="M20 4 8.12 15.88" />
+    <circle cx="6" cy="18" r="3" />
+    <path d="M14.8 14.8 20 20" />
+  </g>
+</svg>
