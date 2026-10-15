@@ -49,6 +49,9 @@ export interface BarberOSState {
   orders: Order[];
   reviews: Review[];
   loyalty: Record<string, LoyaltyAccount>; // customerId -> account
+  loyaltyBalances: Record<string, {tenantId:string;points:number;visitsCount:number}>;
+  rewards: import('../types').LoyaltyReward[];
+  redemptions: import('../types').LoyaltyRedemption[];
   plans: SubscriptionPlan[];
   commercialConfig: CommercialPageConfig;
   palettes: ThemePalette[];
@@ -71,6 +74,7 @@ const getInitialState = (): BarberOSState => {
     loyalty: {
       'usr-client-1': INITIAL_LOYALTY,
     },
+    loyaltyBalances: {}, rewards: [], redemptions: [],
     plans: INITIAL_PLANS,
     commercialConfig: INITIAL_COMMERCIAL_PAGE,
     palettes: INITIAL_PALETTES,
@@ -85,7 +89,7 @@ const getLiveEmptyState = (): BarberOSState => ({
   ...getInitialState(),
   users: [], barbershops: [], barbers: [], services: [], products: [],
   appointments: [], transactions: [], cashClosings: [], orders: [], reviews: [],
-  loyalty: {}, plans: [],
+  loyalty: {}, loyaltyBalances: {}, rewards: [], redemptions: [], plans: [],
 });
 
 class Store {
@@ -157,7 +161,7 @@ class Store {
       currency: this.state.currency,
       users: [], barbershops: [], barbers: [], services: [], products: [],
       appointments: [], transactions: [], cashClosings: [], orders: [], reviews: [],
-      loyalty: {}, ...data,
+      loyalty: {}, loyaltyBalances: {}, rewards: [], redemptions: [], ...data,
     };
     if(import.meta.env.VITE_BACKEND_MODE==='live'){
       try{

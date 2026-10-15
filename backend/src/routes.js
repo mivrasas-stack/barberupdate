@@ -14,6 +14,12 @@ export function endOfBooking(value, duration, now=Date.now()) {
   return new Date(ms+duration*60000).toISOString();
 }
 const tenantSchema = z.object({ name:word(120),slug,currency:z.literal('COP').default('COP'),timeZone:word(80).default('America/Bogota') }).strict();
+const servicePayload=z.object({
+ name:word(120),description:z.string().max(2000).default(''),
+ priceMinor:z.number().int().min(0).max(1000000000),
+ durationMinutes:z.number().int().min(5).max(600),category:word(60),
+ earnsLoyaltyPoints:z.boolean().optional()
+}).strict();
 const bookingSchema = z.object({ barberId:id,serviceId:id,startsAt:z.iso.datetime({offset:true}),customerName:word(120),customerPhone:word(32),notes:z.string().max(2000).default('') }).strict();
 
 export async function registerRoutes(app,{config,db,security}) {
@@ -87,22 +93,18 @@ export async function registerRoutes(app,{config,db,security}) {
     });
     routes.post('/api/v1/tenants/:tenantId/services',async (req,reply)=>{
       const tenant=parseOrThrow(id,req.params.tenantId);
-      await requireTenant(db,tenant,req.actor.id,owners);
-      const x=parseOrThrow(z.object({name:word(120),description:z.string().max(2000).default(''),priceMinor:z.number().int().min(0).max(1000000000),durationMinutes:z.number().int().min(5).max(600),category:word(60)}).strict(),req.body);
-      const row=await db.query('INSERT INTO public.services(tenant_id,name,description,price_minor,duration_minutes,category) VALUES($1,$2,$3,$4,$5,$6) RETURNING *',[tenant,x.name,x.description,x.priceMinor,x.durationMinutes,x.category]);
+      await requireTenant(db,tenant,req.actor.id,[...owners,'barber']);
+      const x=parseOrThrow(servicePayload,req.body);
+      const row=await db.query('INSERT INTO public.services(tenant_id,name,description,price_minor,duration_minutes,category,earns_loyalty_points) VALUES($1,$2,$3,$4,$5,$6,COALESCE($7,false)) RETURNING *',[tenant,x.name,x.description,x.priceMinor,x.durationMinutes,x.category,x.earnsLoyaltyPoints]);
       return reply.code(201).send(row.rows[0]);
     });
     routes.patch('/api/v1/tenants/:tenantId/services/:serviceId',async req=>{
       const tenant=parseOrThrow(id,req.params.tenantId),serviceId=parseOrThrow(id,req.params.serviceId);
-      await requireTenant(db,tenant,req.actor.id,owners);
-      const x=parseOrThrow(z.object({
-        name:word(120),description:z.string().max(2000).default(''),
-        priceMinor:z.number().int().min(0).max(1000000000),
-        durationMinutes:z.number().int().min(5).max(600),category:word(60)
-      }).strict(),req.body);
+      await requireTenant(db,tenant,req.actor.id,[...owners,'barber']);
+      const x=parseOrThrow(servicePayload,req.body);
       const changed=await db.query(
-        'UPDATE public.services SET name=$3,description=$4,price_minor=$5,duration_minutes=$6,category=$7 WHERE tenant_id=$1 AND id=$2 RETURNING *',
-        [tenant,serviceId,x.name,x.description,x.priceMinor,x.durationMinutes,x.category]);
+        'UPDATE public.services SET name=$3,description=$4,price_minor=$5,duration_minutes=$6,category=$7,earns_loyalty_points=COALESCE($8,earns_loyalty_points) WHERE tenant_id=$1 AND id=$2 RETURNING *',
+        [tenant,serviceId,x.name,x.description,x.priceMinor,x.durationMinutes,x.category,x.earnsLoyaltyPoints]);
       if(!changed.rowCount)failure(404,'Servicio no encontrado');
       return changed.rows[0];
     });

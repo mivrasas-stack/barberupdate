@@ -74,10 +74,8 @@ export const AdminUsers: React.FC = () => {
         return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">Superadmin</span>;
       case 'owner':
         return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#D9A323]/15 text-[#D9A323] border border-[#D9A323]/30">Propietario Barbería</span>;
-      case 'barber_independent':
-        return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-orange-500/10 text-orange-400 border border-orange-500/20">Barbero Independiente</span>;
       case 'barber_employee':
-        return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20">Barbero Asociado</span>;
+        return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20">Barbero</span>;
       case 'client':
         return <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">Cliente Registrado</span>;
     }
@@ -119,7 +117,6 @@ export const AdminUsers: React.FC = () => {
           >
             <option value="all">Todos los roles</option>
             <option value="owner">Propietario de Barbería</option>
-            <option value="barber_independent">Barbero Independiente</option>
             <option value="barber_employee">Barbero Asociado</option>
             <option value="client">Cliente</option>
             <option value="superadmin">Superadmin</option>
@@ -178,8 +175,6 @@ export const AdminUsers: React.FC = () => {
                     <td className="py-3 px-4 text-neutral-300">
                       {shop ? (
                         <span className="font-medium text-white">{shop.name}</span>
-                      ) : user.role === 'barber_independent' ? (
-                        <span className="text-orange-400">Estudio Particular</span>
                       ) : (
                         <span className="text-neutral-500">—</span>
                       )}

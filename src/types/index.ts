@@ -2,7 +2,6 @@ export type UserRole =
   | 'superadmin' 
   | 'owner' 
   | 'barber_employee' 
-  | 'barber_independent' 
   | 'client';
 
 export type CurrencyType = 'COP' | 'USD' | 'EUR';
@@ -15,7 +14,7 @@ export interface User {
   role: UserRole;
   avatar: string;
   businessId?: string; // If owner, barber_employee, or linked client
-  barberId?: string;   // If barber_employee or barber_independent
+  barberId?: string;   // If barber_employee
   createdAt: string;
   lastLogin: string;
   planId?: string;
@@ -90,6 +89,7 @@ export interface Service {
   description: string;
   price: number;
   durationMinutes: number;
+  earnsLoyaltyPoints?: boolean;
   category: ServiceCategory;
   barberIds: string[]; // Allowed barbers (empty means all)
   isActive: boolean;
@@ -254,6 +254,31 @@ export interface Review {
   rating: number; // 1-5
   comment: string;
   date: string;
+}
+
+export interface LoyaltyReward {
+  id: string;
+  tenantId: string;
+  title: string;
+  description: string;
+  pointsCost: number;
+  isActive: boolean;
+  availablePoints?: number;
+}
+export interface LoyaltyBalance {
+  tenantId: string;
+  points: number;
+  visitsCount: number;
+}
+export interface LoyaltyRedemption {
+  id: string;
+  tenantId: string;
+  rewardId: string;
+  title: string;
+  pointsCost: number;
+  status: 'pending'|'fulfilled'|'cancelled';
+  createdAt: string;
+  userId?: string;
 }
 
 export interface Achievement {

@@ -21,14 +21,8 @@ export const RoleSwitcherBar: React.FC = () => {
       icon: <Store className="w-3.5 h-3.5 text-yellow-400" />,
     },
     {
-      role: 'barber_independent',
-      label: 'Barbero Independiente',
-      desc: 'Alex "The Blade" Fade - Estudio Propio',
-      icon: <Scissors className="w-3.5 h-3.5 text-orange-400" />,
-    },
-    {
       role: 'barber_employee',
-      label: 'Barbero Asociado',
+      label: 'Barbero',
       desc: 'Santiago Castro - Silla en Barber Club',
       icon: <Users className="w-3.5 h-3.5 text-blue-400" />,
     },
@@ -53,7 +47,7 @@ export const RoleSwitcherBar: React.FC = () => {
             <span className="relative inline-flex rounded-full h-2 w-2 bg-[var(--gold-primary)]"></span>
           </span>
           <span className="text-neutral-400 text-[11px]">Rol activo:</span>
-          <span className="font-bold text-white capitalize tracking-wide">{activeRole.replace('_', ' ')}</span>
+          <span className="font-bold text-white capitalize tracking-wide">{activeRole==='barber_employee'?'Barbero':activeRole==='owner'?'Dueño':activeRole==='client'?'Cliente':'Superadmin'}</span>
           <span className="text-[10px] text-neutral-400 font-mono bg-white/[0.06] px-1.5 py-0.5 rounded-full border border-white/[0.05]">
             {currentUser?.name?.split(' ')[0]}
           </span>
@@ -109,7 +103,7 @@ export const RoleSwitcherBar: React.FC = () => {
                 <RefreshCw className="w-3 h-3 text-blue-400" />
                 <span>Reiniciar Demo</span>
               </button>
-              <span className="text-[10px] font-mono text-neutral-500">BarberOS · Apple UI</span>
+              <span className="text-[10px] font-mono text-neutral-500">BarberNow · Apple UI</span>
             </div>
           </div>
         )}

@@ -157,9 +157,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } else if (user.role === 'barber_employee') {
       const barber = storeState.barbers.find(b => b.id === user.barberId) || storeState.barbers[0];
       navigate(`/barbero/${barber?.slug || 'carlos-mendoza'}/inicio`);
-    } else if (user.role === 'barber_independent') {
-      const barber = storeState.barbers.find(b => b.id === user.barberId) || storeState.barbers.find(b => b.isIndependent);
-      navigate(`/barbero/${barber?.slug || 'alex-fade'}/inicio`);
     } else {
       navigate('/clientes/inicio');
     }
@@ -180,12 +177,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       barberStore.hydrateFromBackend({users:[data.user],barbershops:data.shops,barbers:data.barbers,
         services:data.services,products:data.products,appointments:data.appointments,
-        transactions:data.transactions,orders:data.orders,plans:data.plans,cashClosings:data.cashClosings});
+        transactions:data.transactions,orders:data.orders,plans:data.plans,cashClosings:data.cashClosings,reviews:data.reviews,loyalty:data.loyalty,loyaltyBalances:data.loyaltyBalances,rewards:data.rewards,redemptions:data.redemptions});
       setCurrentUser(data.user);
       setCachedUser(data.user);
       if(data.user.role==='owner')navigate(data.shops[0]?'/barberia/'+data.shops[0].slug+'/inicio':'/clientes/inicio');
       else if(data.user.role==='superadmin')navigate('/admin/inicio');
-      else if(data.user.role==='barber_employee'||data.user.role==='barber_independent')
+      else if(data.user.role==='barber_employee')
         navigate('/barbero/'+(data.barbers.find(b=>b.id===data.user.barberId)?.slug||data.barbers[0]?.slug||'barbero')+'/inicio');
       else navigate('/clientes/inicio');
       addToast('Sesión real iniciada correctamente', 'success');
@@ -199,14 +196,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if(!alive)return;
       barberStore.hydrateFromBackend({users:[data.user],barbershops:data.shops,barbers:data.barbers,
         services:data.services,products:data.products,appointments:data.appointments,
-        transactions:data.transactions,orders:data.orders,plans:data.plans,cashClosings:data.cashClosings});
+        transactions:data.transactions,orders:data.orders,plans:data.plans,cashClosings:data.cashClosings,reviews:data.reviews,loyalty:data.loyalty,loyaltyBalances:data.loyaltyBalances,rewards:data.rewards,redemptions:data.redemptions});
       setCurrentUser(data.user);
       setCachedUser(data.user);
       const currentHash = window.location.hash.slice(1);
       if(!currentHash || currentHash === '/login'){
         if(data.user.role==='owner'&&data.shops[0])navigate('/barberia/'+data.shops[0].slug+'/inicio');
         else if(data.user.role==='superadmin')navigate('/admin/inicio');
-        else if(data.user.role==='barber_employee'||data.user.role==='barber_independent')
+        else if(data.user.role==='barber_employee')
           navigate('/barbero/'+(data.barbers.find(b=>b.id===data.user.barberId)?.slug||data.barbers[0]?.slug||'barbero')+'/inicio');
         else navigate('/clientes/inicio');
       }
@@ -258,7 +255,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (currentUser?.barberId) {
       return storeState.barbers.find(b => b.id === currentUser.barberId) || null;
     }
-    return storeState.barbers.find(b => b.isIndependent) || storeState.barbers[0];
+    return storeState.barbers[0];
   }, [activeRoute, currentUser, storeState.barbers]);
 
   const setCurrentBarberSlug = (slug: string) => {
@@ -361,8 +358,6 @@ const getRoleLabel = (role: UserRole): string => {
       return 'Propietario de Barbería';
     case 'barber_employee':
       return 'Barbero Asociado';
-    case 'barber_independent':
-      return 'Barbero Independiente';
     case 'client':
       return 'Cliente';
   }

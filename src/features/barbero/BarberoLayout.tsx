@@ -75,7 +75,7 @@ export const BarberoLayout: React.FC<{ children: React.ReactNode }> = ({ childre
                 Barbero Pro
               </span>
               <h2 className="text-xs font-bold text-white truncate">{currentBarber?.name}</h2>
-              <p className="text-[10px] text-neutral-400 font-mono">Estudio Privado</p>
+              <p className="text-[10px] text-neutral-400 font-mono">Equipo de barbería</p>
             </div>
           </div>
 

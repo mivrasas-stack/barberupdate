@@ -1,5 +1,5 @@
 import type {
-  Appointment, Barber, Barbershop, Product, Service, SubscriptionPlan, Transaction, Order, User, UserRole, CashClosing
+  Appointment, Barber, Barbershop, Product, Service, SubscriptionPlan, Transaction, Order, User, UserRole, CashClosing, Review, LoyaltyAccount, LoyaltyBalance, LoyaltyReward, LoyaltyRedemption
 } from '../types';
 
 type Db = Record<string, unknown>;
@@ -146,8 +146,25 @@ export function mapService(r:Db,tenant:string):Service{
     id:txt(r,'id'),businessId:tenant,name:txt(r,'name'),description:txt(r,'description'),
     price:money(r,'price_minor'),durationMinutes:num(r,'duration_minutes',30),
     category:['haircut','beard','combo','eyebrows','treatments','special'].includes(category)?category:'special',
-    barberIds:[],isActive:val(r,'is_active')!==false,order:0
+    barberIds:[],isActive:val(r,'is_active')!==false,earnsLoyaltyPoints:val(r,'earns_loyalty_points')===true,order:0
   };
+}
+export function mapReward(r:Db):LoyaltyReward{
+ return {id:txt(r,'id'),tenantId:txt(r,'tenant_id'),title:txt(r,'title'),
+  description:txt(r,'description'),pointsCost:num(r,'points_cost'),
+  isActive:val(r,'is_active')!==false,availablePoints:num(r,'available_points')};
+}
+export function mapRedemption(r:Db):LoyaltyRedemption{
+ return {id:txt(r,'id'),tenantId:txt(r,'tenant_id'),rewardId:txt(r,'reward_id'),
+  title:txt(r,'title'),pointsCost:num(r,'points_cost'),
+  status:txt(r,'status','pending') as LoyaltyRedemption['status'],
+  createdAt:txt(r,'created_at'),userId:txt(r,'user_id')||undefined};
+}
+export function mapReview(r:Db,customerId=''):Review{
+ return {id:txt(r,'id'),businessId:txt(r,'tenant_id'),barberId:txt(r,'barber_id'),
+  customerId:txt(r,'customer_user_id',customerId),customerName:txt(r,'customer_name','Cliente'),
+  customerAvatar:'',appointmentId:txt(r,'appointment_id'),rating:num(r,'rating'),
+  comment:txt(r,'comment'),date:txt(r,'created_at').slice(0,10)};
 }
 export function mapProduct(r:Db,tenant:string):Product{
   return {
@@ -200,7 +217,6 @@ export function tokenUser(id:string,email:string,tenants:Db[],platformRole?:stri
  const t=tenants[0];
  const role=txt(t||{},'role');
  const userRole:UserRole=platformRole==='superadmin'?'superadmin':
-    role==='owner'&&txt(t||{},'business_kind')==='independent'?'barber_independent':
     role==='owner'||role==='manager'?'owner':role==='barber'?'barber_employee':'client';
  return {id,name:email.split('@')[0],email,phone:'',role:userRole,avatar:'',
    businessId:t?.id as string|undefined,createdAt:new Date().toISOString(),
@@ -209,7 +225,10 @@ export function tokenUser(id:string,email:string,tenants:Db[],platformRole?:stri
 export async function loadAccount():Promise<{
   user:User;shops:Barbershop[];barbers:Barber[];services:Service[];
   products:Product[];appointments:Appointment[];transactions:Transaction[];
-  orders:Order[];plans:SubscriptionPlan[];cashClosings:CashClosing[]
+  orders:Order[];plans:SubscriptionPlan[];cashClosings:CashClosing[];
+  reviews:Review[];loyalty:Record<string,LoyaltyAccount>;
+  loyaltyBalances:Record<string,LoyaltyBalance>;
+  rewards:LoyaltyReward[];redemptions:LoyaltyRedemption[]
 }>{
  const [me,tenants]=await Promise.all([
    backendRequest<{id:string;email:string;platformRole:string|null}>('/me'),
@@ -219,6 +238,8 @@ export async function loadAccount():Promise<{
  let shopRows=tenants.map(t=>mapShop(t,me.id));
  const tenant=tenants[0]?.id as string|undefined;
  let barbers:Barber[]=[],services:Service[]=[],products:Product[]=[],appointments:Appointment[]=[],transactions:Transaction[]=[],orders:Order[]=[],cashClosings:CashClosing[]=[];
+ let reviews:Review[]=[],rewards:LoyaltyReward[]=[],redemptions:LoyaltyRedemption[]=[];
+ let loyalty:Record<string,LoyaltyAccount>={},loyaltyBalances:Record<string,LoyaltyBalance>={};
  if(tenant){
    const prefix='/tenants/'+encodeURIComponent(tenant);
    const [bs,ss,ps]=await Promise.all([
@@ -226,8 +247,7 @@ export async function loadAccount():Promise<{
      backendRequest<Db[]>(prefix+'/services'),
      backendRequest<Db[]>(prefix+'/products')
    ]);
-   barbers=bs.map(b=>({...mapBarber(b,tenant),isIndependent:user.role==='barber_independent'}));
-   if(user.role==='barber_independent')user.barberId=txt(bs.find(b=>txt(b,'user_id')===me.id)||{},'id')||undefined;
+   barbers=bs.map(b=>mapBarber(b,tenant));
    if(user.role==='barber_employee')user.barberId=txt(bs.find(b=>txt(b,'user_id')===me.id)||{},'id')||undefined;
    services=ss.map(s=>mapService(s,tenant));
    products=ps.map(x=>mapProduct(x,tenant));
@@ -236,11 +256,22 @@ export async function loadAccount():Promise<{
    const raw=await backendRequest<Db[]>(prefix+'/appointments?start='+encodeURIComponent(from)+'&end='+encodeURIComponent(to));
    appointments=raw.map(a=>mapAppointment(a,tenant,services,txt(tenants[0],'time_zone','America/Bogota')));
    if(userRolePrivileged(user.role)){
-     const [tx,ord,closes]=await Promise.all([
+     const [tx,ord,closes,rawReviews,rawRewards,rawRedemptions]=await Promise.all([
        backendRequest<Db[]>(prefix+'/transactions'),
        backendRequest<Db[]>(prefix+'/orders'),
-       backendRequest<Db[]>(prefix+'/cash-closings')
+       backendRequest<Db[]>(prefix+'/cash-closings'),
+       backendRequest<Db[]>(prefix+'/reviews'),
+       backendRequest<Db[]>(prefix+'/rewards'),
+       backendRequest<Db[]>(prefix+'/redemptions')
      ]);
+     reviews=rawReviews.map(r=>mapReview(r));
+     rewards=rawRewards.map(mapReward);
+     redemptions=rawRedemptions.map(mapRedemption);
+     const shop=shopRows.find(s=>s.id===tenant);
+     if(shop && reviews.length){
+       shop.rating=Number((reviews.reduce((n,r)=>n+r.rating,0)/reviews.length).toFixed(2));
+       shop.reviewsCount=reviews.length;
+     }
      transactions=tx.map(x=>mapTransaction(x,tenant));orders=ord.map(x=>mapOrder(x,tenant));
      cashClosings=closes.map(x=>mapCashClose(x,tenant));
    }
@@ -258,24 +289,44 @@ export async function loadAccount():Promise<{
        backendRequest<{barbers:Db[];services:Db[]}>('/public/tenants/'+slug+'/catalog'),
        backendRequest<Db[]>('/public/tenants/'+id+'/products')
      ]);
-     return {id,barbers:catalog.barbers.map(b=>({...mapBarber(b,id),isIndependent:txt(t,'business_kind')==='independent'})),
+     return {id,barbers:catalog.barbers.map(b=>({...mapBarber(b,id),isIndependent:false})),
        services:catalog.services.map(s=>mapService(s,id)),
        products:p.map(x=>mapProduct(x,id))};
    }));
    barbers=catalogs.flatMap(x=>x.barbers);
    services=catalogs.flatMap(x=>x.services);
    products=catalogs.flatMap(x=>x.products);
-   const mine=await backendRequest<Db[]>('/me/bookings');
+   const [mine,ownedReviews,balances,events,customerRewards,customerRedemptions]=await Promise.all([
+     backendRequest<Db[]>('/me/bookings'),
+     backendRequest<Db[]>('/me/reviews'),
+     backendRequest<Db[]>('/me/loyalty'),
+     backendRequest<Db[]>('/me/loyalty-events'),
+     backendRequest<Db[]>('/me/rewards'),
+     backendRequest<Db[]>('/me/redemptions')
+   ]);
    appointments=mine.map(a=>mapAppointment(a,txt(a,'tenant_id'),services));
+   reviews=ownedReviews.map(r=>mapReview(r,me.id));
+   rewards=customerRewards.map(mapReward);
+   redemptions=customerRedemptions.map(mapRedemption);
+   for(const row of balances){
+     const tenantId=txt(row,'tenant_id');
+     loyaltyBalances[tenantId]={tenantId,points:num(row,'points'),visitsCount:num(row,'visits_count')};
+   }
+   loyalty[me.id]={customerId:me.id,points:Object.values(loyaltyBalances).reduce((total,b)=>total+b.points,0),
+     visitsCount:Object.values(loyaltyBalances).reduce((total,b)=>total+b.visitsCount,0),
+     currentStreak:0,achievements:[],
+     pointHistory:events.map(e=>({id:txt(e,'id'),date:txt(e,'created_at').slice(0,10),concept:txt(e,'description'),points:num(e,'points_delta')}))};
+   for(const shop of shopRows){shop.rating=0;shop.reviewsCount=0;}
  }
  const plans=await backendRequest<Db[]>('/public/plans').catch(()=>[] as Db[]);
- return {user,shops:shopRows,barbers,services,products,appointments,transactions,orders,plans:plans.map(mapPlan),cashClosings};
+ return {user,shops:shopRows,barbers,services,products,appointments,transactions,orders,plans:plans.map(mapPlan),cashClosings,
+   reviews,loyalty,loyaltyBalances,rewards,redemptions};
 }
-function userRolePrivileged(role:UserRole){return role==='owner'||role==='superadmin'||role==='barber_independent';}
-export async function addService(tenant:string,data:{name:string;description:string;price:number;durationMinutes:number;category:string}){
+function userRolePrivileged(role:UserRole){return role==='owner'||role==='superadmin';}
+export async function addService(tenant:string,data:{name:string;description:string;price:number;durationMinutes:number;category:string;earnsLoyaltyPoints:boolean}){
  const r=await backendRequest<Db>('/tenants/'+tenant+'/services',{method:'POST',body:JSON.stringify({
    name:data.name,description:data.description,priceMinor:Math.round(data.price),
-   durationMinutes:data.durationMinutes,category:data.category
+   durationMinutes:data.durationMinutes,category:data.category,earnsLoyaltyPoints:data.earnsLoyaltyPoints
  })});
  return mapService(r,tenant);
 }
@@ -288,6 +339,26 @@ export async function addProduct(tenant:string,data:{name:string;sku:string;pric
    waitingRoomVisible:data.isVisibleInWaitingRoom!==false
  })});
  return mapProduct(r,tenant);
+}
+export async function createReward(tenant:string,data:{title:string;description:string;pointsCost:number;isActive:boolean}){
+ return mapReward(await backendRequest<Db>('/tenants/'+tenant+'/rewards',
+   {method:'POST',body:JSON.stringify(data)}));
+}
+export async function editReward(tenant:string,id:string,data:Partial<{title:string;description:string;pointsCost:number;isActive:boolean}>){
+ return mapReward(await backendRequest<Db>('/tenants/'+tenant+'/rewards/'+id,
+   {method:'PATCH',body:JSON.stringify(data)}));
+}
+export async function fulfillRedemption(tenant:string,id:string){
+ return backendRequest('/tenants/'+tenant+'/redemptions/'+id+'/fulfill',{method:'PATCH'});
+}
+export async function redeemReward(tenant:string,id:string){
+ return backendRequest('/tenants/'+tenant+'/redeem',
+   {method:'POST',body:JSON.stringify({rewardId:id})},
+   'r'+crypto.randomUUID().replace(/-/g,''));
+}
+export async function publishReview(tenant:string,appointmentId:string,rating:number,comment:string){
+ return backendRequest('/tenants/'+tenant+'/reviews',
+   {method:'POST',body:JSON.stringify({appointmentId,rating,comment})});
 }
 export async function adjustStock(tenant:string,productId:string,delta:number,reason:string){
  return mapProduct(await backendRequest<Db>('/tenants/'+tenant+'/products/'+productId+'/stock',
@@ -326,16 +397,17 @@ export async function refreshLiveData(){
   barberStore.hydrateFromBackend({
     users:[result.user],barbershops:result.shops,barbers:result.barbers,
     services:result.services,products:result.products,appointments:result.appointments,
-    transactions:result.transactions,orders:result.orders,plans:result.plans,cashClosings:result.cashClosings
+    transactions:result.transactions,orders:result.orders,plans:result.plans,cashClosings:result.cashClosings,reviews:result.reviews,loyalty:result.loyalty,
+    loyaltyBalances:result.loyaltyBalances,rewards:result.rewards,redemptions:result.redemptions
   });
 }
 export async function editService(tenant:string,id:string,data:{
-  name:string;description:string;price:number;durationMinutes:number;category:string
+  name:string;description:string;price:number;durationMinutes:number;category:string;earnsLoyaltyPoints:boolean
 }){
   const r=await backendRequest<Db>('/tenants/'+tenant+'/services/'+id,{
     method:'PATCH',
     body:JSON.stringify({name:data.name,description:data.description,
-      priceMinor:Math.round(data.price),durationMinutes:data.durationMinutes,category:data.category})
+      priceMinor:Math.round(data.price),durationMinutes:data.durationMinutes,category:data.category,earnsLoyaltyPoints:data.earnsLoyaltyPoints})
   });
   return mapService(r,tenant);
 }

@@ -71,7 +71,7 @@ const AppContent: React.FC = () => {
   if(isLiveBackend&&activeRoute.startsWith('/admin')&&currentUser?.role!=='superadmin')return <LoginView />;
   if(isLiveBackend&&activeRoute.startsWith('/barberia/')&&currentUser?.role!=='owner')return <LoginView />;
   if(isLiveBackend&&activeRoute.startsWith('/barbero/')&&
-    !['barber_employee','barber_independent','owner'].includes(currentUser?.role||''))return <LoginView />;
+    !['barber_employee','owner'].includes(currentUser?.role||''))return <LoginView />;
 
   // --- Area 1: Administrador Global ---
   if (activeRoute.startsWith('/admin')) {
@@ -117,14 +117,14 @@ const AppContent: React.FC = () => {
     );
   }
 
-  // --- Area 3: Barberos Independientes ---
+  // --- Area 3: Barberos de la barbería ---
   if (activeRoute.startsWith('/barbero/')) {
     const subRoute = activeRoute.split('/')[3] || 'inicio';
     let child = <BarberoInicio />;
     if (subRoute === 'dashboard') child = <BarberoDashboard />;
     else if (subRoute === 'inicio') child = <BarberoInicio />;
     else if (subRoute === 'agenda') child = <BarberoAgenda />;
-    else if (subRoute === 'contabilidad') child = <BarberiaContabilidad />; // Reusing accounting module for independent cash
+    else if (subRoute === 'contabilidad') child = <BarberiaContabilidad />; // módulo compartido existente
     else if (subRoute === 'clientes') child = <BarberiaClientes />;
     else if (subRoute === 'boutique') child = <BarberiaBoutique />;
     else if (subRoute === 'servicios') child = <BarberiaServicios />;
@@ -169,7 +169,7 @@ const AppFrame: React.FC = () => {
     (activeRoute.startsWith('/admin') && currentUser.role !== 'superadmin') ||
     (activeRoute.startsWith('/barberia/') && currentUser.role !== 'owner') ||
     (activeRoute.startsWith('/barbero/') &&
-      !['barber_employee', 'barber_independent', 'owner'].includes(currentUser.role))
+      !['barber_employee', 'owner'].includes(currentUser.role))
   ));
   const isLogin = window.location.pathname.startsWith('/unirse-barbero/') || window.location.pathname.startsWith('/vincular/') || activeRoute === '/login'
     || (!currentUser && !activeRoute.startsWith('/vincular')) || deniedRealRoute;
