@@ -20,7 +20,7 @@ const linkedQuery=`
  WHERE l.user_id=$1 ORDER BY l.linked_at DESC LIMIT 100
 `;
 export async function registerCustomerLinkRoutes(app,{db,security}){
- const {authenticated,limited,requireTenant}=security;
+ const {authenticated,limited,requireTenant,service}=security;
  app.register(async publicRoutes=>{
    publicRoutes.addHook('preHandler',async req=>{
      await limited(req);if(!db)failure(503,'Base de datos no configurada');
@@ -46,6 +46,88 @@ export async function registerCustomerLinkRoutes(app,{db,security}){
    secure.addHook('preHandler',async req=>{
      await authenticated(req);await limited(req);
      if(!db)failure(503,'Base de datos no configurada');
+   });
+   // Real CRM roster: QR-linked customers are visible even without appointments.
+   // Booking-only customers remain visible; each account is counted once per tenant.
+   // Only staff of this tenant may request it, and Auth metadata is resolved server-side.
+   secure.get('/api/v1/tenants/:tenantId/customers',async req=>{
+     const tenant=parseOrThrow(uuid,req.params.tenantId);
+     await requireTenant(db,tenant,req.actor.id,['owner','manager','barber']);
+     if(!service?.auth?.admin?.getUserById)failure(503,'Servicio de perfiles no disponible');
+     const results=await db.query(`
+       WITH customers AS (
+         SELECT user_id,linked_at,true AS linked_by_qr
+           FROM public.customer_links WHERE tenant_id=$1
+         UNION ALL
+         SELECT DISTINCT a.customer_user_id,NULL::timestamptz,false
+           FROM public.appointments a
+           WHERE a.tenant_id=$1 AND a.customer_user_id IS NOT NULL
+             AND NOT EXISTS (
+               SELECT 1 FROM public.customer_links l
+               WHERE l.tenant_id=$1 AND l.user_id=a.customer_user_id
+             )
+       ),
+       visits AS (
+         SELECT a.customer_user_id,
+           count(*) FILTER (WHERE a.status='completed')::integer AS completed_visits,
+           coalesce(sum(a.price_minor) FILTER (WHERE a.status='completed'),0)::bigint AS total_spent,
+           max(a.starts_at) FILTER (WHERE a.status='completed') AS last_service_at
+         FROM public.appointments a
+         WHERE a.tenant_id=$1 AND a.customer_user_id IS NOT NULL
+         GROUP BY a.customer_user_id
+       )
+       SELECT c.user_id,c.linked_at,c.linked_by_qr,
+         cp.full_name,cp.phone,
+         coalesce(v.completed_visits,0)::integer AS completed_visits,
+         coalesce(v.total_spent,0)::bigint AS total_spent,
+         v.last_service_at,
+         (SELECT s.name FROM public.appointments a2
+            JOIN public.services s ON s.tenant_id=a2.tenant_id AND s.id=a2.service_id
+           WHERE a2.tenant_id=$1 AND a2.customer_user_id=c.user_id AND a2.status='completed'
+           ORDER BY a2.starts_at DESC LIMIT 1) AS last_service,
+         coalesce(loyalty.points,0)::integer AS points
+       FROM customers c
+       LEFT JOIN public.customer_profiles cp ON cp.user_id=c.user_id
+       LEFT JOIN visits v ON v.customer_user_id=c.user_id
+       LEFT JOIN public.loyalty_accounts loyalty ON loyalty.tenant_id=$1 AND loyalty.user_id=c.user_id
+       ORDER BY c.linked_by_qr DESC,c.linked_at DESC NULLS LAST,c.user_id
+       LIMIT 200
+     `,[tenant]);
+     // Supabase Auth is the source of the avatar/email after profile updates.
+     // Bounded concurrency avoids triggering one large burst of admin API calls.
+     const rows=results.rows;
+     const enriched=new Array(rows.length);
+     let cursor=0;
+     const workers=Array.from({length:Math.min(6,rows.length)},async()=>{
+       while(cursor<rows.length){
+         const index=cursor++;
+         const row=rows[index];
+         let authUser=null;
+         try{
+           const {data,error}=await service.auth.admin.getUserById(row.user_id);
+           if(error)req.log.warn({userId:row.user_id},'Unable to resolve customer avatar');
+           else authUser=data?.user||null;
+         }catch(_error){
+           req.log.warn({userId:row.user_id},'Unable to retrieve customer profile');
+         }
+         enriched[index]={
+           id:row.user_id,
+           name:row.full_name||authUser?.user_metadata?.full_name||authUser?.user_metadata?.name||'Cliente',
+           email:row.linked_by_qr?(authUser?.email||''):'' ,
+           phone:row.phone||'',
+           avatar:authUser?.user_metadata?.avatar_url||'',
+           linkedByQr:row.linked_by_qr===true,
+           linkedAt:row.linked_at,
+           visits:Number(row.completed_visits)||0,
+           totalSpent:Number(row.total_spent)||0,
+           lastService:row.last_service||null,
+           lastServiceAt:row.last_service_at||null,
+           points:Number(row.points)||0
+         };
+       }
+     });
+     await Promise.all(workers);
+     return enriched;
    });
    secure.get('/api/v1/tenants/:tenantId/link-code',async req=>{
      const tenant=parseOrThrow(uuid,req.params.tenantId);
