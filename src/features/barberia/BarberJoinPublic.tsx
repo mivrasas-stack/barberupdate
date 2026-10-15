@@ -146,7 +146,7 @@ export function BarberJoinPublic() {
   return (
     <main data-testid="barber-join-public" className="min-h-screen bg-[#090909] px-4 py-8 text-white">
       <div className="mx-auto w-full max-w-[480px]">
-        <a href="/" className="inline-block text-xs font-semibold text-[#dbac40] hover:underline">← Barber Paradise</a>
+        <a href="/" className="inline-block text-xs font-semibold text-[#dbac40] hover:underline">← BarberNow</a>
         <section className="mt-6 rounded-3xl border border-[#303030] bg-[#151515] px-6 py-8 shadow-2xl sm:px-8">
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#d6a940] text-black">
             <Scissors aria-hidden="true" className="h-6 w-6" />
