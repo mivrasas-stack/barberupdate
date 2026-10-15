@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, {useEffect,useState} from 'react';
+import {rollingAgendaDays,shiftAgendaDate,useRollingAgendaDate,todayInBogota} from '../../utils/agendaDates';
+import {isLiveBackend,addBooking,updateBooking,refreshLiveData} from '../../services/liveBackend';
 import { useApp } from '../../context/AppContext';
 import { barberStore } from '../../services/store';
 import { formatCurrency } from '../../utils/formatters';
-import { Appointment, PaymentMethod } from '../../types';
+import {Appointment,AppointmentStatus,PaymentMethod} from '../../types';
 import {
   Calendar,
   ChevronLeft,
@@ -30,7 +32,9 @@ export const BarberoAgenda: React.FC = () => {
   const [viewMode, setViewMode] = useState<'week' | 'day' | 'list'>('week');
 
   // Reference date (defaults to Tuesday 2026-10-13)
-  const [currentDateStr, setCurrentDateStr] = useState('2026-10-13');
+  const {today,selectedDate:currentDateStr,setSelectedDate:setCurrentDateStr,goToday}=useRollingAgendaDate();
+  const [actionBusy,setActionBusy]=useState(false);
+  useEffect(()=>{if(isLiveBackend)void refreshLiveData().catch(()=>{});},[today]);
 
   // Modals
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
@@ -41,42 +45,14 @@ export const BarberoAgenda: React.FC = () => {
   const [formCustName, setFormCustName] = useState('');
   const [formCustPhone, setFormCustPhone] = useState('');
   const [formServiceId, setFormServiceId] = useState(state.services[0]?.id || '');
-  const [formDate, setFormDate] = useState('2026-10-13');
+  const [formDate, setFormDate] = useState(()=>todayInBogota());
   const [formTime, setFormTime] = useState('11:00');
   const [formNotes, setFormNotes] = useState('');
 
-  // Calculate the 7 days of the active week (Monday to Sunday)
-  const getDaysOfWeek = (baseDateStr: string) => {
-    const base = new Date(baseDateStr + 'T12:00:00');
-    const dayOfWeek = base.getDay(); // 0 is Sunday, 1 is Monday...
-    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-
-    const monday = new Date(base);
-    monday.setDate(base.getDate() + diffToMonday);
-
-    const days = [];
-    const dayNames = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
-    const shortNames = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
-
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(monday);
-      d.setDate(monday.getDate() + i);
-      const iso = d.toISOString().split('T')[0];
-      days.push({
-        date: iso,
-        dayName: dayNames[i],
-        shortName: shortNames[i],
-        dayNumber: d.getDate(),
-        monthName: d.toLocaleString('es-CO', { month: 'short' }),
-        isToday: iso === '2026-10-13',
-      });
-    }
-    return days;
-  };
-
-  const weekDays = getDaysOfWeek(currentDateStr);
-  const weekStart = weekDays[0];
-  const weekEnd = weekDays[6];
+  // A rolling 7-day window begins with the selected day (today by default).
+  const weekDays=rollingAgendaDays(currentDateStr,today);
+  const weekStart=weekDays[0];
+  const weekEnd=weekDays[6];
 
   // Filter appointments of this barber
   const allBarberApts = state.appointments.filter(a => a.barberId === barber.id);
@@ -106,21 +82,9 @@ export const BarberoAgenda: React.FC = () => {
   const myServices = state.services.filter(s => !s.businessId || s.barberIds.includes(barber.id));
 
   // Navigation handlers
-  const handlePrevWeek = () => {
-    const cur = new Date(currentDateStr + 'T12:00:00');
-    cur.setDate(cur.getDate() - 7);
-    setCurrentDateStr(cur.toISOString().split('T')[0]);
-  };
-
-  const handleNextWeek = () => {
-    const cur = new Date(currentDateStr + 'T12:00:00');
-    cur.setDate(cur.getDate() + 7);
-    setCurrentDateStr(cur.toISOString().split('T')[0]);
-  };
-
-  const handleGoToday = () => {
-    setCurrentDateStr('2026-10-13');
-  };
+  const handlePrevWeek=()=>setCurrentDateStr(shiftAgendaDate(currentDateStr,-7));
+  const handleNextWeek=()=>setCurrentDateStr(shiftAgendaDate(currentDateStr,7));
+  const handleGoToday=goToday;
 
   // Open creation modal prefilled with clicked day and time
   const handleSlotClick = (dateStr: string, hourStr: string) => {
@@ -131,10 +95,22 @@ export const BarberoAgenda: React.FC = () => {
     setIsNewModalOpen(true);
   };
 
-  const handleCreateAppointment = (e: React.FormEvent) => {
+  const handleCreateAppointment = async (e: React.FormEvent) => {
     e.preventDefault();
-    const service = state.services.find(s => s.id === formServiceId) || state.services[0];
+    const service=state.services.find(s=>s.id===formServiceId);
+    if(!service||!barber.businessId){addToast('Selecciona un servicio de tu barbería.','error');return;}
+    if(isLiveBackend){
+      try{
+        await addBooking(barber.businessId,{barberId:barber.id,serviceId:service.id,date:formDate,
+         startTime:formTime,customerName:formCustName,customerPhone:formCustPhone,notes:formNotes});
+        await refreshLiveData();
+        addToast('Cita agendada','success');
+        setIsNewModalOpen(false);
+      }catch(error){addToast(error instanceof Error?error.message:'No fue posible reservar la cita','error');}
+      return;
+    }
     const res = barberStore.createAppointment({
+      businessId:barber.businessId,
       barberId: barber.id,
       customerId: `cust-${Date.now()}`,
       customerName: formCustName,
@@ -160,18 +136,29 @@ export const BarberoAgenda: React.FC = () => {
     setIsNewModalOpen(false);
   };
 
-  const handleCompleteAppointment = () => {
-    if (!inspectingApt) return;
-    barberStore.updateAppointmentStatus(inspectingApt.id, 'completed', paymentMethod);
-    addToast(`Corte finalizado. Ingreso de ${formatCurrency(inspectingApt.finalPrice, currency)} registrado.`, 'success');
-    setInspectingApt(null);
+  const noShowAllowed=(apt:Appointment)=>
+    Date.parse(apt.date+'T'+apt.startTime+':00-05:00')<=Date.now()-15*60_000;
+  const changeStatus=async(apt:Appointment,status:AppointmentStatus)=>{
+    if(!barber.businessId||actionBusy)return;
+    if(status==='no_show'&&!noShowAllowed(apt)){
+      addToast('Solo puedes registrar ausencia 15 minutos después de la hora de la cita.','error');return;
+    }
+    if(['cancelled','no_show'].includes(status)&&!window.confirm(status==='no_show'
+      ?'¿Confirmas que el cliente no asistió?'
+      :'¿Cancelar la cita y liberar su horario para futuras reservas?'))return;
+    setActionBusy(true);
+    try{
+      if(isLiveBackend){
+        await updateBooking(barber.businessId,apt.id,status);
+        await refreshLiveData();
+      }else barberStore.updateAppointmentStatus(apt.id,status,paymentMethod);
+      addToast(status==='in_service'?'Corte iniciado':status==='completed'?'Servicio finalizado':
+       status==='no_show'?'Ausencia registrada':status==='cancelled'?'Cita cancelada':'Estado actualizado','success');
+      setInspectingApt(null);
+    }catch(err){addToast(err instanceof Error?err.message:'No se pudo cambiar el estado','error');}
+    finally{setActionBusy(false);}
   };
 
-  const handleCancelAppointment = (id: string) => {
-    barberStore.updateAppointmentStatus(id, 'cancelled');
-    addToast('Cita cancelada', 'info');
-    setInspectingApt(null);
-  };
 
   return (
     <div className="space-y-6">
@@ -183,7 +170,7 @@ export const BarberoAgenda: React.FC = () => {
           </span>
           <h1 className="text-2xl font-extrabold text-white tracking-tight">Agenda Semanal de {barber.name}</h1>
           <p className="text-xs text-neutral-400 mt-1">
-            Visualiza y administra todas tus citas programadas de lunes a domingo
+            Visualiza las citas de hoy y los próximos seis días; navega a otras fechas cuando lo necesites
           </p>
         </div>
 
@@ -302,13 +289,13 @@ export const BarberoAgenda: React.FC = () => {
             onClick={handleGoToday}
             className="px-3.5 py-2 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-neutral-200 hover:text-white text-xs font-bold transition-all cursor-pointer active:scale-95"
           >
-            Semana Actual
+            Volver a hoy
           </button>
 
           <div className="text-xs pl-2">
             <span className="text-neutral-400 block text-[10px] uppercase font-bold tracking-wider">Semana activa:</span>
             <span className="font-extrabold text-white text-sm">
-              {weekStart.dayNumber} {weekStart.monthName} — {weekEnd.dayNumber} {weekEnd.monthName} de 2026
+              {weekStart.dayNumber} {weekStart.monthName} — {weekEnd.dayNumber} {weekEnd.monthName} de {weekEnd.date.slice(0,4)}
             </span>
           </div>
         </div>
@@ -566,121 +553,59 @@ export const BarberoAgenda: React.FC = () => {
         </div>
       )}
 
-      {/* Appointment Detail & Cobro Modal */}
-      {inspectingApt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="relative w-full max-w-md bg-[#141414] border border-[#262626] rounded-2xl p-6 shadow-2xl">
-            <div className="flex items-center justify-between pb-3 border-b border-[#262626]">
-              <div className="flex items-center gap-2">
-                <Scissors className="w-4 h-4 text-[var(--gold-primary)]" />
-                <h3 className="text-sm font-bold text-white">Ficha de Cita Agendada</h3>
-              </div>
-              <button onClick={() => setInspectingApt(null)} className="p-1 text-neutral-400 hover:text-white">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="py-4 space-y-3 text-xs">
-              <div className="p-3 bg-[#181818] rounded-xl border border-neutral-800 space-y-2">
-                <div className="flex justify-between text-neutral-400">
-                  <span>Cliente:</span>
-                  <strong className="text-white text-sm">{inspectingApt.customerName}</strong>
-                </div>
-                <div className="flex justify-between text-neutral-400">
-                  <span>Teléfono:</span>
-                  <span className="font-mono text-neutral-200">{inspectingApt.customerPhone}</span>
-                </div>
-                <div className="flex justify-between text-neutral-400">
-                  <span>Servicio:</span>
-                  <strong className="text-white">{inspectingApt.serviceName}</strong>
-                </div>
-                <div className="flex justify-between text-neutral-400">
-                  <span>Fecha y Hora:</span>
-                  <strong className="text-white font-mono">{inspectingApt.date} a las {inspectingApt.startTime} ({inspectingApt.durationMinutes} min)</strong>
-                </div>
-                <div className="flex justify-between text-neutral-400">
-                  <span>Estado Actual:</span>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-neutral-800 text-neutral-200 uppercase">
-                    {inspectingApt.status}
-                  </span>
-                </div>
-                {inspectingApt.notes && (
-                  <div className="pt-2 border-t border-neutral-800 text-neutral-400 italic">
-                    Notas: "{inspectingApt.notes}"
-                  </div>
-                )}
-                <div className="pt-2 border-t border-neutral-700 flex justify-between items-center text-sm font-bold">
-                  <span className="text-white">Importe del Corte:</span>
-                  <span className="font-mono text-emerald-400">{formatCurrency(inspectingApt.finalPrice, currency)}</span>
-                </div>
-              </div>
-
-              {inspectingApt.status !== 'completed' && inspectingApt.status !== 'cancelled' && (
-                <div>
-                  <label className="text-neutral-400 block mb-1.5 font-semibold">
-                    Medio de pago para finalizar y cobrar:
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {(
-                      [
-                        { id: 'nequi', label: 'Nequi' },
-                        { id: 'daviplata', label: 'Daviplata' },
-                        { id: 'cash', label: 'Efectivo' },
-                        { id: 'transfer', label: 'Transferencia' },
-                      ] as const
-                    ).map(m => (
-                      <button
-                        key={m.id}
-                        type="button"
-                        onClick={() => setPaymentMethod(m.id)}
-                        className={`p-2 rounded-lg border text-left font-medium transition-colors ${
-                          paymentMethod === m.id
-                            ? 'border-[var(--gold-primary)] bg-[var(--gold-primary)]/10 text-[var(--gold-primary)] font-bold'
-                            : 'border-neutral-800 bg-[#181818] text-neutral-300'
-                        }`}
-                      >
-                        {m.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Actions */}
-            <div className="pt-3 border-t border-[#262626] flex items-center justify-between">
-              {inspectingApt.status !== 'completed' && inspectingApt.status !== 'cancelled' ? (
-                <button
-                  onClick={() => handleCancelAppointment(inspectingApt.id)}
-                  className="px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
-                >
-                  Cancelar Cita
-                </button>
-              ) : (
-                <span className="text-xs text-neutral-500 font-mono">ID: {inspectingApt.id}</span>
-              )}
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setInspectingApt(null)}
-                  className="px-3 py-1.5 text-xs text-neutral-400 hover:text-white"
-                >
-                  Cerrar
-                </button>
-
-                {inspectingApt.status !== 'completed' && inspectingApt.status !== 'cancelled' && (
-                  <button
-                    onClick={handleCompleteAppointment}
-                    className="px-4 py-2 rounded-xl bg-emerald-500 text-black font-bold text-xs hover:bg-emerald-400 flex items-center gap-1.5"
-                  >
-                    <Check className="w-3.5 h-3.5" />
-                    <span>Finalizar & Cobrar</span>
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
+      {/* State changes require an explicit action, not just opening a card. */}
+      {inspectingApt&&(
+       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+        <section role="dialog" aria-modal="true" aria-labelledby="barber-appointment-heading"
+         className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-3xl border border-[#303030] bg-[#151515] p-5 sm:p-6">
+         <div className="flex justify-between items-center border-b border-[#303030] pb-3">
+          <h2 id="barber-appointment-heading" className="text-lg font-bold text-white">Detalle de la cita</h2>
+          <button aria-label="Cerrar detalle" onClick={()=>setInspectingApt(null)} className="p-2 text-neutral-400 hover:text-white"><X className="w-5 h-5"/></button>
+         </div>
+         <dl className="grid sm:grid-cols-2 gap-4 py-5 text-xs">
+          {([
+           ['Cliente',inspectingApt.customerName],
+           ['Teléfono',inspectingApt.customerPhone||'No registrado'],
+           ['Servicio',inspectingApt.serviceName],
+           ['Fecha',inspectingApt.date],
+           ['Horario',inspectingApt.startTime+' – '+inspectingApt.endTime],
+           ['Duración',inspectingApt.durationMinutes+' minutos'],
+           ['Estado',inspectingApt.status],
+           ['Importe',formatCurrency(inspectingApt.finalPrice,currency)]
+          ] as [string,string][]).map(([title,value])=>
+           <div key={title}><dt className="text-neutral-500">{title}</dt><dd className="mt-1 font-bold text-white">{value}</dd></div>
+          )}
+          {inspectingApt.notes&&<div className="sm:col-span-2"><dt className="text-neutral-500">Notas</dt><dd className="mt-1 whitespace-pre-wrap text-neutral-200">{inspectingApt.notes}</dd></div>}
+         </dl>
+         <div className="space-y-3 border-t border-[#303030] pt-4">
+          {inspectingApt.status==='pending'&&<button disabled={actionBusy} onClick={()=>void changeStatus(inspectingApt,'confirmed')}
+           className="w-full rounded-xl bg-[var(--gold-primary)] p-3 text-xs font-bold text-black disabled:opacity-40">Confirmar cita</button>}
+          {inspectingApt.status==='confirmed'&&<button disabled={actionBusy} onClick={()=>void changeStatus(inspectingApt,'waiting')}
+           className="w-full rounded-xl border border-amber-500/40 p-3 text-xs font-bold text-amber-300 disabled:opacity-40">Registrar llegada</button>}
+          {['confirmed','waiting'].includes(inspectingApt.status)&&<button disabled={actionBusy} onClick={()=>void changeStatus(inspectingApt,'in_service')}
+           className="w-full rounded-xl bg-[var(--gold-primary)] p-3 text-xs font-bold text-black disabled:opacity-40"><Scissors className="mr-1 inline h-4 w-4"/>Iniciar corte</button>}
+          {inspectingApt.status==='in_service'&&<>
+           {!isLiveBackend&&<div className="space-y-2 text-xs">
+            <p className="text-neutral-400">Método de pago:</p>
+            <div className="flex flex-wrap gap-2">{(['cash','nequi','daviplata','transfer'] as const).map(method=>
+             <button key={method} onClick={()=>setPaymentMethod(method)} className={`rounded-lg border px-3 py-1.5 ${paymentMethod===method?'border-[var(--gold-primary)] text-[var(--gold-primary)]':'border-neutral-700 text-neutral-300'}`}>{method}</button>)}</div>
+           </div>}
+           <button disabled={actionBusy} onClick={()=>void changeStatus(inspectingApt,'completed')}
+            className="w-full rounded-xl bg-emerald-500 p-3 text-xs font-bold text-black disabled:opacity-40">Finalizar corte</button>
+           {isLiveBackend&&<p className="text-[11px] text-neutral-400">Para registrar un pago real, utiliza el módulo de caja.</p>}
+          </>}
+          {['pending','confirmed','waiting'].includes(inspectingApt.status)&&
+           <div className="flex flex-col sm:flex-row gap-2">
+            {['confirmed','waiting'].includes(inspectingApt.status)&&<button disabled={actionBusy||!noShowAllowed(inspectingApt)} onClick={()=>void changeStatus(inspectingApt,'no_show')}
+             title={!noShowAllowed(inspectingApt)?'Disponible tras 15 minutos de espera':''}
+             className="flex-1 rounded-xl border border-orange-500/40 p-3 text-xs text-orange-300 font-bold disabled:opacity-35">Cliente no asistió</button>}
+            <button disabled={actionBusy} onClick={()=>void changeStatus(inspectingApt,'cancelled')}
+             className="flex-1 rounded-xl border border-rose-500/40 p-3 text-xs text-rose-300 font-bold disabled:opacity-40">Cancelar cita</button>
+           </div>}
+          {['completed','cancelled','no_show'].includes(inspectingApt.status)&&<p className="text-xs text-neutral-400">Esta cita ya está cerrada.</p>}
+         </div>
+        </section>
+       </div>
       )}
 
       {/* Modal: New Appointment from Grid Slot Click */}
