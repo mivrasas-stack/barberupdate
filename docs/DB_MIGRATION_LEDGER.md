@@ -13,6 +13,10 @@ Real Supabase: `wrfwhftzaflwhkvkzrjm` (PostgreSQL 17) already has original core 
 | `barber_paradise_outbox_retention_20261015` | `20261015010200_outbox_retention.sql` already applied to remote as a separately numbered Supabase migration |
 | `20261014000400_whatsapp_templates.sql` | **New additive migration** providing `whatsapp_messages`, `whatsapp_consents`, `whatsapp_tenant_settings`. Requires back-end worker to remain disabled until templates are approved |
 | `20261014000500_platform_integrations.sql` | **New additive migration** providing encrypted platform integrations vault |
+| `20261015010400_whatsapp_appointment_fk_index.sql` | Additional index for the standalone appointment FK, recommended by the live performance advisor after new queue install |
+| `barber_paradise_whatsapp_approved_template_queue_20261015` | New queue migration already applied in connected Supabase as version `20261015010706` |
+| `barber_paradise_platform_integrations_vault_20261015` | Platform vault migration applied as version `20261015010717` |
+| `barber_paradise_retire_legacy_whatsapp_trigger_20261015` | Legacy bridge applied as version `20261015010727`; old trigger retired, table preserved and empty |
 | `20261015010300_whatsapp_legacy_bridge.sql` | **New compatibility migration**, run AFTER approved templates, checks legacy queue has no pending messages; retires only old producer trigger; preserves legacy table as archive, disables per-tenant sending by default |
 
 **Warning:** the live migration version identifiers are not equal to migration filenames. Do NOT run `supabase db push` indiscriminately against the connected project or repair migration history without reviewing each version. A separate baseline/reconciliation procedure must map existing completed files to version numbers before first production CD setup.

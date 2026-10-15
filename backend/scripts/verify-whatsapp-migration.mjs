@@ -30,6 +30,10 @@ try{
  await assert.rejects(pool.query(bridgeSql),/Legacy WhatsApp queue has/);
  await pool.query("DELETE FROM public.whatsapp_deliveries WHERE status='pending'");
  await pool.query(bridgeSql);
+ const fkIndexSql=readFileSync(new URL('../../supabase/migrations/20261015010400_whatsapp_appointment_fk_index.sql',import.meta.url),'utf8');
+ await pool.query(fkIndexSql);await pool.query(fkIndexSql);
+ const fkIndex=await pool.query("SELECT 1 FROM pg_indexes WHERE schemaname='public' AND indexname='idx_whatsapp_messages_appointment_fk'");
+ assert.equal(fkIndex.rowCount,1);
  const trg=await pool.query("SELECT tgname FROM pg_trigger WHERE tgrelid='public.appointments'::regclass AND NOT tgisinternal");
  assert.ok(trg.rows.some(x=>x.tgname==='appt_whatsapp_enqueue'),'New queue trigger must remain');
  assert.ok(!trg.rows.some(x=>x.tgname==='appointments_whatsapp_queue'),'Legacy producer must be retired');
