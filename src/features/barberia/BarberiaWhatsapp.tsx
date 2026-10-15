@@ -80,7 +80,7 @@ export function BarberiaWhatsapp({tenant,addToast}:{tenant:string;addToast:(mess
           className="w-full bg-[#181818] border border-neutral-700 rounded-lg p-2 text-white"/>
       </label>
       <label className="text-xs text-neutral-400 space-y-1">Anticipación del recordatorio (horas)
-        <input type="number" min={1} max={168} value={reminderHours} onChange={e=>setReminderHours(Number(e.target.value))}
+        <input type="number" min={1} max={168} placeholder="0" value={reminderHours} onChange={e=>setReminderHours(Number(e.target.value))}
           className="w-full bg-[#181818] border border-neutral-700 rounded-lg p-2 text-white"/>
       </label>
     </div>
