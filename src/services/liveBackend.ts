@@ -75,6 +75,36 @@ export async function updateAuthProfile(profile:{fullName:string;phone:string}){
   const data=await response.json().catch(()=>({}));
   if(!response.ok)throw Error(data.msg||data.error_description||data.message||data.error||'No se pudo guardar el perfil de contacto.');
 }
+
+export type ClientCutPreferences={style:string;topLength:string;beard:string;notes:string};
+export type ClientAuthProfile={name:string;email:string;phone:string;avatar:string;preferences:ClientCutPreferences};
+export async function getClientAuthProfile():Promise<ClientAuthProfile>{
+ const jwt=await token();
+ const res=await fetch(supabaseUrl+'/auth/v1/user',{headers:{apikey:supabasePublicKey,Authorization:'Bearer '+jwt}});
+ const json=await res.json().catch(()=>({}));
+ if(!res.ok)throw Error(json.msg||json.message||'No se pudo cargar tu perfil.');
+ const md=json.user_metadata||{};
+ const cuts=md.cut_preferences||{};
+ return {name:String(md.full_name||md.name||''),email:String(json.email||''),phone:String(md.phone||''),
+   avatar:String(md.avatar_url||''),preferences:{
+     style:String(cuts.style||''),topLength:String(cuts.topLength||''),beard:String(cuts.beard||''),notes:String(cuts.notes||'')
+   }};
+}
+export async function saveClientAuthProfile(input:ClientAuthProfile,originalEmail:string):Promise<void>{
+ const jwt=await token();
+ const body:{email?:string;data:{full_name:string;phone:string;cut_preferences:ClientCutPreferences}}={
+  data:{full_name:input.name.trim(),phone:input.phone.trim(),cut_preferences:input.preferences}
+ };
+ // Avoid asking Supabase to reconfirm an unchanged email on every profile save.
+ if(input.email.trim().toLowerCase()!==originalEmail.trim().toLowerCase()){
+  body.email=input.email.trim().toLowerCase();
+ }
+ const response=await fetch(supabaseUrl+'/auth/v1/user',{method:'PUT',headers:{
+  apikey:supabasePublicKey,Authorization:'Bearer '+jwt,'Content-Type':'application/json'
+ },body:JSON.stringify(body)});
+ const json=await response.json().catch(()=>({}));
+ if(!response.ok)throw Error(json.msg||json.error_description||json.message||'No se pudo guardar tu perfil.');
+}
 export async function requestPasswordReset(email:string){
   await authCall('recover',{email});
 }
@@ -235,6 +265,15 @@ export async function loadAccount():Promise<{
    backendRequest<Db[]>('/tenants')
  ]);
  const user=tokenUser(me.id,me.email,tenants,me.platformRole);
+ // Supabase Auth is the authoritative source of user-editable identity fields.
+ // Failed profile lookups do not block other account data.
+ const identity=await getClientAuthProfile().catch(()=>null);
+ if(identity){
+   user.name=identity.name||user.name;
+   user.phone=identity.phone;
+   user.avatar=identity.avatar;
+   user.email=identity.email||user.email;
+ }
  let shopRows=tenants.map(t=>mapShop(t,me.id));
  const tenant=tenants[0]?.id as string|undefined;
  let barbers:Barber[]=[],services:Service[]=[],products:Product[]=[],appointments:Appointment[]=[],transactions:Transaction[]=[],orders:Order[]=[],cashClosings:CashClosing[]=[];
@@ -340,6 +379,21 @@ export async function addProduct(tenant:string,data:{name:string;sku:string;pric
  })});
  return mapProduct(r,tenant);
 }
+export async function editProduct(tenant:string,id:string,data:{
+ name:string;sku:string;price:number;description:string;photo:string;category:Product['category'];cost:number;minStock:number;
+}){
+ const row=await backendRequest<Db>('/tenants/'+tenant+'/products/'+id,{method:'PATCH',body:JSON.stringify({
+ name:data.name,sku:data.sku,priceMinor:Math.round(data.price),description:data.description,photoUrl:data.photo,
+ category:data.category,costMinor:Math.round(data.cost),minStock:data.minStock
+ })});
+ return mapProduct(row,tenant);
+}
+export async function removeProduct(tenant:string,id:string){
+ await backendRequest('/tenants/'+tenant+'/products/'+id,{method:'DELETE'});
+}
+export async function restoreProduct(tenant:string,id:string){
+ return mapProduct(await backendRequest<Db>('/tenants/'+tenant+'/products/'+id+'/restore',{method:'PATCH'}),tenant);
+}
 export async function createReward(tenant:string,data:{title:string;description:string;pointsCost:number;isActive:boolean}){
  return mapReward(await backendRequest<Db>('/tenants/'+tenant+'/rewards',
    {method:'POST',body:JSON.stringify(data)}));
@@ -363,6 +417,16 @@ export async function publishReview(tenant:string,appointmentId:string,rating:nu
 export async function adjustStock(tenant:string,productId:string,delta:number,reason:string){
  return mapProduct(await backendRequest<Db>('/tenants/'+tenant+'/products/'+productId+'/stock',
    {method:'POST',body:JSON.stringify({delta,reason})}),tenant);
+}
+/** Availability from server (working hours, time off, holidays and overlaps).
+ * Never synthesize open slots in the browser. */
+export async function getAvailabilitySlots(tenant:string,barberId:string,serviceId:string,date:string,zone='America/Bogota'):Promise<string[]>{
+ const params=new URLSearchParams({barberId,serviceId,date});
+ const response=await fetch(apiOrigin+'/public/tenants/'+encodeURIComponent(tenant)+'/availability?'+params.toString(),{cache:'no-store'});
+ const json=await response.json().catch(()=>({}));
+ if(!response.ok)throw Error(json.error||'No fue posible consultar la disponibilidad.');
+ const list:{starts_at:string}[]=Array.isArray(json.slots)?json.slots:[];
+ return [...new Set<string>(list.map(s=>dayParts(s.starts_at,zone).time))].sort();
 }
 export async function addBooking(tenant:string,data:{barberId:string;serviceId:string;date:string;startTime:string;customerName:string;customerPhone:string;notes?:string},zone='America/Bogota'){
  // Obtain a server-computed instant instead of constructing a misleading UTC timestamp in the browser.
