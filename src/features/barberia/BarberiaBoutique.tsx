@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 
 export const BarberiaBoutique: React.FC = () => {
-  const { currentShop, state, currency, addToast } = useApp();
+  const { currentShop, state, currency, addToast, currentUser } = useApp();
   const [activeCategory, setActiveCategory] = useState<ProductCategory>('beauty');
   const [search, setSearch] = useState('');
 
@@ -50,6 +50,7 @@ export const BarberiaBoutique: React.FC = () => {
   const [newProdSku, setNewProdSku] = useState('');
 
   const shopId = currentShop?.id || 'shop-1';
+  const canManage=currentUser?.role==='owner';
 
   const products = state.products.filter(p => {
     const matchesShop = p.businessId === shopId;
@@ -213,13 +214,13 @@ export const BarberiaBoutique: React.FC = () => {
             </div>
           )}
 
-          <button
+          {canManage&&<button
             onClick={openCreate}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--gold-primary)] text-black text-xs font-bold hover:bg-[var(--gold-hover)] transition-all shadow-md"
           >
             <Plus className="w-4 h-4" />
             <span>Nuevo Producto</span>
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -322,7 +323,7 @@ export const BarberiaBoutique: React.FC = () => {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] font-mono text-neutral-500">{prod.sku}</span>
-                      <button
+                      {prod.isActive&&canManage?<button
                         onClick={() => handleToggleWaitingRoom(prod)}
                         className={`text-[10px] flex items-center gap-1 font-semibold ${
                           prod.isVisibleInWaitingRoom ? 'text-emerald-400' : 'text-neutral-500'
@@ -331,7 +332,7 @@ export const BarberiaBoutique: React.FC = () => {
                       >
                         {prod.isVisibleInWaitingRoom ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
                         <span>{prod.isVisibleInWaitingRoom ? 'En Sala' : 'Oculto'}</span>
-                      </button>
+                      </button>:<span className="text-[10px] text-neutral-500">{prod.isActive?'Activo':'Archivado'}</span>}
                     </div>
                     <h3 className="text-xs font-bold text-white mt-0.5 truncate">{prod.name}</h3>
                     <p className="text-[11px] text-neutral-400 line-clamp-2 mt-0.5">{prod.description}</p>
@@ -367,7 +368,7 @@ export const BarberiaBoutique: React.FC = () => {
                 </div>
               </div>
 
-              <div className="mt-3 grid grid-cols-2 gap-2">
+              {canManage&&<div className="mt-3 grid grid-cols-2 gap-2">
                 {prod.isActive?<>
                   <button type="button" disabled={processingId===prod.id} onClick={()=>openEdit(prod)}
                     className="flex items-center justify-center gap-1.5 rounded-lg border border-[var(--gold-primary)]/40 px-3 py-2 text-xs font-bold text-[var(--gold-primary)] disabled:opacity-50">
@@ -381,9 +382,9 @@ export const BarberiaBoutique: React.FC = () => {
                   className="col-span-2 flex items-center justify-center gap-1.5 rounded-lg border border-emerald-500/30 px-3 py-2 text-xs font-bold text-emerald-300 disabled:opacity-50">
                   <RotateCcw className="w-3.5 h-3.5"/> Restaurar
                 </button>}
-              </div>
+              </div>}
               {/* Adjust Stock Button */}
-              {prod.isActive && <div className="mt-4 pt-3 border-t border-neutral-800 flex items-center justify-between">
+              {prod.isActive && canManage && <div className="mt-4 pt-3 border-t border-neutral-800 flex items-center justify-between">
                 <button
                   onClick={() => {
                     setAdjustingProduct(prod);
