@@ -201,7 +201,8 @@ export const BarberiaAgenda: React.FC = () => {
     try{
       if(isLiveBackend){
         const method=paymentMethodForComplete;
-        const saved=await finishAndPayAppointment(shopId,completingApt.id,method==='split'?'cash':method);
+        if(method==='split'){addToast('Los cobros divididos se deben gestionar desde Caja para conservar su desglose.','error');return;}
+        const saved=await finishAndPayAppointment(shopId,completingApt.id,method);
         await refreshLiveData();
         setPaymentReceipt(saved);
       }else{
