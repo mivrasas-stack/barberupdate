@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { useApp } from '../../context/AppContext';
-import { backendRequest } from '../../services/liveBackend';
+import { backendRequest,refreshLiveData } from '../../services/liveBackend';
 import {
   QrCode,
   Copy,
@@ -94,6 +94,7 @@ export function BarberInvites() {
         body: JSON.stringify({ approve })
       });
       await refresh();
+      if(approve)await refreshLiveData();
       addToast(approve ? 'Barbero admitido en el equipo' : 'Solicitud rechazada', 'success');
     } catch (e) {
       addToast(e instanceof Error ? e.message : 'Error al procesar solicitud', 'error');
@@ -181,6 +182,8 @@ export function BarberInvites() {
             <p className="text-xs text-neutral-400 mt-3 font-medium">
               Muestra este código al barbero para que complete su postulación.
             </p>
+            {['127.0.0.1','localhost'].includes(location.hostname)&&
+              <p className="mt-2 text-xs text-amber-300">Este QR usa una dirección localhost: solo funcionará en este computador. Para escanearlo desde otro dispositivo publica la aplicación en una dirección HTTPS accesible.</p>}
           </div>
         )}
 
