@@ -15,8 +15,10 @@ try{
  await pool.query('CREATE TABLE public.whatsapp_deliveries(id uuid PRIMARY KEY,tenant_id uuid NOT NULL,due_at timestamptz NOT NULL DEFAULT now())');
  const sql=readFileSync(new URL('../../supabase/migrations/20261015010100_scalability_foundation.sql',import.meta.url),'utf8');
  await pool.query(sql);await pool.query(sql);
+ const retentionSql=readFileSync(new URL('../../supabase/migrations/20261015010200_outbox_retention.sql',import.meta.url),'utf8');
+ await pool.query(retentionSql);await pool.query(retentionSql);
  const result=await pool.query("SELECT indexname FROM pg_indexes WHERE schemaname='public'");
- for(const index of ['idx_barber_join_requests_user_id','idx_customer_links_tenant_barber','idx_outbox_ready_claim','idx_whatsapp_deliveries_tenant_due'])
+ for(const index of ['idx_barber_join_requests_user_id','idx_customer_links_tenant_barber','idx_outbox_ready_claim','idx_whatsapp_deliveries_tenant_due','idx_outbox_processed_retention'])
   assert.ok(result.rows.some(r=>r.indexname===index),'Missing index: '+index);
  await pool.query('INSERT INTO public.outbox_events(tenant_id) SELECT gen_random_uuid() FROM generate_series(1,150)');
  const claims=await Promise.all(Array.from({length:12},async()=>{
