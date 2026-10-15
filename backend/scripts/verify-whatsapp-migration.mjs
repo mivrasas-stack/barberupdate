@@ -22,7 +22,7 @@ try{
  await pool.query(sql);
  // Simulate the independently deployed legacy queue, with no pending messages.
  await pool.query("CREATE TABLE public.whatsapp_deliveries (id uuid PRIMARY KEY DEFAULT gen_random_uuid(), status text NOT NULL DEFAULT 'pending')");
- await pool.query("CREATE OR REPLACE FUNCTION public.barberos_whatsapp_enqueue() RETURNS trigger LANGUAGE plpgsql AS $ BEGIN INSERT INTO public.whatsapp_deliveries(status) VALUES('pending'); RETURN NEW; END $");
+ await pool.query("CREATE OR REPLACE FUNCTION public.barberos_whatsapp_enqueue() RETURNS trigger LANGUAGE plpgsql AS $legacy$ BEGIN INSERT INTO public.whatsapp_deliveries(status) VALUES('pending'); RETURN NEW; END $legacy$");
  await pool.query("CREATE TRIGGER appointments_whatsapp_queue AFTER INSERT ON public.appointments FOR EACH ROW EXECUTE FUNCTION public.barberos_whatsapp_enqueue()");
  // An unprocessed legacy job must block automatic retirement.
  await pool.query("INSERT INTO public.whatsapp_deliveries DEFAULT VALUES");
