@@ -110,7 +110,9 @@ export function mapShop(r:Db,userId:string):Barbershop{
     id:txt(r,'id'),slug:txt(r,'slug'),name:txt(r,'name'),ownerId:userId,
     tagline:txt(r,'tagline'),logo:txt(r,'logo_url'),coverImage:txt(r,'cover_url'),phone:txt(r,'phone'),email:txt(r,'email'),address:txt(r,'address'),city:txt(r,'city'),
     planId:'',subscriptionStatus:'trial',subscriptionRenewsAt:'',rating:0,reviewsCount:0,
-    openingHours:{days:'',open:'',close:''},socialLinks:{},portfolio:Array.isArray(r.portfolio)?r.portfolio as string[]:[], 
+    openingHours:(val(r,'opening_hours') as Barbershop['openingHours'])||{days:'',open:'',close:''},socialLinks:(val(r,'social_links') as Barbershop['socialLinks'])||{},
+     coordinates:val(r,'latitude')!=null&&val(r,'longitude')!=null?{lat:num(r,'latitude'),lng:num(r,'longitude')}:undefined,
+     portfolio:Array.isArray(r.portfolio)?r.portfolio as string[]:[], 
     publicCode:txt(r,'slug'),businessKind:txt(r,'business_kind','barbershop') as Barbershop['businessKind'],createdAt:txt(r,'created_at',new Date().toISOString())
   };
 }
@@ -119,6 +121,9 @@ export function mapBarber(r:Db,tenant:string):Barber{
     id:txt(r,'id'),businessId:tenant,slug:txt(r,'slug'),
     name:txt(r,'name'),photo:txt(r,'photo_url'),phone:'',email:'',specialties:[],
     bio:txt(r,'bio'),commissionRate:num(r,'commission_rate'),
+     contractType:txt(r,'contract_type','commission') as Barber['contractType'],
+     chairRentalFee:money(r,'chair_rental_fee'),
+     chairRentalPeriod:txt(r,'chair_rental_period','monthly') as Barber['chairRentalPeriod'],
     status:txt(r,'status','active')==='active'?'active':'inactive',
     rating:0,reviewsCount:0,portfolio:Array.isArray(r.portfolio)?r.portfolio as string[]:[],workDays:[],workHours:{start:'09:00',end:'18:00'},
     isIndependent:false,publicCode:txt(r,'slug')

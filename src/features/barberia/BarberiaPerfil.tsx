@@ -18,6 +18,24 @@ export const BarberiaPerfil: React.FC = () => {
   const [formAddress, setFormAddress] = useState(shop.address);
   const [formCity, setFormCity] = useState(shop.city);
   const [formPhone, setFormPhone] = useState(shop.phone);
+  const [formEmail,setFormEmail]=useState(shop.email||'');
+  const [formInstagram,setFormInstagram]=useState(shop.socialLinks?.instagram||'');
+  const [formWhatsapp,setFormWhatsapp]=useState(shop.socialLinks?.whatsapp||'');
+  const [formDays,setFormDays]=useState(shop.openingHours?.days||'Lunes a sábado');
+  const [formOpen,setFormOpen]=useState(shop.openingHours?.open||'09:00');
+  const [formClose,setFormClose]=useState(shop.openingHours?.close||'20:00');
+  const [formLat,setFormLat]=useState<number|null>(shop.coordinates?.lat??null);
+  const [formLng,setFormLng]=useState<number|null>(shop.coordinates?.lng??null);
+  const [gpsBusy,setGpsBusy]=useState(false);
+  const useGps=()=>{
+    if(!navigator.geolocation){addToast('GPS no disponible en este navegador','error');return;}
+    setGpsBusy(true);
+    navigator.geolocation.getCurrentPosition(
+      pos=>{setFormLat(Number(pos.coords.latitude.toFixed(6)));setFormLng(Number(pos.coords.longitude.toFixed(6)));setGpsBusy(false);},
+      ()=>{setGpsBusy(false);addToast('No fue posible obtener la ubicación; puedes introducirla manualmente','error');},
+      {enableHighAccuracy:true,timeout:15000,maximumAge:0}
+    );
+  };
 
   const uploadBranding = async (kind:'logo'|'cover',url:string) => {
     try{
@@ -56,7 +74,7 @@ export const BarberiaPerfil: React.FC = () => {
   const handleSaveProfile = async (e: React.FormEvent) => {
     if(isLiveBackend){
       e.preventDefault();
-      try{await backendRequest('/tenants/'+shop.id+'/profile',{method:'PATCH',body:JSON.stringify({name:formName,tagline:formTagline,address:formAddress,city:formCity,phone:formPhone})});await refreshLiveData();setIsEditing(false);addToast('Perfil comercial guardado','success');}
+      try{await backendRequest('/tenants/'+shop.id+'/profile',{method:'PATCH',body:JSON.stringify({name:formName,tagline:formTagline,address:formAddress,city:formCity,phone:formPhone,email:formEmail,latitude:formLat,longitude:formLng,openingHours:{days:formDays,open:formOpen,close:formClose},socialLinks:{instagram:formInstagram,whatsapp:formWhatsapp}})});await refreshLiveData();setIsEditing(false);addToast('Perfil comercial guardado','success');}
       catch(e){addToast(e instanceof Error?e.message:'No se guardó el perfil','error');}
       return;
     }
@@ -66,6 +84,10 @@ export const BarberiaPerfil: React.FC = () => {
     shop.address = formAddress;
     shop.city = formCity;
     shop.phone = formPhone;
+    shop.email = formEmail;
+    shop.socialLinks = {instagram:formInstagram,whatsapp:formWhatsapp};
+    shop.openingHours={days:formDays,open:formOpen,close:formClose};
+    if(formLat!==null&&formLng!==null)shop.coordinates={lat:formLat,lng:formLng};
     setIsEditing(false);
     addToast('Perfil comercial actualizado exitosamente', 'success');
   };
@@ -74,13 +96,7 @@ export const BarberiaPerfil: React.FC = () => {
     <div className="space-y-6">
       <BarberInvites/>
       {isLiveBackend && <BarberiaWhatsapp tenant={shop.id} addToast={addToast}/>}
-      {isLiveBackend && <div className="rounded-2xl bg-[#141414] border border-neutral-700 p-4 space-y-3">
-        <h2 className="font-semibold text-sm text-white">Imágenes de identidad comercial</h2>
-        <div className="flex flex-wrap gap-5">
-          <div><p className="text-xs text-neutral-400 mb-2">Logotipo</p><ImageUploader tenant={shop.id} category="shop" label="Subir logotipo" onUploaded={url=>void uploadBranding('logo',url)}/></div>
-          <div><p className="text-xs text-neutral-400 mb-2">Portada</p><ImageUploader tenant={shop.id} category="shop" label="Subir portada" onUploaded={url=>void uploadBranding('cover',url)}/></div>
-        </div>
-      </div>}
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#242424]">
         <div>
           <span className="text-xs font-semibold uppercase tracking-wider text-[var(--gold-primary)]">
@@ -177,14 +193,72 @@ export const BarberiaPerfil: React.FC = () => {
             </div>
             <div>
               <label className="text-neutral-400 block mb-1">Teléfono</label>
-              <input
-                type="text"
-                value={formPhone}
-                onChange={e => setFormPhone(e.target.value)}
-                className="w-full bg-[#181818] border border-[#2a2a2a] rounded-lg px-3 py-2 text-white font-mono"
-              />
+              <input type="tel" value={formPhone} maxLength={40}
+                onChange={e=>setFormPhone(e.target.value)} className="w-full bg-[#181818] border border-[#2a2a2a] rounded-lg px-3 py-2 text-white font-mono"/>
+            </div>
+            <div>
+              <label className="text-neutral-400 block mb-1">Correo electrónico de contacto</label>
+              <input type="email" value={formEmail} maxLength={254}
+                onChange={e=>setFormEmail(e.target.value)} placeholder="contacto@barberia.com"
+                className="w-full bg-[#181818] border border-[#2a2a2a] rounded-lg px-3 py-2 text-white"/>
+            </div>
+            <div>
+              <label className="text-neutral-400 block mb-1">Ciudad o municipio</label>
+              <input type="text" value={formCity} maxLength={120}
+                onChange={e=>setFormCity(e.target.value)} placeholder="Ej. Chía, Cundinamarca"
+                className="w-full bg-[#181818] border border-[#2a2a2a] rounded-lg px-3 py-2 text-white"/>
             </div>
           </div>
+          <div className="border-t border-neutral-800 pt-4 space-y-3">
+            <div className="flex flex-wrap gap-3 items-center justify-between">
+              <h4 className="font-semibold text-amber-400">Ubicación y georreferenciación</h4>
+              <button type="button" disabled={gpsBusy} onClick={useGps}
+                className="rounded-xl px-3 py-2 bg-amber-400 text-black font-semibold disabled:opacity-50">
+                {gpsBusy?'Obteniendo GPS...':'Tomar mi ubicación actual (GPS)'}
+              </button>
+            </div>
+            <p className="text-[11px] text-neutral-500">La ubicación se solicita solo cuando pulsas el botón; revisa las coordenadas antes de guardarlas.</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label>Latitud<input type="number" step="any" min={-90} max={90} value={formLat??''}
+                placeholder="0" onChange={e=>setFormLat(e.target.value===''?null:Number(e.target.value))}
+                className="mt-1 w-full bg-[#181818] border border-neutral-700 rounded-lg px-3 py-2"/></label>
+              <label>Longitud<input type="number" step="any" min={-180} max={180} value={formLng??''}
+                placeholder="0" onChange={e=>setFormLng(e.target.value===''?null:Number(e.target.value))}
+                className="mt-1 w-full bg-[#181818] border border-neutral-700 rounded-lg px-3 py-2"/></label>
+            </div>
+          </div>
+          <div className="border-t border-neutral-800 pt-4 space-y-3">
+            <h4 className="font-semibold text-amber-400">Horario y redes sociales</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <label>Días de atención<input type="text" maxLength={80} value={formDays}
+                onChange={e=>setFormDays(e.target.value)} className="mt-1 w-full bg-[#181818] border border-neutral-700 rounded-lg px-3 py-2"/></label>
+              <label>Hora de apertura<input type="time" value={formOpen}
+                onChange={e=>setFormOpen(e.target.value)} className="mt-1 w-full bg-[#181818] border border-neutral-700 rounded-lg px-3 py-2"/></label>
+              <label>Hora de cierre<input type="time" value={formClose}
+                onChange={e=>setFormClose(e.target.value)} className="mt-1 w-full bg-[#181818] border border-neutral-700 rounded-lg px-3 py-2"/></label>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label>Instagram<input type="text" maxLength={120} value={formInstagram}
+                onChange={e=>setFormInstagram(e.target.value)} placeholder="@barberia"
+                className="mt-1 w-full bg-[#181818] border border-neutral-700 rounded-lg px-3 py-2"/></label>
+              <label>WhatsApp comercial<input type="tel" maxLength={40} value={formWhatsapp}
+                onChange={e=>setFormWhatsapp(e.target.value)} placeholder="Ej. 573001234567"
+                className="mt-1 w-full bg-[#181818] border border-neutral-700 rounded-lg px-3 py-2"/></label>
+            </div>
+          </div>
+          {isLiveBackend&&<div className="border-t border-neutral-800 pt-4 space-y-3">
+            <h4 className="font-semibold text-amber-400">Logotipo y portada</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-2"><p>Logotipo actual</p>
+                {shop.logo&&<img src={shop.logo} alt="Logotipo actual" className="h-24 w-full object-contain rounded-lg"/>}
+                <ImageUploader tenant={shop.id} category="shop" label="Subir logotipo" onUploaded={url=>void uploadBranding('logo',url)}/>
+              </div>
+              <div className="space-y-2"><p>Portada actual</p>
+                {shop.coverImage&&<img src={shop.coverImage} alt="Portada actual" className="h-24 w-full object-cover rounded-lg"/>}
+                <ImageUploader tenant={shop.id} category="shop" label="Subir portada" onUploaded={url=>void uploadBranding('cover',url)}/>
+              </div>
+            </div>
+          </div>}
           <button
             type="submit"
             className="px-4 py-2 rounded-xl bg-[var(--gold-primary)] text-black font-bold flex items-center gap-1.5"
