@@ -554,6 +554,14 @@ export async function setProductVisibility(tenant:string,productId:string,visibl
   {method:'PATCH',body:JSON.stringify({visible})}),tenant);
 }
 
+export type TenantCustomer={
+ id:string;name:string;email:string;phone:string;avatar:string;
+ linkedByQr:boolean;linkedAt:string|null;visits:number;totalSpent:number;
+ lastService:string|null;lastServiceAt:string|null;points:number
+};
+export const listTenantCustomers=(tenantId:string)=>
+ backendRequest<TenantCustomer[]>('/tenants/'+encodeURIComponent(tenantId)+'/customers');
+
 export type CustomerLink={
  tenant_id:string;slug:string;name:string;business_kind:'barbershop'|'independent';
  barber_id:string|null;barber_name:string|null;barber_slug:string|null;linked_at:string
