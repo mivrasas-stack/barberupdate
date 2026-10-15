@@ -114,3 +114,45 @@ test('owner can persist full commercial profile and conditions; barbers cannot c
   assert.equal(denied.statusCode,403);
  }finally{await barberApp.close();}
 });
+
+
+test('client without a tenant uploads an avatar only to their own authenticated path',async()=>{
+ const {app,uploads}=await setup('owner');
+ try{
+  const photo=Buffer.concat([Buffer.from([255,216,255]),Buffer.alloc(30)]).toString('base64');
+  const good=await app.inject({method:'POST',url:'/api/v1/me/avatar',payload:{data:photo}});
+  assert.equal(good.statusCode,201,good.body);
+  assert.match(uploads[0].path,/^avatars\/33333333-3333-4333-8333-333333333333\//);
+  const forged=await app.inject({method:'POST',url:'/api/v1/me/avatar',payload:{data:photo,userId:foreign}});
+  assert.equal(forged.statusCode,400,forged.body);
+  const invalid=await app.inject({method:'POST',url:'/api/v1/me/avatar',payload:{data:Buffer.from('unsafe').toString('base64')}});
+  assert.equal(invalid.statusCode,400,invalid.body);
+  assert.equal(uploads.length,1,'Rejected images and forged identities are never stored');
+ }finally{await app.close();}
+});
+
+test('professional details are writable only by barber and constrained to own user_id',async()=>{
+ const own=await setup('barber');
+ try{
+  const route='/api/v1/tenants/'+tenant+'/barbers/'+ownBarber+'/professional-profile';
+  const payload={name:'Carlos Motas',bio:'Cortes clásicos y degradados.',
+   specialties:['Corte clásico','Barba'],experienceYears:8,instagramUrl:'https://www.instagram.com/barber.carlos/',
+   professionalPhone:'+573001112233'};
+  const updated=await own.app.inject({method:'PATCH',url:route,payload});
+  assert.equal(updated.statusCode,200,updated.body);
+  const query=own.calls.find(x=>x.sql.includes('SET name=$4,bio=$5,specialties=$6'));
+  assert.ok(query,'A professional update should be issued');
+  assert.match(query.sql,/tenant_id=\$1 AND id=\$2 AND user_id=\$3/);
+  assert.ok(!/commission|chair_rental|status=/.test(query.sql),'No salary or contract fields may be edited');
+  const injection=await own.app.inject({method:'PATCH',url:route,payload:{...payload,commissionRate:1}});
+  assert.equal(injection.statusCode,400,injection.body);
+  const invalid=await own.app.inject({method:'PATCH',url:route,payload:{...payload,experienceYears:100}});
+  assert.equal(invalid.statusCode,400,invalid.body);
+ }finally{await own.app.close();}
+ const owner=await setup('owner');
+ try{
+  const denied=await owner.app.inject({method:'PATCH',url:'/api/v1/tenants/'+tenant+'/barbers/'+ownBarber+'/professional-profile',
+   payload:{name:'Override',bio:'',specialties:[],experienceYears:0,instagramUrl:'',professionalPhone:''}});
+  assert.equal(denied.statusCode,403,denied.body);
+ }finally{await owner.app.close();}
+});
