@@ -24,11 +24,13 @@ CREATE TABLE IF NOT EXISTS public.loyalty_redemptions (
  reward_id uuid NOT NULL,
  points_cost integer NOT NULL CHECK(points_cost>0),
  status text NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','fulfilled','cancelled')),
+ idempotency_key text NOT NULL CHECK(length(idempotency_key) BETWEEN 12 AND 100),
  created_at timestamptz NOT NULL DEFAULT now(),
  fulfilled_at timestamptz,
  FOREIGN KEY(tenant_id,reward_id) REFERENCES public.loyalty_rewards(tenant_id,id),
  FOREIGN KEY(tenant_id,user_id) REFERENCES public.loyalty_accounts(tenant_id,user_id),
- UNIQUE(tenant_id,id)
+ UNIQUE(tenant_id,id),
+ UNIQUE(tenant_id,user_id,idempotency_key)
 );
 CREATE INDEX IF NOT EXISTS idx_loyalty_redemptions_user ON public.loyalty_redemptions(user_id,created_at DESC);
 
