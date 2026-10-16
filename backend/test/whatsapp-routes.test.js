@@ -6,7 +6,7 @@ import {registerWhatsAppRoutes} from '../src/whatsapp-routes.js';
 import {HttpProblem} from '../src/security.js';
 const TENANT='11111111-1111-4111-8111-111111111111';
 const ACTOR='22222222-2222-4222-8222-222222222222';
-async function fixture(){
+async function fixture({webhookEnabled=false}={}){
   const app=Fastify(),calls=[];
   const db={
     query:async(sql,args)=>{
@@ -17,7 +17,7 @@ async function fixture(){
     },
     transaction:async work=>work(db),
   };
-  const config={whatsappSendEnabled:false,whatsappAccessToken:'',
+  const config={whatsappWebhookEnabled:webhookEnabled,whatsappSendEnabled:false,whatsappAccessToken:'',
     whatsappPhoneNumberId:'12345678901',whatsappWebhookVerifyToken:'verify-123',whatsappAppSecret:'app-secret'};
   const security={
     authenticated:async(req)=>{req.actor={id:ACTOR};},
@@ -63,8 +63,8 @@ test('consent cannot be granted for somebody else\'s appointment phone',async()=
   }finally{await app.close();}
 });
 
-test('webhook handshake checks verify token and signature against raw body',async()=>{
-  const {app,calls}=await fixture();
+test('webhook handshake only in legacy opt-in webhook mode',async()=>{
+  const {app,calls}=await fixture({webhookEnabled:true});
   try{
     const challenge=await app.inject({method:'GET',url:'/api/v1/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=verify-123&hub.challenge=okay'});
     assert.equal(challenge.statusCode,200,challenge.body);
@@ -83,4 +83,17 @@ test('webhook handshake checks verify token and signature against raw body',asyn
     assert.equal(valid.statusCode,200,valid.body);
     assert.ok(calls.some(x=>x.args?.includes('wamid.test')));
   }finally{await app.close();}
+});
+
+test('outbound-only mode does not expose GET or POST webhook endpoints',async()=>{
+ const {app}=await fixture();
+ try{
+  const get=await app.inject({method:'GET',url:'/api/v1/whatsapp/webhook?hub.mode=subscribe'});
+  assert.equal(get.statusCode,404,get.body);
+  const post=await app.inject({method:'POST',url:'/api/v1/whatsapp/webhook',
+   headers:{'content-type':'application/json'},payload:{object:'whatsapp_business_account',entry:[]}});
+  assert.equal(post.statusCode,404,post.body);
+  const config=await app.inject({method:'GET',url:'/api/v1/tenants/'+TENANT+'/whatsapp/settings'});
+  assert.equal(config.statusCode,200,'Outbound settings remain available');
+ }finally{await app.close();}
 });
