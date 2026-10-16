@@ -87,7 +87,8 @@ export async function registerWhatsAppRoutes(app,{config,db,security}){
       return {consent:true};
     });
   });
-  app.register(async webhook=>{
+  // Outbound-only is the default: no public webhook endpoints or callback secrets required.
+  if(config.whatsappWebhookEnabled===true)app.register(async webhook=>{
     // Scope the raw body parser to this route group. JSON reserialization breaks Meta signatures.
     webhook.addContentTypeParser('application/json',{parseAs:'buffer'},(_req,body,done)=>done(null,body));
     webhook.get('/api/v1/whatsapp/webhook',async(req,reply)=>{
