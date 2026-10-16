@@ -1,7 +1,7 @@
 import {createCipheriv,createDecipheriv,randomBytes} from 'node:crypto';
 
 const specs={
-  whatsapp:{secretKeys:['accessToken','appSecret','webhookVerifyToken'],required:['accessToken','appSecret','webhookVerifyToken']},
+  whatsapp:{secretKeys:['accessToken','appSecret','webhookVerifyToken'],required:['accessToken']},
   email:{secretKeys:['apiKey'],required:['apiKey']},
   openai:{secretKeys:['apiKey'],required:['apiKey']},
 };
@@ -46,7 +46,8 @@ export function safeIntegrationView(provider,row){
   const spec=integrationSpec(provider),configured=row?.configured||[];
   return {provider,enabled:Boolean(row?.enabled),settings:row?.settings||{},
     credentials:Object.fromEntries(spec.secretKeys.map(k=>[k,configured.includes(k)])),
-    ready:spec.required.every(k=>configured.includes(k)),
+    ready:spec.required.every(k=>configured.includes(k))&&
+      (provider!=='whatsapp'||Boolean(row?.settings?.phoneNumberId)),
     updatedAt:row?.updatedAt||null};
 }
 
@@ -65,6 +66,7 @@ export async function resolveWhatsAppIntegration(db,config){
     whatsappAppSecret:row.secrets.appSecret||'',
     whatsappWebhookVerifyToken:row.secrets.webhookVerifyToken||'',
     whatsappPhoneNumberId:row.settings.phoneNumberId||'',
+    whatsappBusinessAccountId:row.settings.businessAccountId||'',
     whatsappGraphVersion:row.settings.graphVersion||config.whatsappGraphVersion
   };
 }
