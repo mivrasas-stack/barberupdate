@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { barberStore } from '../../services/store';
 import { ImageUploader } from './ImageUploader';
 import { BoutiqueCobros } from './BoutiqueCobros';
+import { BoutiqueHistorialVentas } from './BoutiqueHistorialVentas';
 import { formatCurrency } from '../../utils/formatters';
 import {CopAmountInput} from '../../components/common/CopAmountInput';
 import { Product, ProductCategory } from '../../types';
@@ -25,12 +26,13 @@ import {
   Trash2,
   RotateCcw,
   ReceiptText,
+  History,
 } from 'lucide-react';
 
 export const BarberiaBoutique: React.FC = () => {
   const { currentShop, state, currency, addToast, currentUser } = useApp();
   const [activeCategory, setActiveCategory] = useState<ProductCategory>('beauty');
-  const [activeView,setActiveView] = useState<'inventory'|'checkout'>('inventory');
+  const [activeView,setActiveView] = useState<'inventory'|'checkout'|'history'>('inventory');
   const [search, setSearch] = useState('');
 
   // Modals
@@ -236,8 +238,13 @@ export const BarberiaBoutique: React.FC = () => {
           className={'rounded-xl px-5 py-3 text-xs sm:text-sm font-bold flex items-center gap-2 '+(activeView==='checkout'?'bg-[var(--gold-primary)] text-black':'text-neutral-300 hover:bg-[#242424]')}>
           <ReceiptText size={17}/> Cobrar pedido por código
         </button>
+        <button type="button" role="tab" aria-selected={activeView==='history'} onClick={()=>setActiveView('history')}
+          className={'rounded-xl px-5 py-3 text-xs sm:text-sm font-bold flex items-center gap-2 '+(activeView==='history'?'bg-[var(--gold-primary)] text-black':'text-neutral-300 hover:bg-[#242424]')}>
+          <History size={17}/> Historial de ventas
+        </button>
       </div>}
-      {activeView==='checkout' && canManage && isLiveBackend ? <BoutiqueCobros tenantId={shopId}/> : <>
+      {activeView==='checkout' && canManage && isLiveBackend ? <BoutiqueCobros tenantId={shopId}/> :
+       activeView==='history' && canManage && isLiveBackend ? <BoutiqueHistorialVentas tenantId={shopId}/> : <>
       {/* 3 Main Category Tabs */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <button

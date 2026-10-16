@@ -40,6 +40,80 @@ export async function registerBusinessRoutes(app,{db,security}) {
       await requireTenant(db,tenant,req.actor.id,['owner','manager']);
       return (await db.query('SELECT * FROM public.orders WHERE tenant_id=$1 ORDER BY created_at DESC LIMIT 200',[tenant])).rows;
     });
+    // Paginated, read-only history of genuinely confirmed collections. A created
+    // order without confirmed payment is NOT a sale, and fully refunded sales
+    // remain visible for audit with their net amount.
+    api.get('/api/v1/tenants/:tenantId/orders/sales-history',async req=>{
+      const tenant=parseOrThrow(id,req.params.tenantId);
+      await requireTenant(db,tenant,req.actor.id,['owner','manager']);
+      const params=parseOrThrow(z.object({
+        cursor:id.optional(),
+        q:z.string().trim().max(80).default(''),
+        limit:z.coerce.number().int().min(1).max(50).default(20)
+      }).strict(),req.query);
+      const limit=params.limit;
+      const records=await db.query(
+        `WITH paid_orders AS (
+          SELECT o.id,o.customer_name,o.pickup_code,o.total_minor,o.status,o.created_at
+          FROM public.orders o
+          LEFT JOIN public.orders anchor ON anchor.tenant_id=$1 AND anchor.id=$2::uuid
+          WHERE o.tenant_id=$1
+            AND EXISTS (
+              SELECT 1 FROM public.manual_payments m
+              WHERE m.tenant_id=o.tenant_id AND m.order_id=o.id AND m.status='confirmed'
+            )
+            AND ($2::uuid IS NULL OR (o.created_at,o.id)<(anchor.created_at,anchor.id))
+            AND ($3::text='' OR strpos(lower(o.customer_name),lower($3))>0
+                  OR strpos(lower(o.pickup_code),lower($3))>0)
+          ORDER BY o.created_at DESC,o.id DESC LIMIT $4
+        )
+        SELECT o.*,coalesce(p.confirmed_minor,0) AS confirmed_minor,
+          coalesce(r.refunded_minor,0) AS refunded_minor,
+          coalesce(p.payment_details,'[]'::json) AS payment_details,
+          p.last_paid_at
+        FROM paid_orders o
+        LEFT JOIN LATERAL (
+          SELECT coalesce(sum(amount_minor),0)::bigint AS confirmed_minor,
+            coalesce(json_agg(json_build_object(
+              'id',id,'amountMinor',amount_minor,'method',method,
+              'confirmedAt',confirmed_at,'reference',reference
+            ) ORDER BY confirmed_at,id),'[]'::json) AS payment_details,
+            max(confirmed_at) AS last_paid_at
+          FROM public.manual_payments
+          WHERE tenant_id=$1 AND order_id=o.id AND status='confirmed'
+        ) p ON true
+        LEFT JOIN LATERAL (
+          SELECT coalesce(sum(amount_minor),0)::bigint AS refunded_minor
+          FROM public.manual_refunds
+          WHERE tenant_id=$1 AND order_id=o.id
+        ) r ON true
+        ORDER BY o.created_at DESC,o.id DESC`,
+        [tenant,params.cursor||null,params.q.toLowerCase(),limit+1]);
+      const page=records.rows.slice(0,limit);
+      const items=page.length?await db.query(
+        "SELECT oi.order_id,oi.product_name,oi.quantity,oi.unit_price_minor,oi.subtotal_minor,coalesce(p.category,'beauty') AS category FROM public.order_items oi LEFT JOIN public.products p ON p.tenant_id=oi.tenant_id AND p.id=oi.product_id WHERE oi.tenant_id=$1 AND oi.order_id=ANY($2::uuid[]) ORDER BY oi.product_name,oi.id",
+        [tenant,page.map(o=>o.id)]):{rows:[]};
+      const grouped=new Map();
+      for(const row of items.rows){
+        if(!grouped.has(row.order_id))grouped.set(row.order_id,[]);
+        grouped.get(row.order_id).push({
+          productName:row.product_name,category:row.category,
+          quantity:Number(row.quantity),unitPriceMinor:Number(row.unit_price_minor),
+          subtotalMinor:Number(row.subtotal_minor)
+        });
+      }
+      return {
+        sales:page.map(o=>({
+          id:o.id,pickupCode:o.pickup_code,customerName:o.customer_name,status:o.status,
+          totalMinor:Number(o.total_minor),confirmedMinor:Number(o.confirmed_minor),
+          refundedMinor:Number(o.refunded_minor),
+          netMinor:Number(o.confirmed_minor)-Number(o.refunded_minor),
+          createdAt:o.created_at,lastPaidAt:o.last_paid_at,
+          payments:o.payment_details,items:grouped.get(o.id)||[]
+        })),
+        nextCursor:records.rows.length>limit?page.at(-1).id:null
+      };
+    });
     // A pickup code is a cashier lookup, not proof of payment.
     // Scope every read to the authenticated owner's/manager's tenant.
     api.get('/api/v1/tenants/:tenantId/orders/by-pickup-code',async req=>{
