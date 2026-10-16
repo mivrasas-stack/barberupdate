@@ -85,3 +85,32 @@ test('old clients can omit notes while new schema stores the empty default',asyn
   assert.equal(result.json().notes,'');
  }finally{await f.app.close();}
 });
+
+
+test('owner records manual additional income and operational expense as separate typed ledger entries',async()=>{
+ const f=fixture();
+ await registerRoutes(f.app,{config:{},db:f.db,security:f.security});
+ await f.app.ready();
+ const url='/api/v1/tenants/'+TENANT+'/transactions';
+ try{
+  const income=await f.app.inject({method:'POST',url,payload:{
+   type:'income',category:'other',concept:'Ingreso extraordinario',
+   amountMinor:47000,paymentMethod:'nequi',notes:'Comprobante externo verificado'
+  }});
+  assert.equal(income.statusCode,201,income.body);
+  const expense=await f.app.inject({method:'POST',url,payload:{
+   type:'expense',category:'utilities',concept:'Factura de luz',
+   amountMinor:23500,paymentMethod:'transfer',notes:'Factura corriente'
+  }});
+  assert.equal(expense.statusCode,201,expense.body);
+  assert.equal(f.rows.length,2);
+  assert.equal(f.rows[0].type,'income');
+  assert.equal(f.rows[0].amount_minor,47000);
+  assert.equal(f.rows[1].type,'expense');
+  assert.equal(f.rows[1].amount_minor,23500);
+  const listed=await f.app.inject({method:'GET',url});
+  assert.equal(listed.statusCode,200,listed.body);
+  assert.equal(listed.json().filter(x=>x.type==='income').length,1);
+  assert.equal(listed.json().filter(x=>x.type==='expense').length,1);
+ }finally{await f.app.close();}
+});

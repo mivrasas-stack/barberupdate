@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { barberStore } from '../../services/store';
 import { ImageUploader } from './ImageUploader';
+import { BoutiqueCobros } from './BoutiqueCobros';
 import { formatCurrency } from '../../utils/formatters';
 import {CopAmountInput} from '../../components/common/CopAmountInput';
 import { Product, ProductCategory } from '../../types';
@@ -23,11 +24,13 @@ import {
   Pencil,
   Trash2,
   RotateCcw,
+  ReceiptText,
 } from 'lucide-react';
 
 export const BarberiaBoutique: React.FC = () => {
   const { currentShop, state, currency, addToast, currentUser } = useApp();
   const [activeCategory, setActiveCategory] = useState<ProductCategory>('beauty');
+  const [activeView,setActiveView] = useState<'inventory'|'checkout'>('inventory');
   const [search, setSearch] = useState('');
 
   // Modals
@@ -224,6 +227,17 @@ export const BarberiaBoutique: React.FC = () => {
         </div>
       </div>
 
+      {isLiveBackend && canManage && <div className="flex flex-wrap gap-2 rounded-2xl border border-[#303030] bg-[#141414] p-2" role="tablist" aria-label="Opciones de boutique">
+        <button type="button" role="tab" aria-selected={activeView==='inventory'} onClick={()=>setActiveView('inventory')}
+          className={'rounded-xl px-5 py-3 text-xs sm:text-sm font-bold flex items-center gap-2 '+(activeView==='inventory'?'bg-[var(--gold-primary)] text-black':'text-neutral-300 hover:bg-[#242424]')}>
+          <ShoppingBag size={17}/> Catálogo e inventario
+        </button>
+        <button type="button" role="tab" aria-selected={activeView==='checkout'} onClick={()=>setActiveView('checkout')}
+          className={'rounded-xl px-5 py-3 text-xs sm:text-sm font-bold flex items-center gap-2 '+(activeView==='checkout'?'bg-[var(--gold-primary)] text-black':'text-neutral-300 hover:bg-[#242424]')}>
+          <ReceiptText size={17}/> Cobrar pedido por código
+        </button>
+      </div>}
+      {activeView==='checkout' && canManage && isLiveBackend ? <BoutiqueCobros tenantId={shopId}/> : <>
       {/* 3 Main Category Tabs */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <button
@@ -568,6 +582,7 @@ export const BarberiaBoutique: React.FC = () => {
           </div>
         </div>
       )}
+      </>}
     </div>
   );
 };

@@ -26,7 +26,9 @@ export const BarberiaContabilidad: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'summary' | 'transactions' | 'cash_closing'>('summary');
 
   // Modals
-  const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
+  const [isMovementModalOpen, setIsMovementModalOpen] = useState(false);
+  const [movementType,setMovementType]=useState<'income'|'expense'>('expense');
+  const [savingMovement,setSavingMovement]=useState(false);
   const [isCashClosingModalOpen, setIsCashClosingModalOpen] = useState(false);
 
   // Form states for Expense
@@ -74,37 +76,31 @@ export const BarberiaContabilidad: React.FC = () => {
   const countedCashValue=cashCounted??0;
   const theoreticalCashBalance = openingCashValue + cashIncome - cashExpenses;
 
-  const handleCreateExpense = async (e: React.FormEvent) => {
+  const openMovement=()=>{setMovementType('expense');setExpenseCategory('inventory_purchase');setExpenseConcept('');setExpenseAmount(null);setExpenseNotes('');setIsMovementModalOpen(true);};
+  const changeMovementType=(type:'income'|'expense')=>{setMovementType(type);setExpenseCategory(type==='income'?'other':'inventory_purchase');};
+  const handleCreateMovement = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!expenseConcept || expenseAmount===null || expenseAmount < 100) {
-      addToast('Introduce un gasto de al menos $100 COP','error');return;
+    if(savingMovement)return;
+    if (!expenseConcept.trim() || expenseAmount===null || !Number.isInteger(expenseAmount) || expenseAmount < 100) {
+      addToast('Indica un concepto y un valor de al menos $100 COP','error');return;
     }
-    if(isLiveBackend){
-      try{
-        await recordTransaction(shopId,{type:'expense',category:expenseCategory,concept:expenseConcept,
-          amount:expenseAmount,paymentMethod:expensePaymentMethod,notes:expenseNotes});
-        await refreshLiveData();
-        addToast('Gasto registrado en el backend','success');
-        setIsExpenseModalOpen(false);setExpenseConcept('');setExpenseAmount(null);setExpenseNotes('');
-      }catch(error){addToast(error instanceof Error?error.message:'Error guardando gasto','error');}
-      return;
-    }
-
-    barberStore.addTransaction({
-      businessId: shopId,
-      type: 'expense',
-      category: expenseCategory,
-      concept: expenseConcept,
-      amount: expenseAmount,
-      paymentMethod: expensePaymentMethod,
-      notes: expenseNotes,
-    });
-
-    addToast(`Gasto registrado: ${expenseConcept} (${formatCurrency(expenseAmount, currency)})`, 'success');
-    setIsExpenseModalOpen(false);
-    setExpenseConcept('');
-    setExpenseAmount(null);
-    setExpenseNotes('');
+    setSavingMovement(true);
+    const label=movementType==='income'?'Ingreso':'Gasto';
+    try{
+      if(isLiveBackend){
+        await recordTransaction(shopId,{type:movementType,category:expenseCategory,concept:expenseConcept.trim(),
+          amount:expenseAmount,paymentMethod:expensePaymentMethod,notes:expenseNotes.trim()});
+        addToast(label+' registrado correctamente en Contabilidad','success');
+        setIsMovementModalOpen(false);setExpenseConcept('');setExpenseAmount(null);setExpenseNotes('');
+        try{await refreshLiveData();}catch{addToast('Actualiza para ver el nuevo movimiento','info');}
+      }else{
+        barberStore.addTransaction({businessId:shopId,type:movementType,category:expenseCategory,
+          concept:expenseConcept.trim(),amount:expenseAmount,paymentMethod:expensePaymentMethod,notes:expenseNotes.trim()});
+        addToast(label+' registrado: '+formatCurrency(expenseAmount,currency),'success');
+        setIsMovementModalOpen(false);setExpenseConcept('');setExpenseAmount(null);setExpenseNotes('');
+      }
+    }catch(error){addToast(error instanceof Error?error.message:'No se pudo registrar el movimiento','error');}
+    finally{setSavingMovement(false);}
   };
 
   const handlePerformCashClosing = async (e: React.FormEvent) => {
@@ -189,11 +185,11 @@ export const BarberiaContabilidad: React.FC = () => {
           </button>
 
           <button
-            onClick={() => setIsExpenseModalOpen(true)}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-red-500/15 border border-red-500/30 text-red-300 text-xs font-semibold hover:bg-red-500/25 transition-colors"
+            onClick={openMovement}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[var(--gold-primary)]/15 border border-[var(--gold-primary)]/40 text-[var(--gold-primary)] text-xs font-semibold hover:bg-[var(--gold-primary)]/25 transition-colors"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>Registrar Gasto</span>
+            <span>Registrar ingreso / gasto</span>
           </button>
 
           <button
@@ -406,36 +402,49 @@ export const BarberiaContabilidad: React.FC = () => {
         </div>
       )}
 
-      {/* Modal: Registrar Gasto */}
-      {isExpenseModalOpen && (
+      {/* Modal: Registrar movimiento contable */}
+      {isMovementModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div className="relative w-full max-w-md bg-[#141414] border border-[#262626] rounded-2xl shadow-2xl p-6">
             <div className="flex items-center justify-between pb-3 border-b border-[#262626]">
-              <h3 className="text-sm font-bold text-white">Registrar Gasto de Operación</h3>
+              <h3 className="text-sm font-bold text-white">Registrar movimiento contable</h3>
               <button
-                onClick={() => setIsExpenseModalOpen(false)}
+                onClick={() => setIsMovementModalOpen(false)}
                 className="p-1 text-neutral-400 hover:text-white"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateExpense} className="py-4 space-y-3 text-xs">
+            <form onSubmit={handleCreateMovement} className="py-4 space-y-3 text-xs">
+              <div className="grid grid-cols-2 gap-2" role="group" aria-label="Tipo de movimiento">
+                <button type="button" onClick={()=>changeMovementType('income')} aria-pressed={movementType==='income'}
+                  className={'rounded-xl p-3 font-bold border '+(movementType==='income'?'border-emerald-500/60 text-emerald-300 bg-emerald-500/15':'border-neutral-700 text-neutral-400')}>
+                  <TrendingUp size={16} className="inline mr-1"/> Ingreso
+                </button>
+                <button type="button" onClick={()=>changeMovementType('expense')} aria-pressed={movementType==='expense'}
+                  className={'rounded-xl p-3 font-bold border '+(movementType==='expense'?'border-red-500/60 text-red-300 bg-red-500/15':'border-neutral-700 text-neutral-400')}>
+                  <TrendingDown size={16} className="inline mr-1"/> Gasto
+                </button>
+              </div>
+              {movementType==='income'&&<p className="p-3 rounded-xl border border-amber-500/30 bg-amber-500/10 text-amber-200 text-xs">
+                Registra aquí únicamente ingresos adicionales no contabilizados. Los cobros de pedidos por código y de cortes ya se registran automáticamente; no vuelvas a ingresarlos.
+              </p>}
               <div>
-                <label className="text-neutral-400 block mb-1">Concepto del Gasto</label>
+                <label className="text-neutral-400 block mb-1">Concepto del {movementType==='income'?'ingreso':'gasto'}</label>
                 <input
                   type="text"
                   required
                   value={expenseConcept}
                   onChange={e => setExpenseConcept(e.target.value)}
-                  placeholder="Ej. Compra de toallas y desinfectante Barbicide"
+                  placeholder={movementType==='income'?'Ej. Ingreso extraordinario por servicio externo':'Ej. Compra de toallas y desinfectante'}
                   className="w-full bg-[#181818] border border-[#2a2a2a] rounded-lg px-3 py-2 text-white"
                 />
               </div>
 
               <div>
                 <label className="text-neutral-400 block mb-1">Valor (COP)</label>
-                <CopAmountInput value={expenseAmount} onChange={setExpenseAmount} required ariaLabel="Valor del gasto en COP"
+                <CopAmountInput value={expenseAmount} onChange={setExpenseAmount} required ariaLabel={'Valor del '+(movementType==='income'?'ingreso':'gasto')+' en COP'}
                   className="bg-[#181818] border border-[#2a2a2a] rounded-lg px-3 py-2 text-white font-mono" />
               </div>
 
@@ -447,18 +456,25 @@ export const BarberiaContabilidad: React.FC = () => {
                     onChange={e => setExpenseCategory(e.target.value as any)}
                     className="w-full bg-[#181818] border border-[#2a2a2a] rounded-lg px-3 py-2 text-white"
                   >
-                    <option value="inventory_purchase">Compra Insumos</option>
-                    <option value="rent">Arriendo Local</option>
-                    <option value="utilities">Servicios Públicos</option>
-                    <option value="payroll">Nómina / Comisiones</option>
-                    <option value="maintenance">Mantenimiento</option>
-                    <option value="marketing">Publicidad</option>
-                    <option value="other">Otros Gastos</option>
+                    {movementType==='expense'?<>
+                      <option value="inventory_purchase">Compra de insumos</option>
+                      <option value="rent">Arriendo local</option>
+                      <option value="utilities">Servicios públicos</option>
+                      <option value="payroll">Nómina / comisiones</option>
+                      <option value="maintenance">Mantenimiento</option>
+                      <option value="marketing">Publicidad</option>
+                      <option value="other">Otros gastos</option>
+                    </>:<>
+                      <option value="other">Otros ingresos</option>
+                      <option value="haircut_service">Servicio adicional fuera del sistema</option>
+                      <option value="product_sale">Venta externa de productos</option>
+                      <option value="beverage_food">Venta externa de alimentos</option>
+                    </>}
                   </select>
                 </div>
 
                 <div>
-                  <label className="text-neutral-400 block mb-1">Pagado con</label>
+                  <label className="text-neutral-400 block mb-1">{movementType==='income'?'Recibido por':'Pagado con'}</label>
                   <select
                     value={expensePaymentMethod}
                     onChange={e => setExpensePaymentMethod(e.target.value as any)}
@@ -467,7 +483,9 @@ export const BarberiaContabilidad: React.FC = () => {
                     <option value="cash">Efectivo de Caja</option>
                     <option value="transfer">Transferencia</option>
                     <option value="nequi">Nequi</option>
-                    <option value="debit">Tarjeta Débito</option>
+                    <option value="daviplata">Daviplata</option>
+                    <option value="debit">Tarjeta débito</option>
+                    <option value="credit">Tarjeta crédito</option>
                   </select>
                 </div>
               </div>
@@ -487,16 +505,16 @@ export const BarberiaContabilidad: React.FC = () => {
               <div className="pt-3 border-t border-[#262626] flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setIsExpenseModalOpen(false)}
+                  onClick={() => setIsMovementModalOpen(false)}
                   className="px-4 py-2 text-neutral-400 hover:text-white"
                 >
                   Cancelar
                 </button>
                 <button
-                  type="submit"
-                  className="px-4 py-2 rounded-xl bg-red-500 text-white font-bold hover:bg-red-600"
+                  type="submit" disabled={savingMovement}
+                  className={'px-4 py-2 rounded-xl font-bold disabled:opacity-50 '+(movementType==='income'?'bg-emerald-500 text-black':'bg-red-500 text-white')}
                 >
-                  Confirmar Gasto
+                  {savingMovement?'Registrando...':movementType==='income'?'Confirmar ingreso':'Confirmar gasto'}
                 </button>
               </div>
             </form>

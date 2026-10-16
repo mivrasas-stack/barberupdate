@@ -40,6 +40,50 @@ export async function registerBusinessRoutes(app,{db,security}) {
       await requireTenant(db,tenant,req.actor.id,['owner','manager']);
       return (await db.query('SELECT * FROM public.orders WHERE tenant_id=$1 ORDER BY created_at DESC LIMIT 200',[tenant])).rows;
     });
+    // A pickup code is a cashier lookup, not proof of payment.
+    // Scope every read to the authenticated owner's/manager's tenant.
+    api.get('/api/v1/tenants/:tenantId/orders/by-pickup-code',async req=>{
+      const tenant=parseOrThrow(id,req.params.tenantId);
+      await requireTenant(db,tenant,req.actor.id,['owner','manager']);
+      const {code}=parseOrThrow(z.object({
+        code:z.string().trim().toUpperCase().regex(/^PK-[A-Z0-9]{8}$/)
+      }).strict(),req.query);
+      const found=await db.query(
+        'SELECT id,pickup_code,customer_name,status,total_minor,created_at FROM public.orders WHERE tenant_id=$1 AND pickup_code=$2 LIMIT 1',
+        [tenant,code]);
+      if(!found.rowCount)failure(404,'No existe un pedido con ese código en esta barbería');
+      const order=found.rows[0];
+      // Persisted order lines are authoritative: prices, categories and inventory
+      // must never be supplied by the cashier's browser.
+      const [items,payments,refunds]=await Promise.all([
+        db.query(
+          'SELECT oi.product_id,oi.product_name,oi.quantity,oi.unit_price_minor,oi.subtotal_minor,COALESCE(p.category,\'beauty\') AS category FROM public.order_items oi LEFT JOIN public.products p ON p.tenant_id=oi.tenant_id AND p.id=oi.product_id WHERE oi.tenant_id=$1 AND oi.order_id=$2 ORDER BY oi.product_name,oi.id',
+          [tenant,order.id]),
+        db.query(
+          "SELECT id,amount_minor,method,status,created_at FROM public.manual_payments WHERE tenant_id=$1 AND order_id=$2 AND status IN ('pending','confirmed') ORDER BY created_at",
+          [tenant,order.id]),
+        db.query('SELECT coalesce(sum(amount_minor),0)::bigint AS refunded FROM public.manual_refunds WHERE tenant_id=$1 AND order_id=$2',
+          [tenant,order.id])
+      ]);
+      const confirmed=payments.rows.filter(p=>p.status==='confirmed').reduce((sum,p)=>sum+Number(p.amount_minor),0);
+      const refunded=Number(refunds.rows[0]?.refunded||0);
+      const total=Number(order.total_minor);
+      return {
+        id:order.id,pickupCode:order.pickup_code,customerName:order.customer_name,
+        status:order.status,totalMinor:total,createdAt:order.created_at,
+        items:items.rows.map(line=>({
+          productId:line.product_id,productName:line.product_name,category:line.category,
+          quantity:Number(line.quantity),unitPriceMinor:Number(line.unit_price_minor),
+          subtotalMinor:Number(line.subtotal_minor)
+        })),
+        confirmedMinor:confirmed,refundedMinor:refunded,
+        balanceMinor:Math.max(0,total-confirmed+refunded),
+        pendingPayments:payments.rows.filter(p=>p.status==='pending').map(p=>({
+          id:p.id,amountMinor:Number(p.amount_minor),method:p.method,createdAt:p.created_at
+        })),
+        verification:'El pago es manual: el personal debe comprobar que recibió el dinero antes de confirmarlo.'
+      };
+    });
     api.get('/api/v1/me/orders',async req=>{
       return (await db.query('SELECT id,tenant_id,total_minor,status,pickup_code,created_at FROM public.orders WHERE customer_user_id=$1 ORDER BY created_at DESC LIMIT 200',[req.actor.id])).rows;
     });
@@ -82,6 +126,27 @@ export async function registerBusinessRoutes(app,{db,security}) {
         return {order,repeated:false};
       });
       return reply.code(created.repeated?200:201).send(created.order);
+    });
+    // Staff can hand over a code-verified order only after the real offline
+    // collection was confirmed in full. Delivery does not post another income.
+    api.post('/api/v1/tenants/:tenantId/orders/:orderId/deliver',async req=>{
+      const tenant=parseOrThrow(id,req.params.tenantId),orderId=parseOrThrow(id,req.params.orderId);
+      await requireTenant(db,tenant,req.actor.id,['owner','manager']);
+      return db.transaction(async tx=>{
+        const found=await tx.query('SELECT id,total_minor,status FROM public.orders WHERE id=$1 AND tenant_id=$2 FOR UPDATE',[orderId,tenant]);
+        if(!found.rowCount)failure(404,'Pedido no encontrado');
+        const order=found.rows[0];
+        if(order.status==='cancelled')failure(409,'Pedido cancelado');
+        if(order.status==='delivered')return order;
+        const totals=await tx.query(
+          "SELECT (SELECT coalesce(sum(amount_minor),0) FROM public.manual_payments WHERE tenant_id=$1 AND order_id=$2 AND status='confirmed')::bigint AS confirmed,(SELECT coalesce(sum(amount_minor),0) FROM public.manual_refunds WHERE tenant_id=$1 AND order_id=$2)::bigint AS refunded",
+          [tenant,orderId]);
+        if(Number(totals.rows[0].confirmed||0)-Number(totals.rows[0].refunded||0)<Number(order.total_minor))
+          failure(409,'Confirma el pago completo antes de entregar el pedido');
+        return (await tx.query(
+          "UPDATE public.orders SET status='delivered',updated_at=now() WHERE id=$1 AND tenant_id=$2 RETURNING id,status,total_minor,pickup_code",
+          [orderId,tenant])).rows[0];
+      });
     });
     api.patch('/api/v1/tenants/:tenantId/orders/:orderId/status',async req=>{
       const tenant=parseOrThrow(id,req.params.tenantId);
