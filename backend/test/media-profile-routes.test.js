@@ -10,7 +10,15 @@ const ownBarber='44444444-4444-4444-8444-444444444444';
 async function setup(role='owner'){
  const app=Fastify();
  const calls=[],uploads=[];
- const db={query:async(sql,args)=>{calls.push({sql,args});if(sql.includes('SELECT 1 FROM public.barbers'))return {rowCount:args?.[1]===ownBarber?1:0,rows:args?.[1]===ownBarber?[{}]:[]};return {rowCount:1,rows:[{id:tenant,portfolio:args?.[1]||[]}]};}};
+ const db={query:async(sql,args)=>{
+  calls.push({sql,args});
+  if(sql.includes('SELECT 1 FROM public.barbers'))return {rowCount:args?.[1]===ownBarber?1:0,rows:args?.[1]===ownBarber?[{}]:[]};
+  if(sql.includes('UPDATE public.barbers SET name=$4,bio=$5')) {
+    const allowed=args?.[0]===tenant&&args?.[1]===ownBarber&&args?.[2]==='33333333-3333-4333-8333-333333333333';
+    return {rowCount:allowed?1:0,rows:allowed?[{id:ownBarber,name:args?.[3]}]:[]};
+  }
+  return {rowCount:1,rows:[{id:tenant,portfolio:args?.[1]||[]}]};
+ }};
  const security={
   authenticated:async req=>{req.actor={id:'33333333-3333-4333-8333-333333333333'};},
   limited:async()=>{},
@@ -131,7 +139,7 @@ test('client without a tenant uploads an avatar only to their own authenticated 
  }finally{await app.close();}
 });
 
-test('professional details are writable only by barber and constrained to own user_id',async()=>{
+test('professional details are writable by own barber or owner and constrained to own user_id',async()=>{
  const own=await setup('barber');
  try{
   const route='/api/v1/tenants/'+tenant+'/barbers/'+ownBarber+'/professional-profile';
@@ -151,8 +159,14 @@ test('professional details are writable only by barber and constrained to own us
  }finally{await own.app.close();}
  const owner=await setup('owner');
  try{
-  const denied=await owner.app.inject({method:'PATCH',url:'/api/v1/tenants/'+tenant+'/barbers/'+ownBarber+'/professional-profile',
-   payload:{name:'Override',bio:'',specialties:[],experienceYears:0,instagramUrl:'',professionalPhone:''}});
+  const allowed=await owner.app.inject({method:'PATCH',url:'/api/v1/tenants/'+tenant+'/barbers/'+ownBarber+'/professional-profile',
+   payload:{name:'Dueño barbero',bio:'Atiendo mis propias citas',specialties:['Barba'],experienceYears:6,instagramUrl:'',professionalPhone:''}});
+  assert.equal(allowed.statusCode,200,allowed.body);
+  const update=owner.calls.find(x=>x.sql.includes('SET name=$4,bio=$5'));
+  assert.ok(update,'The owner may update an Auth-linked professional profile');
+  assert.equal(update.args[2],'33333333-3333-4333-8333-333333333333','Owner edits must use server-resolved user identity');
+  const denied=await owner.app.inject({method:'PATCH',url:'/api/v1/tenants/'+tenant+'/barbers/'+foreign+'/professional-profile',
+   payload:{name:'Barbero ajeno',bio:'',specialties:[],experienceYears:0,instagramUrl:'',professionalPhone:''}});
   assert.equal(denied.statusCode,403,denied.body);
  }finally{await owner.app.close();}
 });

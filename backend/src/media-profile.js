@@ -48,7 +48,7 @@ export async function registerMediaProfileRoutes(app,{db,security,config}){
   // Contract, payouts, status and schedule fields are intentionally excluded.
   routes.patch('/api/v1/tenants/:tenantId/barbers/:barberId/professional-profile',async req=>{
    const tenant=parseOrThrow(id,req.params.tenantId),barber=parseOrThrow(id,req.params.barberId);
-   await requireTenant(db,tenant,req.actor.id,['barber']);
+   await requireTenant(db,tenant,req.actor.id,['barber','owner']);
    const payload=z.object({
     name:z.string().trim().min(2).max(120),
     bio:z.string().trim().max(2000),

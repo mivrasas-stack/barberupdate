@@ -1,18 +1,36 @@
 import React, { useState } from 'react';
+import {BarberoPerfil} from '../barbero/BarberoPerfil';
 import { useApp } from '../../context/AppContext';
 import { BarberInvites } from './BarberInvites';
 import {BarberiaWhatsapp} from './BarberiaWhatsapp';
 import { ImageUploader } from './ImageUploader';
 import {backendRequest,isLiveBackend,refreshLiveData} from '../../services/liveBackend';
 import { barberStore } from '../../services/store';
-import { Store, MapPin, Phone, Mail, Instagram, Clock, Image, Trash2, Plus, Star, Save } from 'lucide-react';
+import { Store, MapPin, Phone, Mail, Instagram, Clock, Image, Trash2, Plus, Star, Save, Scissors, UserRound } from 'lucide-react';
 
 export const BarberiaPerfil: React.FC = () => {
-  const { currentShop, addToast } = useApp();
+  const { currentShop, currentUser, state, addToast } = useApp();
+  const [activeTab,setActiveTab] = useState<'commercial'|'professional'>('commercial');
+  const [creatingProfessional,setCreatingProfessional] = useState(false);
   const [photoInput, setPhotoInput] = useState('');
   const [isEditing, setIsEditing] = useState(false);
 
   const shop = currentShop || barberStore.getState().barbershops[0];
+  // Managers and other barber staff must not gain access to the owner's private profile.
+  const isActualOwner = Boolean(isLiveBackend && currentUser && shop.ownerId === currentUser.id && currentUser.role === 'owner');
+  const ownerBarber = isActualOwner ? state.barbers.find(b=>b.businessId===shop.id && b.userId===currentUser?.id) : undefined;
+  const enableProfessionalProfile = async()=>{
+    if(!isActualOwner || !currentUser || creatingProfessional)return;
+    setCreatingProfessional(true);
+    try{
+      await backendRequest('/tenants/'+shop.id+'/barbers/me',{method:'POST',
+        body:JSON.stringify({name:currentUser.name.trim() || currentUser.email.split('@')[0]})});
+      await refreshLiveData();
+      addToast('Tu perfil profesional está listo para personalizar y recibir reservas.','success');
+    }catch(error){
+      addToast(error instanceof Error?error.message:'No fue posible activar tu perfil de barbero.','error');
+    }finally{setCreatingProfessional(false);}
+  };
   const [formName, setFormName] = useState(shop.name);
   const [formTagline, setFormTagline] = useState(shop.tagline);
   const [formAddress, setFormAddress] = useState(shop.address);
@@ -94,6 +112,40 @@ export const BarberiaPerfil: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {isActualOwner && (
+        <div className="flex flex-wrap gap-2 border-b border-[#292929] pb-3" role="tablist" aria-label="Perfiles de la barbería">
+          <button type="button" role="tab" aria-selected={activeTab==='commercial'}
+            onClick={()=>setActiveTab('commercial')}
+            className={'flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-bold transition-colors '+(activeTab==='commercial'?'bg-[var(--gold-primary)] text-black':'bg-[#1b1b1b] text-neutral-300 hover:text-white border border-[#303030]')}>
+            <Store className="h-4 w-4"/> Perfil comercial
+          </button>
+          <button type="button" role="tab" aria-selected={activeTab==='professional'}
+            onClick={()=>setActiveTab('professional')}
+            className={'flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-bold transition-colors '+(activeTab==='professional'?'bg-[var(--gold-primary)] text-black':'bg-[#1b1b1b] text-neutral-300 hover:text-white border border-[#303030]')}>
+            <Scissors className="h-4 w-4"/> Mi perfil de barbero
+          </button>
+        </div>
+      )}
+      {isActualOwner && activeTab==='professional' && (
+        <div role="tabpanel" aria-label="Mi perfil de barbero">
+          {ownerBarber ? (
+            <BarberoPerfil barberOverride={ownerBarber}/>
+          ) : (
+            <div className="max-w-4xl mx-auto rounded-2xl border border-[#343434] bg-[#141414] p-6 space-y-4">
+              <h2 className="flex items-center gap-2 text-lg font-bold text-white">
+                <UserRound className="h-5 w-5 text-[var(--gold-primary)]"/> Atiende citas como dueño y barbero
+              </h2>
+              <p className="text-sm text-neutral-400">Activa tu propio perfil profesional para mostrar tu foto, biografía, especialidades y portafolio. Aparecerás como opción al agendar, sin perder el acceso de propietario.</p>
+              <p className="text-xs text-neutral-500">Horario inicial: lunes a sábado de 9:00 a 18:00. Podrás ajustarlo desde la gestión de horarios.</p>
+              <button type="button" disabled={creatingProfessional} onClick={()=>void enableProfessionalProfile()}
+                className="rounded-xl bg-[var(--gold-primary)] px-5 py-3 text-sm font-bold text-black disabled:opacity-50">
+                {creatingProfessional?'Activando...':'Activar mi perfil de barbero'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+      {activeTab==='commercial' && <>
       <BarberInvites/>
       {isLiveBackend && <BarberiaWhatsapp tenant={shop.id} addToast={addToast}/>}
 
@@ -325,6 +377,7 @@ export const BarberiaPerfil: React.FC = () => {
           ))}
         </div>
       </div>
+      </>}
     </div>
   );
 };

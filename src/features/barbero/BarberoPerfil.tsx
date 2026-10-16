@@ -1,4 +1,5 @@
 import React,{useEffect,useState} from 'react';
+import type {Barber} from '../../types';
 import {useApp} from '../../context/AppContext';
 import {barberStore} from '../../services/store';
 import {ImageUploader} from '../barberia/ImageUploader';
@@ -9,9 +10,10 @@ import {Scissors,Star,Trash2,UserRound,Save,Camera,Loader2} from 'lucide-react';
 const field='w-full bg-[#101010] border border-[#343434] rounded-xl px-3.5 py-3 text-sm text-white outline-none focus:border-[var(--gold-primary)]';
 const label='block text-xs font-semibold text-neutral-300 mb-1.5';
 
-export const BarberoPerfil:React.FC=()=>{
+export const BarberoPerfil:React.FC<{barberOverride?:Barber}>=({barberOverride})=>{
  const {currentBarber,currentUser,state,addToast,updateCurrentUserProfile}=useApp();
- const barber=currentBarber||(!isLiveBackend?state.barbers[0]:undefined);
+ // The owner passes their own explicitly-linked barber record. Never fall back to another barber.
+ const barber=barberOverride||currentBarber||(!isLiveBackend?state.barbers[0]:undefined);
  const [newPhoto,setNewPhoto]=useState('');
  const [publicName,setPublicName]=useState('');
  const [bio,setBio]=useState('');
@@ -72,7 +74,7 @@ export const BarberoPerfil:React.FC=()=>{
 
  const savePersonal=async(e:React.FormEvent)=>{
   e.preventDefault();
-  if(fullName.trim().length<2||phone.trim().length<7){addToast('Revisa el nombre y el teléfono','error');return;}
+  if(fullName.trim().length<2||(phone.trim().length>0&&phone.trim().length<7)){addToast('Revisa el nombre y el teléfono','error');return;}
   setSavingPersonal(true);
   try{
    if(isLiveBackend){
@@ -176,7 +178,7 @@ export const BarberoPerfil:React.FC=()=>{
      <p className="mt-1 text-[11px] text-neutral-500">El nuevo correo puede requerir confirmación.</p>
     </div>
     <div><label className={label} htmlFor="barber-phone">Teléfono personal</label>
-     <input id="barber-phone" className={field} type="tel" required minLength={7} maxLength={32} autoComplete="tel" value={phone} onChange={e=>setPhone(e.target.value)}/>
+     <input id="barber-phone" className={field} type="tel" minLength={7} maxLength={32} autoComplete="tel" value={phone} onChange={e=>setPhone(e.target.value)}/>
     </div>
    </div>
    <button type="submit" disabled={savingPersonal||loading||!privateLoaded} className="flex items-center justify-center gap-2 rounded-xl bg-[var(--gold-primary)] px-5 py-2.5 text-xs font-bold text-black disabled:opacity-40">
