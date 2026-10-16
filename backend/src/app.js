@@ -16,6 +16,7 @@ import { registerBarberInviteRoutes } from './barber-invites.js';
 import { registerMediaProfileRoutes } from './media-profile.js';
 import {registerWhatsAppRoutes} from './whatsapp-routes.js';
 import {registerPlatformIntegrationRoutes} from './platform-integrations.js';
+import {registerPlatformAdminRoutes} from './platform-admin.js';
 
 /**
  * Translate database rules without exposing raw PostgreSQL messages to clients.
@@ -64,6 +65,7 @@ export async function buildApp(env = process.env) {
     } catch { return reply.code(503).send({ status: 'unavailable' }); }
   });
   await registerRoutes(app, { config, db, security });
+  await registerPlatformAdminRoutes(app, { config, db, security });
   await registerBusinessRoutes(app, { config, db, security });
   await registerSchedulingRoutes(app, { config, db, security });
   await registerNotificationRoutes(app, { config, db, security });

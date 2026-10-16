@@ -14,6 +14,35 @@ const apiOrigin=String(import.meta.env.VITE_API_BASE_URL||'/api/v1').replace(/\/
 const supabaseUrl=String(import.meta.env.VITE_SUPABASE_URL||'').replace(/\/$/,'');
 const supabasePublicKey=String(import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY||'');
 const storageKey='barberos_auth_session_v1';
+const authSetupKey='barbernow_password_setup_v1';
+export function isPasswordSetupPending(){return isLiveBackend && !!sessionStorage.getItem(authSetupKey);}
+export function cancelPasswordSetup(){sessionStorage.removeItem(authSetupKey);clearSession();}
+export function consumeAuthRedirect(){
+  if(!isLiveBackend)return;
+  const fragment=new URLSearchParams(window.location.hash.replace(/^#/,''));
+  const flow=fragment.get('type');
+  if(flow!=='invite'&&flow!=='recovery')return;
+  const access_token=fragment.get('access_token'),refresh_token=fragment.get('refresh_token');
+  history.replaceState(null,'',window.location.pathname+window.location.search+'#/login');
+  if(!access_token||!refresh_token)return;
+  const expires_in=Number(fragment.get('expires_in')||3600);
+  receiveToken({access_token,refresh_token,expires_in});
+  sessionStorage.setItem(authSetupKey,flow);
+}
+export async function savePasswordFromLink(password:string){
+  if(!isPasswordSetupPending())throw Error('Abre un enlace válido de invitación o recuperación.');
+  if(password.length<12)throw Error('La contraseña debe tener al menos 12 caracteres.');
+  const jwt=await token();
+  const response=await fetch(supabaseUrl+'/auth/v1/user',{
+    method:'PUT',headers:{apikey:supabasePublicKey,Authorization:'Bearer '+jwt,'Content-Type':'application/json'},
+    body:JSON.stringify({password})
+  });
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok)throw Error(data.msg||data.error_description||data.message||'No se pudo establecer la contraseña.');
+  sessionStorage.removeItem(authSetupKey);
+  clearSession();
+  return String(data.email||'');
+}
 
 type Session={access_token:string;refresh_token:string;expires_at:number};
 let session:Session|null=null;
@@ -38,7 +67,7 @@ export function clearSession(){
   storeSession(null);
   setCachedUser(null);
 }
-export function hasSession(){return !!session||!!sessionStorage.getItem(storageKey);}
+export function hasSession(){return !isPasswordSetupPending() && (!!session||!!sessionStorage.getItem(storageKey));}
 async function authCall(path:string,payload:object){
   if(!supabaseUrl||!supabasePublicKey)throw Error('Faltan variables públicas de Supabase para conectar BarberOS.');
   const result=await fetch(supabaseUrl+'/auth/v1/'+path,{
@@ -178,7 +207,7 @@ function dayParts(raw:string,zone='America/Bogota'){
 }
 export function mapShop(r:Db,userId:string):Barbershop{
   return {
-    id:txt(r,'id'),slug:txt(r,'slug'),name:txt(r,'name'),ownerId:userId,
+    id:txt(r,'id'),slug:txt(r,'slug'),name:txt(r,'name'),ownerId:txt(r,'owner_user_id',userId),
     tagline:txt(r,'tagline'),logo:txt(r,'logo_url'),coverImage:txt(r,'cover_url'),phone:txt(r,'phone'),email:txt(r,'email'),address:txt(r,'address'),city:txt(r,'city'),
     planId:'',subscriptionStatus:'trial',subscriptionRenewsAt:'',rating:0,reviewsCount:0,
     openingHours:(val(r,'opening_hours') as Barbershop['openingHours'])||{days:'',open:'',close:''},socialLinks:(val(r,'social_links') as Barbershop['socialLinks'])||{},
@@ -189,7 +218,7 @@ export function mapShop(r:Db,userId:string):Barbershop{
 }
 export function mapBarber(r:Db,tenant:string):Barber{
   return {
-    id:txt(r,'id'),businessId:tenant,slug:txt(r,'slug'),
+    id:txt(r,'id'),businessId:tenant,slug:txt(r,'slug'),userId:txt(r,'user_id')||undefined,
     name:txt(r,'name'),photo:txt(r,'photo_url'),phone:txt(r,'professional_phone'),email:'',
     specialties:Array.isArray(r.specialties)?r.specialties.map(v=>String(v)):[],
     experienceYears:num(r,'experience_years'),instagramUrl:txt(r,'instagram_url'),
@@ -311,7 +340,7 @@ export async function loadAccount():Promise<{
  let barbers:Barber[]=[],services:Service[]=[],products:Product[]=[],appointments:Appointment[]=[],transactions:Transaction[]=[],orders:Order[]=[],cashClosings:CashClosing[]=[];
  let reviews:Review[]=[],rewards:LoyaltyReward[]=[],redemptions:LoyaltyRedemption[]=[];
  let loyalty:Record<string,LoyaltyAccount>={},loyaltyBalances:Record<string,LoyaltyBalance>={};
- if(tenant){
+ if(tenant && user.role!=='superadmin'){
    const prefix='/tenants/'+encodeURIComponent(tenant);
    const [bs,ss,ps]=await Promise.all([
      backendRequest<Db[]>(prefix+'/barbers'),

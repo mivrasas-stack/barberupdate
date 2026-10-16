@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { backendRequest, isLiveBackend } from '../../services/liveBackend';
+import { CreateUserModal } from './CreateUserModal';
 import { useApp } from '../../context/AppContext';
 import { User, UserRole } from '../../types';
 import {
@@ -23,6 +25,17 @@ import {
 export const AdminUsers: React.FC = () => {
   const { state, addToast } = useApp();
   const [search, setSearch] = useState('');
+  const [showCreate,setShowCreate] = useState(false);
+  const [directoryUsers,setDirectoryUsers] = useState<User[]>([]);
+  const [loadingDirectory,setLoadingDirectory] = useState(isLiveBackend);
+  const reloadDirectory=async()=>{
+    if(!isLiveBackend)return;
+    try{setDirectoryUsers(await backendRequest<User[]>('/platform/users'));}
+    catch(e){addToast(e instanceof Error?e.message:'No se cargaron los usuarios','error');}
+    finally{setLoadingDirectory(false);}
+  };
+  useEffect(()=>{void reloadDirectory();},[]);
+  const users=isLiveBackend?directoryUsers:state.users;
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -30,7 +43,7 @@ export const AdminUsers: React.FC = () => {
   const [editForm, setEditForm] = useState<Partial<User>>({});
 
   // Filter users
-  const filteredUsers = state.users.filter(u => {
+  const filteredUsers = users.filter(u => {
     const matchesSearch =
       u.name.toLowerCase().includes(search.toLowerCase()) ||
       u.email.toLowerCase().includes(search.toLowerCase()) ||
@@ -48,6 +61,7 @@ export const AdminUsers: React.FC = () => {
 
   const handleSaveEdit = () => {
     if (!selectedUser) return;
+    if(isLiveBackend){addToast('La edición y suspensión requieren operaciones autenticadas del servidor','info');return;}
     const idx = state.users.findIndex(u => u.id === selectedUser.id);
     if (idx >= 0) {
       state.users[idx] = { ...state.users[idx], ...editForm };
@@ -59,6 +73,7 @@ export const AdminUsers: React.FC = () => {
 
   const handleToggleStatus = () => {
     if (!selectedUser) return;
+    if(isLiveBackend){addToast('La edición y suspensión requieren operaciones autenticadas del servidor','info');return;}
     const newStatus = selectedUser.status === 'active' ? 'suspended' : 'active';
     const idx = state.users.findIndex(u => u.id === selectedUser.id);
     if (idx >= 0) {
@@ -94,8 +109,9 @@ export const AdminUsers: React.FC = () => {
             Administra propietarios, barberos, clientes y personal con roles granulares
           </p>
         </div>
+        {isLiveBackend&&<button type="button" onClick={()=>setShowCreate(true)} className="self-start sm:self-auto px-4 py-2.5 rounded-xl bg-[var(--gold-primary)] text-black text-sm font-bold">+ Crear usuario</button>}
       </div>
-
+      {showCreate&&<CreateUserModal shops={state.barbershops.map(s=>({id:s.id,name:s.name}))} onClose={()=>setShowCreate(false)} onCreated={()=>void reloadDirectory()}/>}
       {/* Filter and Search Bar */}
       <div className="flex flex-col sm:flex-row gap-3 bg-[#141414] border border-[#262626] rounded-2xl p-4">
         <div className="relative flex-1">
@@ -135,6 +151,8 @@ export const AdminUsers: React.FC = () => {
         </div>
       </div>
 
+      {loadingDirectory&&<p className="text-xs text-neutral-400">Cargando el directorio real de usuarios...</p>}
+      {!loadingDirectory&&filteredUsers.length===0&&<p className="text-sm text-neutral-400">No hay usuarios que coincidan con los filtros.</p>}
       {/* Users Table */}
       <div className="bg-[#141414] border border-[#262626] rounded-2xl overflow-hidden shadow-xl">
         <div className="overflow-x-auto">
@@ -333,7 +351,7 @@ export const AdminUsers: React.FC = () => {
 
             {/* Modal Actions */}
             <div className="pt-4 border-t border-[#262626] flex items-center justify-between">
-              <button
+              {!isLiveBackend&&<button
                 onClick={handleToggleStatus}
                 className={`px-3.5 py-2 text-xs font-semibold rounded-xl border transition-colors flex items-center gap-1.5 ${
                   selectedUser.status === 'active'
@@ -352,10 +370,10 @@ export const AdminUsers: React.FC = () => {
                     <span>Activar Usuario</span>
                   </>
                 )}
-              </button>
+              </button>}
 
               <div className="flex items-center gap-2">
-                {isEditing ? (
+                {isLiveBackend ? <span className="text-xs text-neutral-500">Edición y suspensión pendientes de integración</span> : isEditing ? (
                   <>
                     <button
                       onClick={() => setIsEditing(false)}

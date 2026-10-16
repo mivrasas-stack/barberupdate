@@ -1,4 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { backendRequest, isLiveBackend } from '../../services/liveBackend';
+import { CreateBarbershopModal } from './CreateBarbershopModal';
+import { User } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { Barbershop } from '../../types';
 import { formatCurrency } from '../../utils/formatters';
@@ -23,6 +26,13 @@ import {
 export const AdminBarbershops: React.FC = () => {
   const { state, currency, navigate, addToast } = useApp();
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
+  const [showCreate,setShowCreate] = useState(false);
+  const [directoryUsers,setDirectoryUsers] = useState<User[]>([]);
+  useEffect(()=>{
+    if(!isLiveBackend)return;
+    backendRequest<User[]>('/platform/users').then(setDirectoryUsers)
+      .catch(e=>addToast(e instanceof Error?e.message:'No se pudo cargar el directorio','error'));
+  },[]);
   const [search, setSearch] = useState('');
   const [cityFilter, setCityFilter] = useState('all');
   const [selectedShop, setSelectedShop] = useState<Barbershop | null>(null);
@@ -51,8 +61,10 @@ export const AdminBarbershops: React.FC = () => {
           </p>
         </div>
 
+        <div className="flex items-center gap-3 self-start sm:self-auto">
+          {isLiveBackend&&<button type="button" onClick={()=>setShowCreate(true)} className="px-4 py-2 rounded-xl bg-[var(--gold-primary)] text-black text-sm font-bold">+ Crear barbería</button>}
         {/* View Mode Toggle */}
-        <div className="flex items-center gap-1 p-1 bg-[#161616] border border-[#2a2a2a] rounded-xl self-start sm:self-auto">
+        <div className="flex items-center gap-1 p-1 bg-[#161616] border border-[#2a2a2a] rounded-xl">
           <button
             onClick={() => setViewMode('cards')}
             className={`p-2 rounded-lg transition-colors ${
@@ -72,7 +84,9 @@ export const AdminBarbershops: React.FC = () => {
             <List className="w-4 h-4" />
           </button>
         </div>
+        </div>
       </div>
+      {showCreate&&<CreateBarbershopModal onClose={()=>setShowCreate(false)}/>}
 
       {/* Filter Bar */}
       <div className="flex flex-col sm:flex-row gap-3 bg-[#141414] border border-[#262626] rounded-2xl p-4">
@@ -99,13 +113,14 @@ export const AdminBarbershops: React.FC = () => {
         </select>
       </div>
 
+      {filteredShops.length===0&&<p className="text-sm text-neutral-400">No hay barberías con estos filtros. Puedes crear una nueva desde el botón superior.</p>}
       {/* Cards View */}
       {viewMode === 'cards' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredShops.map(shop => {
             const barbers = state.barbers.filter(b => b.businessId === shop.id);
             const services = state.services.filter(s => s.businessId === shop.id);
-            const owner = state.users.find(u => u.id === shop.ownerId);
+            const owner = (isLiveBackend?directoryUsers:state.users).find(u => u.id === shop.ownerId);
 
             return (
               <div
@@ -214,7 +229,7 @@ export const AdminBarbershops: React.FC = () => {
               <tbody className="divide-y divide-[#1e1e1e]">
                 {filteredShops.map(shop => {
                   const barbers = state.barbers.filter(b => b.businessId === shop.id);
-                  const owner = state.users.find(u => u.id === shop.ownerId);
+                  const owner = (isLiveBackend?directoryUsers:state.users).find(u => u.id === shop.ownerId);
 
                   return (
                     <tr key={shop.id} className="hover:bg-[#181818] transition-colors">

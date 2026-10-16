@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { createHash } from 'node:crypto';
 import { failure, parseOrThrow, uuid } from './security.js';
+import { createProfessionalProfile } from './platform-admin.js';
 
 const id = z.uuid();
 const word = (max=160) => z.string().trim().min(1).max(max);
@@ -38,7 +39,7 @@ export async function registerRoutes(app,{config,db,security}) {
       const granted=await db.query('SELECT 1 FROM public.platform_admins WHERE user_id=$1',[req.actor.id]);
       if(!granted.rowCount)failure(403,'Solo administradores globales');
       return (await db.query(
-        'SELECT id,name,slug,currency,time_zone,status,business_kind FROM public.tenants ORDER BY created_at DESC LIMIT 100'
+        'SELECT id,name,slug,currency,time_zone,status,business_kind,owner_user_id,city,address,phone,email,tagline,opening_hours,logo_url,cover_url,created_at FROM public.tenants ORDER BY created_at DESC LIMIT 100'
       )).rows;
     });
     routes.get('/api/v1/tenants',async req=>{
@@ -80,11 +81,23 @@ export async function registerRoutes(app,{config,db,security}) {
       await requireTenant(db,tenant,req.actor.id,owners);
       const x=parseOrThrow(z.object({name:word(120),slug,userId:id.nullish(),bio:z.string().max(2000).default(''),commissionRate:z.number().min(0).max(1).default(0)}).strict(),req.body);
       if(x.userId){
-        const member=await db.query("SELECT 1 FROM public.tenant_members WHERE tenant_id=$1 AND user_id=$2 AND role='barber'",[tenant,x.userId]);
+        const member=await db.query("SELECT 1 FROM public.tenant_members WHERE tenant_id=$1 AND user_id=$2 AND role IN ('barber','owner')",[tenant,x.userId]);
         if(!member.rowCount) failure(400,'El barbero debe ser miembro de la empresa con rol barber');
       }
       const row=await db.query('INSERT INTO public.barbers(tenant_id,name,slug,user_id,bio,commission_rate) VALUES($1,$2,$3,$4,$5,$6) RETURNING *',[tenant,x.name,x.slug,x.userId||null,x.bio,x.commissionRate]);
       return reply.code(201).send(row.rows[0]);
+    });
+    routes.post('/api/v1/tenants/:tenantId/barbers/me',async (req,reply)=>{
+      const tenant=parseOrThrow(id,req.params.tenantId);
+      await requireTenant(db,tenant,req.actor.id,['owner']);
+      const x=parseOrThrow(z.object({name:word(120)}).strict(),req.body);
+      const result=await db.transaction(async tx=>{
+        await tx.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[tenant+':owner-professional:'+req.actor.id]);
+        const existing=await tx.query('SELECT id FROM public.barbers WHERE tenant_id=$1 AND user_id=$2',[tenant,req.actor.id]);
+        const barber=await createProfessionalProfile(tx,tenant,req.actor.id,x.name,'propietario');
+        return {row:barber,created:!existing.rowCount};
+      });
+      return reply.code(result.created?201:200).send(result.row);
     });
     routes.get('/api/v1/tenants/:tenantId/services',async req=>{
       const tenant=parseOrThrow(id,req.params.tenantId);

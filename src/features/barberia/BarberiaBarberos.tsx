@@ -10,7 +10,8 @@ import {backendRequest,isLiveBackend,refreshLiveData} from '../../services/liveB
 import { Scissors, Plus, Star, Phone, Mail, Clock, Calendar, Image, X, Check, Trash2 } from 'lucide-react';
 
 export const BarberiaBarberos: React.FC = () => {
-  const { currentShop, state, addToast } = useApp();
+  const { currentShop, currentUser, state, addToast } = useApp();
+  const [creatingOwnerProfile,setCreatingOwnerProfile] = useState(false);
   const [selectedBarber, setSelectedBarber] = useState<Barber | null>(null);
   const [newPhotoUrl, setNewPhotoUrl] = useState('');
   const [showInvites, setShowInvites] = useState(false);
@@ -18,6 +19,20 @@ export const BarberiaBarberos: React.FC = () => {
 
   const shopId = currentShop?.id || 'shop-1';
   const barbers = state.barbers.filter(b => b.businessId === shopId);
+  const ownerCanJoin = isLiveBackend && currentUser?.role==='owner' && currentShop?.ownerId===currentUser.id
+    && !barbers.some(b=>b.userId===currentUser.id);
+  const enableOwnerAsBarber=async()=>{
+    if(!currentUser||!currentShop)return;
+    setCreatingOwnerProfile(true);
+    try{
+      await backendRequest('/tenants/'+currentShop.id+'/barbers/me',{
+        method:'POST',body:JSON.stringify({name:currentUser.name||currentUser.email.split('@')[0]})
+      });
+      await refreshLiveData();
+      addToast('Tu perfil de barbero está activo y ya puedes recibir reservas','success');
+    }catch(e){addToast(e instanceof Error?e.message:'No se pudo crear tu perfil profesional','error');}
+    finally{setCreatingOwnerProfile(false);}
+  };
 
   const updatePortrait=async(barberId:string,url:string)=>{
     try{
@@ -74,7 +89,10 @@ export const BarberiaBarberos: React.FC = () => {
             Gestiona comisiones, horarios de trabajo, especialidades y portafolios fotográficos
           </p>
         </div>
-        {isLiveBackend && <button type="button" onClick={()=>setShowInvites(value=>!value)} className="rounded-xl bg-[var(--gold-primary)] text-black font-bold px-4 py-2 text-sm">{showInvites?'Ocultar invitaciones':'Añadir barbero'}</button>}
+        <div className="flex flex-wrap gap-2">
+          {ownerCanJoin&&<button type="button" disabled={creatingOwnerProfile} onClick={()=>void enableOwnerAsBarber()} className="rounded-xl border border-[var(--gold-primary)] text-[var(--gold-primary)] font-bold px-4 py-2 text-sm disabled:opacity-50">{creatingOwnerProfile?'Activando...':'Atender también como barbero'}</button>}
+          {isLiveBackend&&<button type="button" onClick={()=>setShowInvites(value=>!value)} className="rounded-xl bg-[var(--gold-primary)] text-black font-bold px-4 py-2 text-sm">{showInvites?'Ocultar invitaciones':'Añadir barbero'}</button>}
+        </div>
       </div>
       {showInvites && isLiveBackend && <BarberInvites/>}
 

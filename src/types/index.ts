@@ -57,6 +57,7 @@ export interface Barbershop {
 export interface Barber {
   id: string;
   businessId?: string; // If null/empty, independent
+  userId?: string; // Linked Auth user, including owner
   slug: string;
   name: string;
   photo: string;

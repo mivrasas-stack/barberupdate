@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ArrowRight, LockKeyhole, Mail } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import type { UserRole } from '../../types';
-import { isLiveBackend, requestPasswordReset, registerWithEmail } from '../../services/liveBackend';
+import { isLiveBackend, requestPasswordReset, registerWithEmail, isPasswordSetupPending, savePasswordFromLink, cancelPasswordSetup } from '../../services/liveBackend';
 
 /**
  * Login only. Reproduces the BarberNow visual supplied by the owner.
@@ -15,6 +15,23 @@ export const LoginView: React.FC = () => {
   const selectedRole: UserRole = 'owner';
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [busy, setBusy] = useState(false);
+  const [passwordSetup,setPasswordSetup] = useState(isPasswordSetupPending);
+  const [newPassword,setNewPassword]=useState('');
+  const [confirmPassword,setConfirmPassword]=useState('');
+  const finishSetup=async(event:React.FormEvent)=>{
+    event.preventDefault();
+    if(busy)return;
+    if(newPassword!==confirmPassword){addToast('Las contraseñas no coinciden','error');return;}
+    setBusy(true);
+    try{
+      const accountEmail=await savePasswordFromLink(newPassword);
+      if(accountEmail)setEmail(accountEmail);
+      setPassword('');
+      setPasswordSetup(false);
+      addToast('Contraseña guardada. Ya puedes iniciar sesión.','success');
+    }catch(error){addToast(error instanceof Error?error.message:'No se pudo activar la cuenta','error');}
+    finally{setBusy(false);}
+  };
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -63,6 +80,22 @@ export const LoginView: React.FC = () => {
     }
   };
 
+  if(passwordSetup)return (
+    <main className="min-h-screen flex items-center justify-center bg-[#090909] text-white px-4">
+      <form onSubmit={finishSetup} className="w-full max-w-md rounded-2xl border border-[#303030] bg-[#181818] p-7 space-y-5">
+        <h1 className="text-2xl font-bold">Activa tu cuenta BarberNow</h1>
+        <p className="text-sm text-neutral-400">Define una contraseña para ingresar de manera segura. Debe contener al menos 12 caracteres.</p>
+        <label className="block text-sm space-y-2">Nueva contraseña
+          <input type="password" autoComplete="new-password" required minLength={12} value={newPassword} onChange={e=>setNewPassword(e.target.value)} className="block w-full rounded-xl bg-[#111] border border-[#333] px-4 py-3"/>
+        </label>
+        <label className="block text-sm space-y-2">Confirmar contraseña
+          <input type="password" autoComplete="new-password" required minLength={12} value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} className="block w-full rounded-xl bg-[#111] border border-[#333] px-4 py-3"/>
+        </label>
+        <button type="submit" disabled={busy} className="w-full rounded-xl py-3 bg-[var(--gold-primary,#e5a700)] text-black font-bold disabled:opacity-50">{busy?'Guardando...':'Establecer contraseña'}</button>
+        <button type="button" onClick={()=>{cancelPasswordSetup();setPasswordSetup(false);}} className="w-full text-xs text-neutral-400 hover:text-white">Cancelar y volver al inicio de sesión</button>
+      </form>
+    </main>
+  );
   const landing = import.meta.env.VITE_PUBLIC_LANDING_URL as string | undefined;
 
   return (
