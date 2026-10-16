@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomBytes} from 'node:crypto';
 import Fastify from 'fastify';
-import {encryptSecret,decryptSecret,masterKey,safeIntegrationView} from '../src/integration-secrets.js';
+import {encryptSecret,decryptSecret,masterKey,safeIntegrationView,resolveWhatsAppIntegration} from '../src/integration-secrets.js';
 import {registerPlatformIntegrationRoutes} from '../src/platform-integrations.js';
 
 test('AES-GCM integration secrets round trip, no ciphertext/plaintext in admin response',()=>{
@@ -60,4 +60,25 @@ test('admin can save credential without echoing it, then preserve it on settings
  assert.equal(listing.body.includes('sk-secret-never-expose'),false);
  assert.equal(JSON.stringify(records.get('openai')).includes('sk-secret-never-expose'),false);
  await app.close();
+});
+
+test('WhatsApp outbound only needs access token and phone number; WABA id is optional',async()=>{
+ const configured={enabled:true,settings:{phoneNumberId:'1234567890',businessAccountId:'9876543210',graphVersion:'v23.0'},
+   configured:['accessToken'],secrets:{accessToken:'example-test-token'},updatedAt:new Date().toISOString()};
+ const view=safeIntegrationView('whatsapp',configured);
+ assert.equal(view.ready,true,'Webhook app secret and verification token must not be required');
+ assert.equal(view.credentials.accessToken,true);
+ assert.equal(view.credentials.appSecret,false);
+ assert.equal(safeIntegrationView('whatsapp',{...configured,settings:{phoneNumberId:''}}).ready,false);
+ const db={query:async()=>({rowCount:1,rows:[{
+   ...configured,secrets:{accessToken:encryptSecret('only-sending-token',masterKey(Buffer.alloc(32,7).toString('base64')))}
+ }]})};
+ const config={platformSecretsKey:Buffer.alloc(32,7).toString('base64'),whatsappSendEnabled:true};
+ const resolved=await resolveWhatsAppIntegration(db,config);
+ assert.equal(resolved.whatsappSendEnabled,true);
+ assert.equal(resolved.whatsappAccessToken,'only-sending-token');
+ assert.equal(resolved.whatsappPhoneNumberId,'1234567890');
+ assert.equal(resolved.whatsappBusinessAccountId,'9876543210');
+ assert.equal(resolved.whatsappWebhookVerifyToken,'');
+ assert.equal(resolved.whatsappAppSecret,'');
 });
