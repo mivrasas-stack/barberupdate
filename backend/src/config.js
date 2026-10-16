@@ -20,6 +20,8 @@ export function configFromEnv(env = process.env) {
     whatsappSendEnabled: env.WHATSAPP_SEND_ENABLED === 'true',
     whatsappAccessToken: env.WHATSAPP_ACCESS_TOKEN || '',
     whatsappPhoneNumberId: env.WHATSAPP_PHONE_NUMBER_ID || '',
+    whatsappBusinessAccountId: env.WHATSAPP_BUSINESS_ACCOUNT_ID || '',
+    whatsappWebhookEnabled: env.WHATSAPP_WEBHOOK_ENABLED === 'true',
     whatsappGraphVersion: env.WHATSAPP_GRAPH_VERSION || 'v23.0',
     whatsappAppSecret: env.WHATSAPP_APP_SECRET || '',
     whatsappWebhookVerifyToken: env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || '',

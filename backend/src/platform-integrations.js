@@ -5,6 +5,7 @@ import {decryptSecret,encryptSecret,integrationProviders,integrationSpec,masterK
 const providerSchema=z.enum(['whatsapp','email','openai']);
 const settingsSchema={
   whatsapp:z.object({phoneNumberId:z.union([z.literal(''),z.string().regex(/^[0-9]{5,25}$/)]).default(''),
+    businessAccountId:z.union([z.literal(''),z.string().regex(/^[0-9]{5,25}$/)]).default(''),
     graphVersion:z.string().regex(/^v[0-9]{1,3}\.[0-9]{1,2}$/).default('v23.0')}).strict(),
   email:z.object({fromEmail:z.union([z.literal(''),z.email().max(254)]).default(''),
     fromName:z.string().max(120).default('Barber Paradise'),
