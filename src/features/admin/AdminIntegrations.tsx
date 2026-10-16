@@ -1,17 +1,17 @@
 import React,{useEffect,useState} from 'react';
-import {Bot,Mail,MessageCircle,KeyRound,Save,ShieldCheck,TestTube2,Eye,EyeOff,Copy} from 'lucide-react';
+import {Bot,Mail,MessageCircle,KeyRound,Save,ShieldCheck,TestTube2,Eye,EyeOff} from 'lucide-react';
 import {backendRequest,isLiveBackend} from '../../services/liveBackend';
 
 type Provider='whatsapp'|'email'|'openai';
 type Integration={provider:Provider;enabled:boolean;ready:boolean;settings:Record<string,string>;credentials:Record<string,boolean>;updatedAt:string|null};
 const TYPES:Provider[]=['whatsapp','email','openai'];
 const INITIAL:Record<Provider,Integration>={
- whatsapp:{provider:'whatsapp',enabled:false,ready:false,settings:{phoneNumberId:'',graphVersion:'v23.0'},credentials:{},updatedAt:null},
+ whatsapp:{provider:'whatsapp',enabled:false,ready:false,settings:{phoneNumberId:'',businessAccountId:'',graphVersion:'v23.0'},credentials:{},updatedAt:null},
  email:{provider:'email',enabled:false,ready:false,settings:{fromEmail:'',fromName:'Barber Paradise',replyTo:''},credentials:{},updatedAt:null},
  openai:{provider:'openai',enabled:false,ready:false,settings:{model:'gpt-4.1-mini',systemPrompt:''},credentials:{},updatedAt:null}
 };
 const OPTIONS={
- whatsapp:{title:'WhatsApp Cloud API',description:'Citas, recordatorios y plantillas aprobadas por Meta.',fields:[['phoneNumberId','Phone Number ID'],['graphVersion','Versión Graph API']],keys:[['accessToken','Token permanente'],['appSecret','App Secret'],['webhookVerifyToken','Token de verificación']]},
+ whatsapp:{title:'WhatsApp Cloud API',description:'Solo envío de confirmaciones y recordatorios mediante plantillas aprobadas por Meta.',fields:[['phoneNumberId','Phone Number ID'],['businessAccountId','WhatsApp Business Account ID (opcional)'],['graphVersion','Versión Graph API']],keys:[['accessToken','Token permanente de Meta']]},
  email:{title:'Correos · Resend',description:'Mensajes transaccionales con un remitente verificado.',fields:[['fromEmail','Correo remitente'],['fromName','Nombre remitente'],['replyTo','Responder a']],keys:[['apiKey','API Key de Resend']]},
  openai:{title:'OpenAI y bots',description:'Configura tu clave, modelo e instrucciones.',fields:[['model','Modelo'],['systemPrompt','Instrucciones del asistente']],keys:[['apiKey','API Key de OpenAI']]}
 } as const;
@@ -54,12 +54,6 @@ export const AdminIntegrations:React.FC=()=>{
      setNotice({kind:'ok',message:result.detail});
    }catch(e){setNotice({kind:'error',message:String((e as Error).message)});}
    finally{setBusy(false);}
- };
- const generate=()=>{
-   const value=Array.from(crypto.getRandomValues(new Uint8Array(32)),b=>b.toString(16).padStart(2,'0')).join('');
-   updateSecret('webhookVerifyToken',value);
-   setVisible(v=>({...v,webhookVerifyToken:true}));
-   setNotice({kind:'info',message:'Copia este token y pégalo en Meta. Tras guardarlo no volverá a mostrarse.'});
  };
  const option=OPTIONS[tab],config=saved[tab];
  return <div className="max-w-6xl space-y-6 pb-10">
@@ -109,14 +103,12 @@ export const AdminIntegrations:React.FC=()=>{
         className="min-w-0 flex-1 rounded-xl bg-[#0d0d0d] border border-neutral-700 text-white p-3 text-sm"/>
        <button type="button" className="rounded-xl px-3 bg-neutral-800 text-white" aria-label={visible[key]?'Ocultar':'Mostrar'}
         onClick={()=>setVisible(v=>({...v,[key]:!v[key]}))}>{visible[key]?<EyeOff className="w-4 h-4"/>:<Eye className="w-4 h-4"/>}</button>
-       {key==='webhookVerifyToken'&&inputs[tab][key]&&<button type="button" title="Copiar token" className="rounded-xl px-3 bg-neutral-800 text-white" onClick={()=>navigator.clipboard.writeText(inputs[tab][key])}><Copy className="w-4 h-4"/></button>}
       </div>
-      {key==='webhookVerifyToken'&&<button type="button" onClick={generate} disabled={!isLiveBackend||busy} className="text-xs text-[var(--gold-primary)] hover:underline">Generar token seguro nuevo</button>}
      </div>)}
     </div>
    </div>
    {tab==='whatsapp'&&<p className="text-xs rounded-xl p-3 border border-neutral-800 bg-neutral-900 text-neutral-400">
-    Endpoint webhook: /api/v1/whatsapp/webhook. Configura una URL pública HTTPS estable en Meta. Los envíos requieren plantillas aprobadas, consentimiento y habilitar el interruptor global del servidor.
+    Modo solo envío: no necesitas webhook, App Secret ni token de verificación. Para enviar se requieren token de acceso, Phone Number ID, plantillas aprobadas, consentimiento y habilitar el envío en el servidor. El ID de cuenta Business es opcional.
    </p>}
    {tab==='email'&&<p className="text-xs rounded-xl p-3 border border-neutral-800 bg-neutral-900 text-neutral-400">Primero verifica tu dominio en Resend. La prueba envía un correo real exclusivamente al email de tu cuenta superadmin.</p>}
    {tab==='openai'&&<p className="text-xs rounded-xl p-3 border border-neutral-800 bg-neutral-900 text-neutral-400">Configurar OpenAI prepara las credenciales para futuros bots; no activa respuestas automáticas por sí solo.</p>}
