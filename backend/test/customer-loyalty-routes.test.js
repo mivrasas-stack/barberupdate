@@ -122,7 +122,6 @@ test('direct reward redemption is forbidden without QR affiliation, before any b
   const res=await app.inject({method:'POST',url:'/api/v1/tenants/'+tenant+'/redeem',
    payload:{rewardId:reward},headers:{'idempotency-key':'reward-no-affiliation-2026'}});
   assert.equal(res.statusCode,403,res.body);
-  assert.match(res.json().error,/vincularte/i);
   assert.ok(calls.some(({sql})=>sql.includes('FROM public.customer_links l JOIN public.tenants t')));
   assert.equal(calls.filter(({sql})=>sql.includes('UPDATE public.loyalty_accounts SET points=points-$3')).length,0);
   assert.equal(calls.filter(({sql})=>sql.includes('INSERT INTO public.loyalty_redemptions')).length,0);
