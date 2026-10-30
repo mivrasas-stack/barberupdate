@@ -420,7 +420,7 @@ export async function loadAccount():Promise<{
    loyalty[me.id]={customerId:me.id,points:Object.values(loyaltyBalances).reduce((total,b)=>total+b.points,0),
      visitsCount:Object.values(loyaltyBalances).reduce((total,b)=>total+b.visitsCount,0),
      currentStreak:0,achievements:[],
-     pointHistory:events.map(e=>({id:txt(e,'id'),date:txt(e,'created_at').slice(0,10),concept:txt(e,'description'),points:num(e,'points_delta')}))};
+     pointHistory:events.map(e=>({id:txt(e,'id'),tenantId:txt(e,'tenant_id'),date:txt(e,'created_at').slice(0,10),concept:txt(e,'description'),points:num(e,'points_delta')}))};
    for(const shop of shopRows){shop.rating=0;shop.reviewsCount=0;}
  }
  const plans=await backendRequest<Db[]>('/public/plans').catch(()=>[] as Db[]);
