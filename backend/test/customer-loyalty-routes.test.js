@@ -9,7 +9,7 @@ const reward='22222222-2222-4222-8222-222222222222';
 const customer='33333333-3333-4333-8333-333333333333';
 const appointment='44444444-4444-4444-8444-444444444444';
 
-async function setup(initialRole='owner'){
+async function setup(initialRole='owner',linked=true){
  const app=Fastify();
  let role=initialRole;
  const calls=[];
@@ -17,6 +17,14 @@ async function setup(initialRole='owner'){
   calls.push({sql,args});
   if(sql.includes('INSERT INTO public.loyalty_rewards'))
    return {rowCount:1,rows:[{id:reward,tenant_id:tenant,title:args[1],points_cost:args[3],is_active:true}]};
+  if(sql.includes('AS available_points FROM public.loyalty_rewards')){
+   assert.match(sql,/JOIN public.customer_links l ON l.tenant_id=r.tenant_id AND l.user_id=\$1/,
+    'Reward catalog must be restricted by the authenticated customer QR link');
+   const rewards=linked?[{id:reward,tenant_id:tenant,title:'Corte de cortesía',points_cost:100,is_active:true,available_points:0}]:[];
+   return {rowCount:rewards.length,rows:rewards};
+  }
+  if(sql.includes('FROM public.customer_links l JOIN public.tenants t'))
+   return linked?{rowCount:1,rows:[{tenant_id:tenant}]}:{rowCount:0,rows:[]};
   if(sql.includes("FROM public.loyalty_rewards r JOIN public.tenants t ON t.id=r.tenant_id"))
    return {rowCount:1,rows:[{id:reward,points_cost:100}]};
   if(sql.includes('UPDATE public.loyalty_accounts SET points=points-$3'))
@@ -45,6 +53,7 @@ test('loyalty balances never fabricate the 420-point demo value',async()=>{
   const response=await app.inject({method:'GET',url:'/api/v1/me/loyalty'});
   assert.equal(response.statusCode,200,response.body);
   assert.deepEqual(response.json(),[]);
+  // The API must not expose balances of unrelated tenants, even when a points row exists.
  }finally{await app.close();}
 });
 
@@ -82,5 +91,39 @@ test('reviews cannot be submitted without a completed customer booking',async()=
   const denied=await app.inject({method:'POST',url:'/api/v1/tenants/'+tenant+'/reviews',
    payload:{appointmentId:appointment,rating:5,comment:'Buen servicio'}});
   assert.equal(denied.statusCode,403,denied.body);
+ }finally{await app.close();}
+});
+
+
+test('reward catalog only contains QR-linked tenant rewards',async()=>{
+ const linkedFixture=await setup('owner',true);
+ const unlinkedFixture=await setup('owner',false);
+ try{
+  const yes=await linkedFixture.app.inject({method:'GET',url:'/api/v1/me/rewards'});
+  assert.equal(yes.statusCode,200,yes.body);
+  assert.equal(yes.json().length,1);
+  const no=await unlinkedFixture.app.inject({method:'GET',url:'/api/v1/me/rewards'});
+  assert.equal(no.statusCode,200,no.body);
+  assert.deepEqual(no.json(),[],'An unrelated customer must see no rewards');
+  for(const url of ['/api/v1/me/loyalty','/api/v1/me/loyalty-events']){
+   const res=await unlinkedFixture.app.inject({method:'GET',url});
+   assert.equal(res.statusCode,200,res.body);
+  }
+  assert.ok(unlinkedFixture.calls.some(({sql})=>sql.includes('FROM public.loyalty_accounts a JOIN public.customer_links l')),
+   'Customer balances must be QR-affiliation-scoped');
+  assert.ok(unlinkedFixture.calls.some(({sql})=>sql.includes('FROM public.loyalty_events e JOIN public.customer_links l')),
+   'Customer point events must be QR-affiliation-scoped');
+ }finally{await linkedFixture.app.close();await unlinkedFixture.app.close();}
+});
+
+test('direct reward redemption is forbidden without QR affiliation, before any balance deduction',async()=>{
+ const {app,calls}=await setup('owner',false);
+ try{
+  const res=await app.inject({method:'POST',url:'/api/v1/tenants/'+tenant+'/redeem',
+   payload:{rewardId:reward},headers:{'idempotency-key':'reward-no-affiliation-2026'}});
+  assert.equal(res.statusCode,403,res.body);
+  assert.ok(calls.some(({sql})=>sql.includes('FROM public.customer_links l JOIN public.tenants t')));
+  assert.equal(calls.filter(({sql})=>sql.includes('UPDATE public.loyalty_accounts SET points=points-$3')).length,0);
+  assert.equal(calls.filter(({sql})=>sql.includes('INSERT INTO public.loyalty_redemptions')).length,0);
  }finally{await app.close();}
 });
