@@ -6,6 +6,7 @@ import {hasSession,signIn,registerWithEmail,linkCustomer,resolveBusinessLink,
 /** Public QR entry point: a visible authenticated opt-in, never a privileged token. */
 export const PublicJoinView:React.FC=()=>{
  const code=decodeURIComponent(location.pathname.split('/')[2]||'').trim().toUpperCase();
+ const barberId=new URLSearchParams(location.search).get('barberId')||undefined;
  const [target,setTarget]=useState<PublicBusinessLink|null>(null);
  const [error,setError]=useState('');
  const [status,setStatus]=useState('');
@@ -20,10 +21,10 @@ export const PublicJoinView:React.FC=()=>{
  const [existingSession]=useState(hasSession);
  useEffect(()=>{
    let alive=true;
-   resolveBusinessLink(code).then(data=>{if(alive)setTarget(data)})
+   resolveBusinessLink(code,barberId).then(data=>{if(alive)setTarget(data)})
      .catch(e=>{if(alive)setError(e instanceof Error?e.message:'QR no válido')});
    return()=>{alive=false};
- },[code]);
+ },[code,barberId]);
  const join=async(e:React.FormEvent)=>{
    e.preventDefault();
    if(busy||!target)return;
@@ -42,7 +43,7 @@ export const PublicJoinView:React.FC=()=>{
        }else await signIn(email.trim(),password);
      }
      if(!existingSession&&mode!=='profile'){setMode('profile');setStatus('Sesi�n iniciada. Completa tus datos para vincularte.');return;}
-     const result=await linkCustomer(code,name.trim(),phone.trim());
+     const result=await linkCustomer(code,name.trim(),phone.trim(),barberId);
      setStatus('¡Te vinculaste con '+result.name+'! Entrando a tu portal...');
      window.location.replace('/login#/clientes/inicio');
    }catch(err){setError(err instanceof Error?err.message:'No pudimos completar el registro')}
