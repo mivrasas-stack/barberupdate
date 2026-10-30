@@ -136,6 +136,16 @@ export async function registerRoutes(app,{config,db,security}) {
           if(existing.rows[0].request_hash && existing.rows[0].request_hash!==requestHash) failure(409,'Idempotency-Key reutilizada con datos diferentes');
           return {row:existing.rows[0],repeated:true};
         }
+        // Customers linked by QR may book only their affiliated tenant and,
+        // for a professional-specific QR, that one barber. Preserve the
+        // existing booking flow for accounts that have no QR affiliations.
+        const links=await tx.query('SELECT tenant_id,barber_id FROM public.customer_links WHERE user_id=$1',[req.actor.id]);
+        if(links.rowCount){
+          const linked=links.rows.find(link=>link.tenant_id===tenant);
+          if(!linked)failure(403,'Debes vincularte con esta barbería mediante su QR');
+          if(linked.barber_id&&linked.barber_id!==x.barberId)
+            failure(403,'Tu QR permite reservar solamente con el barbero vinculado');
+        }
         // Serialize slot reservation with work-hour and time-off changes.
         await tx.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[tenant+':schedule:'+x.barberId]);
         // One PostgreSQL round trip validates tenant + active barber + service,
