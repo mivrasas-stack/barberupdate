@@ -5,7 +5,12 @@ import {QrCode,Copy,Printer} from 'lucide-react';
 import {isLiveBackend,getBusinessLinkCode} from '../../services/liveBackend';
 
 export const BarberiaQRView:React.FC=()=>{
- const {currentShop,addToast}=useApp();
+ const {currentShop,state,addToast}=useApp();
+ const activeBarbers=state.barbers.filter(b=>b.businessId===currentShop?.id&&b.status==='active');
+ const [selectedBarberId,setSelectedBarberId]=useState('');
+ useEffect(()=>{
+   setSelectedBarberId(previous=>activeBarbers.some(b=>b.id===previous)?previous:activeBarbers[0]?.id||'');
+ },[currentShop?.id,state.barbers]);
  const [link,setLink]=useState('');
  const [qrImage,setQrImage]=useState('');
  const [error,setError]=useState('');
@@ -16,14 +21,15 @@ export const BarberiaQRView:React.FC=()=>{
      try{
        if(!isLiveBackend)throw Error('El QR requiere una barbería registrada en el backend real.');
        const data=await getBusinessLinkCode(currentShop.id);
-       const url=window.location.origin+'/vincular/'+encodeURIComponent(data.link_code);
+       const url=window.location.origin+'/vincular/'+encodeURIComponent(data.link_code)
+         +(selectedBarberId?'?barberId='+encodeURIComponent(selectedBarberId):'');
        const image=await QRCode.toDataURL(url,{width:360,margin:2,
          errorCorrectionLevel:'H',color:{dark:'#000000',light:'#ffffff'}});
        if(alive){setLink(url);setQrImage(image);setError('');}
      }catch(e){if(alive)setError(e instanceof Error?e.message:'No se pudo generar el QR');}
    })();
    return()=>{alive=false};
- },[currentShop?.id]);
+ },[currentShop?.id,selectedBarberId]);
  const copy=async()=>{
    if(!link)return;
    try{await navigator.clipboard.writeText(link);addToast('Enlace de vinculación copiado','success');}
@@ -39,7 +45,13 @@ export const BarberiaQRView:React.FC=()=>{
      <div className="absolute top-0 w-72 h-32 bg-[var(--gold-primary)]/10 blur-[80px] rounded-full pointer-events-none"/>
      <div className="w-14 h-14 rounded-2xl bg-[var(--gold-primary)] text-black flex items-center justify-center mb-4"><QrCode className="w-8 h-8"/></div>
      <h2 className="text-xl font-bold text-white">{currentShop?.name||'Mi negocio'}</h2>
-     <p className="text-xs text-neutral-400 mt-1 max-w-sm">Escanea para registrarte, agendar citas y seguir tus barberías o profesionales favoritos.</p>
+     <p className="text-xs text-neutral-400 mt-1 max-w-sm">Escanea para vincularte y reservar únicamente con el profesional seleccionado.</p>
+     {activeBarbers.length>0&&<label className="mt-4 text-xs text-neutral-300 w-full text-left">QR exclusivo de
+       <select value={selectedBarberId} onChange={e=>setSelectedBarberId(e.target.value)}
+         className="block mt-2 w-full rounded-xl bg-[#202020] border border-[#444] p-3 text-white">
+         {activeBarbers.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}
+       </select>
+     </label>}
      {error&&<p role="alert" className="text-red-300 text-sm mt-4">{error}</p>}
      <div className="my-6 p-6 bg-white rounded-3xl shadow-2xl border-4 border-[var(--gold-primary)] inline-block">
        {qrImage?<img src={qrImage} alt={'QR real de '+(currentShop?.name||'mi negocio')} className="w-52 h-52" data-testid="real-business-qr"/>:
