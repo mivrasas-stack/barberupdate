@@ -272,7 +272,7 @@ export async function registerBusinessRoutes(app,{db,security}) {
         'SELECT r.id,r.tenant_id,r.appointment_id,r.barber_id,r.customer_user_id,r.rating,r.comment,r.created_at,a.customer_name,a.service_id,a.starts_at FROM public.reviews r JOIN public.appointments a ON a.id=r.appointment_id AND a.tenant_id=r.tenant_id WHERE r.tenant_id=$1 ORDER BY r.created_at DESC LIMIT 200',[tenant])).rows;
     });
     api.get('/api/v1/me/loyalty',async req=>{
-      return (await db.query('SELECT tenant_id,points,visits_count,updated_at FROM public.loyalty_accounts WHERE user_id=$1 ORDER BY updated_at DESC LIMIT 200',[req.actor.id])).rows;
+      return (await db.query('SELECT a.tenant_id,a.points,a.visits_count,a.updated_at FROM public.loyalty_accounts a JOIN public.customer_links l ON l.tenant_id=a.tenant_id AND l.user_id=a.user_id JOIN public.tenants t ON t.id=a.tenant_id AND t.status='active' WHERE a.user_id=$1 ORDER BY a.updated_at DESC LIMIT 200',[req.actor.id])).rows;
     });
 
     // Customer reviews are read only from their own completed bookings.
@@ -280,11 +280,12 @@ export async function registerBusinessRoutes(app,{db,security}) {
       return (await db.query('SELECT r.* FROM public.reviews r WHERE r.customer_user_id=$1 ORDER BY r.created_at DESC LIMIT 200',[req.actor.id])).rows;
     });
     api.get('/api/v1/me/loyalty-events',async req=>{
-      return (await db.query('SELECT id,tenant_id,points_delta,description,created_at FROM public.loyalty_events WHERE user_id=$1 ORDER BY created_at DESC LIMIT 200',[req.actor.id])).rows;
+      return (await db.query('SELECT e.id,e.tenant_id,e.points_delta,e.description,e.created_at FROM public.loyalty_events e JOIN public.customer_links l ON l.tenant_id=e.tenant_id AND l.user_id=e.user_id JOIN public.tenants t ON t.id=e.tenant_id AND t.status='active' WHERE e.user_id=$1 ORDER BY e.created_at DESC LIMIT 200',[req.actor.id])).rows;
     });
     api.get('/api/v1/me/rewards',async req=>{
-      // Catalog of active rewards, with balances kept separate by tenant.
-      return (await db.query("SELECT r.id,r.tenant_id,r.title,r.description,r.points_cost,r.is_active,coalesce(a.points,0)::integer AS available_points FROM public.loyalty_rewards r JOIN public.tenants t ON t.id=r.tenant_id AND t.status='active' LEFT JOIN public.loyalty_accounts a ON a.tenant_id=r.tenant_id AND a.user_id=$1 WHERE r.is_active=true ORDER BY r.tenant_id,r.points_cost LIMIT 300",[req.actor.id])).rows;
+      // Only QR-affiliated customers may discover this tenant's rewards.
+      // Balances alone are not proof of an active customer affiliation.
+      return (await db.query("SELECT r.id,r.tenant_id,r.title,r.description,r.points_cost,r.is_active,coalesce(a.points,0)::integer AS available_points FROM public.loyalty_rewards r JOIN public.tenants t ON t.id=r.tenant_id AND t.status='active' JOIN public.customer_links l ON l.tenant_id=r.tenant_id AND l.user_id=$1 LEFT JOIN public.loyalty_accounts a ON a.tenant_id=r.tenant_id AND a.user_id=$1 WHERE r.is_active=true ORDER BY r.tenant_id,r.points_cost LIMIT 300",[req.actor.id])).rows;
     });
     api.get('/api/v1/me/redemptions',async req=>{
       return (await db.query('SELECT d.id,d.tenant_id,d.reward_id,d.points_cost,d.status,d.created_at,r.title FROM public.loyalty_redemptions d JOIN public.loyalty_rewards r ON r.id=d.reward_id AND r.tenant_id=d.tenant_id WHERE d.user_id=$1 ORDER BY d.created_at DESC LIMIT 100',[req.actor.id])).rows;
@@ -296,6 +297,10 @@ export async function registerBusinessRoutes(app,{db,security}) {
       if(!safeKey(key)) failure(400,'Idempotency-Key requerido');
       const response=await db.transaction(async tx=>{
         await tx.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[tenant+':'+req.actor.id+':redeem:'+key]);
+        // Enforce the same QR membership as reward discovery, server-side.
+        // A pre-existing points balance does not authorize an unrelated tenant.
+        const affiliation=await tx.query("SELECT 1 FROM public.customer_links l JOIN public.tenants t ON t.id=l.tenant_id AND t.status='active' WHERE l.tenant_id=$1 AND l.user_id=$2 LIMIT 1",[tenant,req.actor.id]);
+        if(!affiliation.rowCount) failure(403,'Debes vincularte con esta barbería mediante su QR para canjear recompensas');
         // Deduplicate retrying client requests to prevent double-charge.
         const past=await tx.query('SELECT d.* FROM public.loyalty_redemptions d WHERE d.tenant_id=$1 AND d.user_id=$2 AND d.idempotency_key=$3',[tenant,req.actor.id,key]);
         if(past.rowCount){
