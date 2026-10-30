@@ -31,17 +31,20 @@ function colombiaToday(){
 
 export const ClienteReservas: React.FC = () => {
   const { state, currentUser, currency, navigate, addToast } = useApp();
-  const {items:linkedBusinesses,profile:customerProfile}=useCustomerLinks(currentUser?.id);
+  const {items:linkedBusinesses,loading:linksLoading,profile:customerProfile}=useCustomerLinks(currentUser?.id);
   const linkedIds=new Set(linkedBusinesses.map(link=>link.tenant_id));
-  const shopsToShow=state.barbershops.filter(s=>s.businessKind!=='independent')
-    .sort((a,b)=>Number(linkedIds.has(b.id))-Number(linkedIds.has(a.id)));
+  // A QR affiliation is the boundary of the customer's booking portal.
+  // Keep demo mode independent from the real, authenticated linking flow.
+  const shopsToShow=isLiveBackend
+    ? state.barbershops.filter(shop=>linkedIds.has(shop.id))
+    : state.barbershops;
 
   const [step, setStep] = useState<1 | 2 | 3 | 4 | 5 | 6>(1);
 
   // Selections
-  const [selectedShop, setSelectedShop] = useState<Barbershop>(() =>
+  const [selectedShop, setSelectedShop] = useState<Barbershop | null>(() =>
     shopsToShow.find(shop=>state.services.some(service=>service.businessId===shop.id)
-      &&state.barbers.some(barber=>barber.businessId===shop.id))||shopsToShow[0]);
+      &&state.barbers.some(barber=>barber.businessId===shop.id))||shopsToShow[0]||null);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [selectedBarber, setSelectedBarber] = useState<Barber | null>(null);
   const [selectedDate, setSelectedDate] = useState(() => colombiaToday());
@@ -53,15 +56,26 @@ export const ClienteReservas: React.FC = () => {
   const [notes, setNotes] = useState('');
   const [whatsappConsent,setWhatsappConsent]=useState(false);
   useEffect(()=>{
-    if(!isLiveBackend||!linkedBusinesses.length)return;
-    const linked=linkedBusinesses.find(x=>x.business_kind!=='independent');
-    if(!linked)return;
-    const shop=shopsToShow.find(s=>s.id===linked.tenant_id);
-    if(shop)setSelectedShop(shop);
-  },[linkedBusinesses.map(x=>x.tenant_id).join(','),state.barbershops]);
+    if(!isLiveBackend||linksLoading)return;
+    const preferred=shopsToShow.find(shop=>shop.id===selectedShop?.id)
+      ||shopsToShow.find(shop=>shop.id===linkedBusinesses[0]?.tenant_id)
+      ||shopsToShow[0]||null;
+    if(preferred?.id!==selectedShop?.id){
+      setSelectedShop(preferred);
+      setSelectedService(null);
+      setSelectedBarber(null);
+      setStep(1);
+    }
+  },[linksLoading,linkedBusinesses.map(x=>x.tenant_id).join(','),state.barbershops,selectedShop?.id]);
 
-  // Only barberías comerciales: barbers are picked after choosing the service.
-  const availableBarbers=state.barbers.filter(b=>b.businessId===selectedShop?.id && b.status==='active');
+  const assignedBarberId=linkedBusinesses.find(link=>link.tenant_id===selectedShop?.id)?.barber_id;
+  const availableBarbers=state.barbers.filter(b=>b.businessId===selectedShop?.id && b.status==='active'
+    &&(!isLiveBackend||!assignedBarberId||b.id===assignedBarberId));
+  useEffect(()=>{
+    if(!isLiveBackend||!assignedBarberId)return;
+    const assigned=availableBarbers.find(b=>b.id===assignedBarberId);
+    if(assigned)setSelectedBarber(assigned);
+  },[assignedBarberId,selectedShop?.id,state.barbers]);
   const availableServices=state.services.filter(s=>s.businessId===selectedShop?.id && s.isActive);
   
 
@@ -185,7 +199,7 @@ export const ClienteReservas: React.FC = () => {
           Paso {step} de 5
         </span>
         <h1 className="text-2xl font-extrabold text-white tracking-tight">
-          {step === 1 && 'Paso 1: Elige tu Barbería'}
+          {step === 1 && 'Paso 1: Tu barbería o profesional vinculado'}
           {step === 2 && 'Paso 2: Selecciona el Servicio'}
           {step === 3 && 'Paso 3: Elige tu Barbero de Preferencia'}
           {step === 4 && 'Paso 4: Fecha & Franja Horaria'}
@@ -215,7 +229,7 @@ export const ClienteReservas: React.FC = () => {
         )}
       </div>
 
-      {/* Step 1: Choose a commercial barbershop; there is no independent-barber role. */}
+      {/* Step 1: Only QR-linked businesses and independent professionals. */}
       {step === 1 && (
         <div className="space-y-4">
           {shopsToShow.length ? shopsToShow.map(shop => {
@@ -235,7 +249,7 @@ export const ClienteReservas: React.FC = () => {
                 {isSelected && <CheckCircle2 className="w-5 h-5 text-[var(--gold-primary)]" />}
               </button>
             );
-          }) : <p className="text-neutral-400 text-sm">No hay barberías disponibles para reservar.</p>}
+          }) : <p className="text-neutral-400 text-sm">{linksLoading?'Consultando tus vinculaciones...':'No tienes barberías o profesionales vinculados. Escanea primero su código QR.'}</p>}
           <div className="flex justify-end pt-4">
             <button disabled={!selectedShop} onClick={()=>setStep(2)}
               className="px-6 py-2.5 rounded-xl bg-[var(--gold-primary)] text-black font-bold text-xs disabled:opacity-40 hover:bg-[var(--gold-hover)] flex items-center gap-1.5">

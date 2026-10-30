@@ -19,6 +19,8 @@ test('a new customer booking is automatically confirmed and idempotent without s
   query:async(sql,args=[])=>{
    queries.push({sql,args});
    if(sql.includes('pg_advisory_xact_lock'))return {rowCount:1,rows:[{}]};
+   if(sql.includes('SELECT tenant_id,barber_id FROM public.customer_links WHERE user_id='))
+    return {rowCount:1,rows:[{tenant_id:tenant,barber_id:barber}]};
    if(sql.includes('SELECT * FROM public.appointments WHERE tenant_id='))
     return {rowCount:rows.length,rows:[...rows]};
    if(sql.includes('INSERT INTO public.appointments')){
@@ -45,6 +47,11 @@ test('a new customer booking is automatically confirmed and idempotent without s
    customerName:'Cliente QR',customerPhone:'3001112233'};
   const options={method:'POST',url:'/api/v1/tenants/'+tenant+'/bookings',
    headers:{'Idempotency-Key':'auto-confirm-test-2026'},payload};
+  const crossTenant=await app.inject({...options,url:'/api/v1/tenants/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/bookings',headers:{'Idempotency-Key':'qr-block-tenant-test'}});
+  assert.equal(crossTenant.statusCode,403,'QR linked customer must not book another tenant');
+  const wrongBarber=await app.inject({...options,payload:{...payload,barberId:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'},headers:{'Idempotency-Key':'qr-block-barber-test'}});
+  assert.equal(wrongBarber.statusCode,403,'Professional QR must not book a different barber');
+  assert.equal(rows.length,0,'Rejected requests must not create bookings');
   const first=await app.inject(options);
   assert.equal(first.statusCode,201,first.body);
   assert.equal(first.json().status,'confirmed');
