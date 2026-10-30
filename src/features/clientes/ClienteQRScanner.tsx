@@ -19,24 +19,27 @@ export const ClienteQRScanner:React.FC=()=>{
  const working=useRef(false);
  useEffect(()=>{if(profile){setFullName(profile.full_name);setPhone(profile.phone)}else if(currentUser?.name)setFullName(currentUser.name)},[profile,currentUser?.name]);
  useEffect(()=>()=>{controls.current?.stop();controls.current=null},[]);
- const normalize=(value:string)=>{
+ const parseCode=(value:string)=>{
    const raw=value.trim();
    try{
      const url=new URL(raw);
-     if(url.pathname.startsWith('/vincular/'))return decodeURIComponent(url.pathname.split('/')[2]||'').toUpperCase();
+     if(url.pathname.startsWith('/vincular/'))return {
+       code:decodeURIComponent(url.pathname.split('/')[2]||'').toUpperCase(),
+       barberId:url.searchParams.get('barberId')||undefined
+     };
    }catch{}
-   return raw.toUpperCase();
+   return {code:raw.toUpperCase(),barberId:undefined};
  };
  const stop=()=>{controls.current?.stop();controls.current=null;setScanning(false)};
  const submit=async(value=manualCode)=>{
-   const code=normalize(value);
+   const {code,barberId}=parseCode(value);
    if(!isLiveBackend){addToast('Para vincular se requiere el backend real','error');return}
    if(!fullName.trim()||!phone.trim()){addToast('Completa tu nombre y teléfono para vincularte','error');return}
    if(saving||!code)return;
    setSaving(true);
    try{
-     await resolveBusinessLink(code);
-     const linked=await linkCustomer(code,fullName.trim(),phone.trim());
+     await resolveBusinessLink(code,barberId);
+     const linked=await linkCustomer(code,fullName.trim(),phone.trim(),barberId);
      setLinkedResult(linked.name);
      addToast('Vinculación guardada con '+linked.name,'success');
    }catch(e){addToast(e instanceof Error?e.message:'No se pudo vincular','error')}
@@ -55,7 +58,7 @@ export const ClienteQRScanner:React.FC=()=>{
      controls.current=await decoder.decodeFromVideoDevice(undefined,video.current,(result,_,ctrl)=>{
        if(result&&!working.current){
          working.current=true;
-         const value=normalize(result.getText());
+         const value=result.getText().trim();
          setManualCode(value);ctrl.stop();stop();
          void submit(value);
        }
