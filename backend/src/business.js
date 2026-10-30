@@ -272,7 +272,7 @@ export async function registerBusinessRoutes(app,{db,security}) {
         'SELECT r.id,r.tenant_id,r.appointment_id,r.barber_id,r.customer_user_id,r.rating,r.comment,r.created_at,a.customer_name,a.service_id,a.starts_at FROM public.reviews r JOIN public.appointments a ON a.id=r.appointment_id AND a.tenant_id=r.tenant_id WHERE r.tenant_id=$1 ORDER BY r.created_at DESC LIMIT 200',[tenant])).rows;
     });
     api.get('/api/v1/me/loyalty',async req=>{
-      return (await db.query('SELECT a.tenant_id,a.points,a.visits_count,a.updated_at FROM public.loyalty_accounts a JOIN public.customer_links l ON l.tenant_id=a.tenant_id AND l.user_id=a.user_id JOIN public.tenants t ON t.id=a.tenant_id AND t.status='active' WHERE a.user_id=$1 ORDER BY a.updated_at DESC LIMIT 200',[req.actor.id])).rows;
+      return (await db.query("SELECT a.tenant_id,a.points,a.visits_count,a.updated_at FROM public.loyalty_accounts a JOIN public.customer_links l ON l.tenant_id=a.tenant_id AND l.user_id=a.user_id JOIN public.tenants t ON t.id=a.tenant_id AND t.status='active' WHERE a.user_id=$1 ORDER BY a.updated_at DESC LIMIT 200",[req.actor.id])).rows;
     });
 
     // Customer reviews are read only from their own completed bookings.
@@ -280,7 +280,7 @@ export async function registerBusinessRoutes(app,{db,security}) {
       return (await db.query('SELECT r.* FROM public.reviews r WHERE r.customer_user_id=$1 ORDER BY r.created_at DESC LIMIT 200',[req.actor.id])).rows;
     });
     api.get('/api/v1/me/loyalty-events',async req=>{
-      return (await db.query('SELECT e.id,e.tenant_id,e.points_delta,e.description,e.created_at FROM public.loyalty_events e JOIN public.customer_links l ON l.tenant_id=e.tenant_id AND l.user_id=e.user_id JOIN public.tenants t ON t.id=e.tenant_id AND t.status='active' WHERE e.user_id=$1 ORDER BY e.created_at DESC LIMIT 200',[req.actor.id])).rows;
+      return (await db.query("SELECT e.id,e.tenant_id,e.points_delta,e.description,e.created_at FROM public.loyalty_events e JOIN public.customer_links l ON l.tenant_id=e.tenant_id AND l.user_id=e.user_id JOIN public.tenants t ON t.id=e.tenant_id AND t.status='active' WHERE e.user_id=$1 ORDER BY e.created_at DESC LIMIT 200",[req.actor.id])).rows;
     });
     api.get('/api/v1/me/rewards',async req=>{
       // Only QR-affiliated customers may discover this tenant's rewards.
