@@ -617,16 +617,17 @@ export type PublicBusinessLink={
 };
 export const getBusinessLinkCode=(tenant:string)=>
  backendRequest<{tenant_id:string;link_code:string;name:string}>('/tenants/'+encodeURIComponent(tenant)+'/link-code');
-export async function resolveBusinessLink(code:string):Promise<PublicBusinessLink>{
- const response=await fetch(apiOrigin+'/public/links/'+encodeURIComponent(code.trim()),{cache:'no-store'});
+export async function resolveBusinessLink(code:string,barberId?:string):Promise<PublicBusinessLink>{
+ const barberQuery=barberId?'?barberId='+encodeURIComponent(barberId):'';
+ const response=await fetch(apiOrigin+'/public/links/'+encodeURIComponent(code.trim())+barberQuery,{cache:'no-store'});
  const data=await response.json().catch(()=>null);
  if(!response.ok)throw Error(data?.error||'El QR no corresponde a un negocio activo');
  return data as PublicBusinessLink;
 }
 export const listCustomerLinks=()=>backendRequest<{items:CustomerLink[];profile:{full_name:string;phone:string}|null}>('/me/links');
-export async function linkCustomer(code:string,fullName:string,phone:string){
+export async function linkCustomer(code:string,fullName:string,phone:string,barberId?:string){
  const result=await backendRequest<{tenantId:string;name:string;kind:string}>('/me/links',{method:'POST',
- body:JSON.stringify({code,fullName,phone})});
+ body:JSON.stringify({code,fullName,phone,...(barberId?{barberId}:{})})});
  window.dispatchEvent(new Event('barberos-links-updated'));
  return result;
 }
