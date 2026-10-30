@@ -304,6 +304,7 @@ export interface LoyaltyAccount {
     id: string;
     date: string;
     concept: string;
+    tenantId?: string; // source barber shop for strict QR affiliation filtering
     points: number; // + or -
   }[];
 }
