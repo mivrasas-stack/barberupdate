@@ -8,7 +8,8 @@ const uuid=z.uuid();
 const profile=z.object({
   code,
   fullName:z.string().trim().min(2).max(120),
-  phone:z.string().trim().min(7).max(32).regex(/^[+0-9 ()-]+$/)
+  phone:z.string().trim().min(7).max(32).regex(/^[+0-9 ()-]+$/),
+  barberId:uuid.optional()
 }).strict();
 const linkedQuery=`
  SELECT t.id AS tenant_id,t.slug,t.name,t.business_kind,
@@ -27,18 +28,22 @@ export async function registerCustomerLinkRoutes(app,{db,security}){
    });
    publicRoutes.get('/api/v1/public/links/:code',async req=>{
      const key=parseOrThrow(code,req.params.code);
+     const barberId=req.query?.barberId?parseOrThrow(uuid,req.query.barberId):null;
      const rows=await db.query(`
        SELECT t.id AS tenant_id,t.slug,t.name,t.business_kind,t.link_code,
          b.id AS barber_id,b.name AS barber_name,b.slug AS barber_slug
        FROM public.tenants t
        LEFT JOIN LATERAL (
          SELECT id,name,slug FROM public.barbers
-         WHERE tenant_id=t.id AND status='active' AND user_id=t.owner_user_id
+         WHERE tenant_id=t.id AND status='active'
+           AND (($2::uuid IS NOT NULL AND id=$2::uuid)
+              OR ($2::uuid IS NULL AND t.business_kind='independent' AND user_id=t.owner_user_id))
          ORDER BY created_at LIMIT 1
-       ) b ON t.business_kind='independent'
+       ) b ON true
        WHERE t.link_code=$1 AND t.status='active'
-     `,[key]);
+     `,[key,barberId]);
      if(!rows.rowCount)failure(404,'QR no registrado o negocio inactivo');
+     if(barberId&&!rows.rows[0].barber_id)failure(404,'Barbero no disponible para este QR');
      return rows.rows[0];
    });
  });
@@ -160,13 +165,16 @@ export async function registerCustomerLinkRoutes(app,{db,security}){
          FROM public.tenants t
          LEFT JOIN LATERAL(
            SELECT id FROM public.barbers
-           WHERE tenant_id=t.id AND user_id=t.owner_user_id AND status='active'
+           WHERE tenant_id=t.id AND status='active'
+             AND (($2::uuid IS NOT NULL AND id=$2::uuid)
+                OR ($2::uuid IS NULL AND t.business_kind='independent' AND user_id=t.owner_user_id))
            ORDER BY created_at LIMIT 1
-         ) b ON t.business_kind='independent'
+         ) b ON true
          WHERE t.link_code=$1 AND t.status='active'
          FOR SHARE OF t
-       `,[input.code]);
+       `,[input.code,input.barberId||null]);
        if(!target.rowCount)failure(404,'El código no corresponde a un negocio activo');
+       if(input.barberId&&!target.rows[0].barber_id)failure(404,'Barbero no disponible para este QR');
        if(target.rows[0].business_kind==='independent'&&!target.rows[0].barber_id)
          failure(409,'Este profesional todavía no tiene su perfil activo');
        const membership=await tx.query(
