@@ -88,6 +88,32 @@ export async function registerWhatsAppRoutes(app,{config,db,security}){
         const row=await tx.query('INSERT INTO public.whatsapp_tenant_settings(tenant_id,enabled,language_code,reminder_hours,templates) VALUES($1,$2,$3,$4,$5::jsonb) ON CONFLICT(tenant_id) DO UPDATE SET enabled=EXCLUDED.enabled,language_code=EXCLUDED.language_code,reminder_hours=EXCLUDED.reminder_hours,templates=EXCLUDED.templates,updated_at=now() RETURNING enabled,language_code,reminder_hours,templates',
           [tenant,x.enabled,x.languageCode,x.reminderHours,JSON.stringify(x.templates)]);
         if(!x.enabled)await tx.query("UPDATE public.whatsapp_messages SET status='suppressed',failure_code='tenant_disabled',updated_at=now() WHERE tenant_id=$1 AND status='queued'",[tenant]);
+        if(x.enabled){
+          // Customers may already have opted in before this shop activated its
+          // approved templates. Queue only FUTURE bookings with matching active
+          // consent; the unique appointment/event index prevents duplicates.
+          if(x.templates.created?.name)await tx.query(`
+            INSERT INTO public.whatsapp_messages(tenant_id,appointment_id,user_id,phone_e164,event_kind,event_version,scheduled_at)
+            SELECT a.tenant_id,a.id,a.customer_user_id,c.phone_e164,'created',0,now()
+            FROM public.appointments a
+            JOIN public.whatsapp_consents c ON c.tenant_id=a.tenant_id
+              AND c.user_id=a.customer_user_id AND c.revoked_at IS NULL
+              AND c.phone_e164=regexp_replace(a.customer_phone,'[[:space:]().-]','','g')
+            WHERE a.tenant_id=$1 AND a.status IN ('pending','confirmed') AND a.starts_at>now()
+            ON CONFLICT(tenant_id,appointment_id,event_kind,event_version) DO NOTHING`,[tenant]);
+          if(x.templates.reminder?.name)await tx.query(`
+            INSERT INTO public.whatsapp_messages(tenant_id,appointment_id,user_id,phone_e164,event_kind,event_version,scheduled_at)
+            SELECT a.tenant_id,a.id,a.customer_user_id,c.phone_e164,'reminder',
+              a.reschedule_count,a.starts_at-make_interval(hours=>$2)
+            FROM public.appointments a
+            JOIN public.whatsapp_consents c ON c.tenant_id=a.tenant_id
+              AND c.user_id=a.customer_user_id AND c.revoked_at IS NULL
+              AND c.phone_e164=regexp_replace(a.customer_phone,'[[:space:]().-]','','g')
+            WHERE a.tenant_id=$1 AND a.status IN ('pending','confirmed')
+              AND a.starts_at>now()+make_interval(hours=>$2)
+            ON CONFLICT(tenant_id,appointment_id,event_kind,event_version) DO NOTHING`,
+            [tenant,x.reminderHours]);
+        }
         return row.rows[0];
       });
     });
