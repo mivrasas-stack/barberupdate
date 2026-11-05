@@ -13,6 +13,21 @@ export function normalizeWhatsAppPhone(phone){
   return number.replace(/^\+/,'');
 }
 
+/**
+ * Customer bookings accept locally entered Colombian mobile numbers and
+ * normalize them to +57 for Meta. Never invent or truncate an 11-digit number.
+ */
+export function normalizeBookingPhone(phone){
+  if(typeof phone!=='string')throw new TypeError('Número de contacto inválido');
+  const compact=phone.trim().replace(/[\s().-]/g,'');
+  if(/^3[0-9]{9}$/.test(compact))return '+57'+compact;
+  if(/^\+?573[0-9]{9}$/.test(compact))return '+'+compact.replace(/^\+/,'');
+  if(/^\+?57/.test(compact)||/^3/.test(compact))
+    throw new TypeError('El celular colombiano debe tener exactamente 10 dígitos, empezando por 3');
+  if(/^\+[1-9][0-9]{7,14}$/.test(compact))return '+'+normalizeWhatsAppPhone(compact);
+  throw new TypeError('Revisa el celular de tu perfil: debe tener 10 dígitos');
+}
+
 export function validateTemplateName(name){
   if(typeof name!=='string'||!namePattern.test(name))throw new TypeError('Invalid approved template name');
   return name;

@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { failure, parseOrThrow, uuid } from './security.js';
 import { createProfessionalProfile } from './platform-admin.js';
 import {checkBusinessSlot} from './business-hours.js';
-import {normalizeWhatsAppPhone} from './whatsapp-cloud.js';
+import {normalizeBookingPhone} from './whatsapp-cloud.js';
 
 const id = z.uuid();
 const word = (max=160) => z.string().trim().min(1).max(max);
@@ -130,7 +130,14 @@ export async function registerRoutes(app,{config,db,security}) {
       if(typeof key!=='string'||!/^[a-zA-Z0-9_-]{12,100}$/.test(key)) failure(400,'Idempotency-Key requerido (12-100 caracteres)');
       const startsAt=new Date(x.startsAt).toISOString();
       endOfBooking(startsAt,30);
-      const requestHash=createHash('sha256').update(JSON.stringify([x.barberId,x.serviceId,startsAt,x.customerName,x.customerPhone,x.notes,x.whatsappOptIn??null])).digest('hex');
+      // Validate before opening the booking transaction. The same canonical
+      // number is used by the appointment trigger, consent and idempotency hash.
+      let contactPhone=x.customerPhone;
+      if(x.whatsappOptIn===true){
+        try{contactPhone=normalizeBookingPhone(x.customerPhone);}
+        catch(err){failure(400,err.message);}
+      }
+      const requestHash=createHash('sha256').update(JSON.stringify([x.barberId,x.serviceId,startsAt,x.customerName,contactPhone,x.notes,x.whatsappOptIn??null])).digest('hex');
       const booking=await db.transaction(async tx=>{
         await tx.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[tenant+':'+req.actor.id+':booking:'+key]);
         const existing=await tx.query('SELECT * FROM public.appointments WHERE tenant_id=$1 AND created_by=$2 AND idempotency_key=$3',[tenant,req.actor.id,key]);
@@ -161,28 +168,17 @@ export async function registerRoutes(app,{config,db,security}) {
         // before the appointment INSERT so the DB trigger queues the notice
         // atomically, after all authorization and availability checks.
         if(x.whatsappOptIn===true){
-          if(!x.customerPhone.startsWith('+'))
-            failure(400,'Para avisos por WhatsApp escribe el teléfono con indicativo internacional');
-          let e164;
-          try{e164='+'+normalizeWhatsAppPhone(x.customerPhone);}
-          catch{failure(400,'Número de WhatsApp inválido');}
           await tx.query(
             'INSERT INTO public.whatsapp_consents(tenant_id,user_id,phone_e164) VALUES($1,$2,$3) ON CONFLICT(tenant_id,user_id,phone_e164) DO UPDATE SET consented_at=now(),revoked_at=NULL',
-            [tenant,req.actor.id,e164]);
+            [tenant,req.actor.id,contactPhone]);
         }else if(x.whatsappOptIn===false){
-          // The clearly labelled "Reservar sin WhatsApp" action also honours
-          // an existing opt-out, including old 10-digit Colombian phone records.
-          const digits=x.customerPhone.trim().replace(/[\s().-]/g,'');
-          const candidate=/^3\d{9}$/.test(digits)?'+57'+digits:
-            /^57[1-9]\d{9}$/.test(digits)?'+'+digits:
-            digits.startsWith('+')?digits:null;
-          if(candidate){
-            let e164=null;
-            try{e164='+'+normalizeWhatsAppPhone(candidate);}catch{}
-            if(e164)await tx.query(
-              'UPDATE public.whatsapp_consents SET revoked_at=COALESCE(revoked_at,now()) WHERE tenant_id=$1 AND user_id=$2 AND phone_e164=$3',
-              [tenant,req.actor.id,e164]);
-          }
+          // Explicit no-WhatsApp choice revokes any matching prior opt-in.
+          // Invalid optional phone text can still be used for a non-WhatsApp booking.
+          let e164=null;
+          try{e164=normalizeBookingPhone(x.customerPhone);}catch{}
+          if(e164)await tx.query(
+            'UPDATE public.whatsapp_consents SET revoked_at=COALESCE(revoked_at,now()) WHERE tenant_id=$1 AND user_id=$2 AND phone_e164=$3',
+            [tenant,req.actor.id,e164]);
         }
         // The following INSERT still checks active barber, service and price,
         // computes authoritative duration/price and inserts an ALREADY CONFIRMED reservation.
@@ -191,7 +187,7 @@ export async function registerRoutes(app,{config,db,security}) {
         // The database exclusion constraint and schedule trigger remain authoritative.
         const inserted=await tx.query(
           "INSERT INTO public.appointments(tenant_id,barber_id,service_id,customer_user_id,customer_name,customer_phone,created_by,starts_at,ends_at,price_minor,notes,idempotency_key,request_hash,status) SELECT $1,b.id,s.id,$4,$5,$6,$4,$7::timestamptz,$7::timestamptz + s.duration_minutes * interval '1 minute',s.price_minor,$8,$9,$10,'confirmed' FROM public.services s JOIN public.tenants t ON t.id=s.tenant_id AND t.status='active' JOIN public.barbers b ON b.tenant_id=s.tenant_id AND b.id=$2 AND b.status='active' WHERE s.tenant_id=$1 AND s.id=$3 AND s.is_active=true RETURNING *",
-          [tenant,x.barberId,x.serviceId,req.actor.id,x.customerName,x.customerPhone,startsAt,x.notes,key,requestHash]);
+          [tenant,x.barberId,x.serviceId,req.actor.id,x.customerName,contactPhone,startsAt,x.notes,key,requestHash]);
         if(!inserted.rowCount) failure(404,'Servicio o barbero no disponible');
         return {row:inserted.rows[0],repeated:false};
       });

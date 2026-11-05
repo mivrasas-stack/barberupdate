@@ -64,13 +64,15 @@ export const ClienteReservas: React.FC = () => {
   });
   const [selectedTime, setSelectedTime] = useState('');
   const [notes, setNotes] = useState('');
-  const [bookingPhone,setBookingPhone]=useState('');
+  // Use the phone already registered through QR. Only show an editor if
+  // the customer needs to correct it; no country code typing is required.
+  const [phoneOverride,setPhoneOverride]=useState<string|null>(null);
+  const profilePhone=(customerProfile?.phone||currentUser?.phone||'').trim();
+  const contactPhone=phoneOverride??profilePhone;
+  const validWhatsAppPhone=normalizeBookingWhatsAppPhone(contactPhone);
   const [submitting,setSubmitting]=useState(false);
   const [whatsappNotice,setWhatsappNotice]=useState('');
   const [confirmedBooking,setConfirmedBooking]=useState<ConfirmedBooking|null>(null);
-  useEffect(()=>{
-    if(!bookingPhone.trim())setBookingPhone(customerProfile?.phone||currentUser?.phone||'');
-  },[customerProfile?.phone,currentUser?.phone]);
   useEffect(()=>{
     if(!isLiveBackend||linksLoading)return;
     const preferred=shopsToShow.find(shop=>shop.id===selectedShop?.id)
@@ -163,11 +165,15 @@ export const ClienteReservas: React.FC = () => {
     if(isLiveBackend){
       const tenantId=selectedShop?.id;
       if(!tenantId){addToast('Selecciona un negocio o profesional disponible.','error');return;}
-      const rawPhone=bookingPhone.trim();
-      if(!rawPhone){addToast('Ingresa tu teléfono de contacto para confirmar la cita.','error');return;}
-      const e164=normalizeBookingWhatsAppPhone(rawPhone);
-      if(notifyWhatsApp&&!e164){
-        addToast('Escribe un celular válido con indicativo; por ejemplo, 3001234567 o +573001234567.','error');
+      const rawPhone=contactPhone.trim();
+      if(!rawPhone){
+        setPhoneOverride('');
+        addToast('Registra tu celular para confirmar la cita.','error');
+        return;
+      }
+      if(notifyWhatsApp&&!validWhatsAppPhone){
+        setPhoneOverride(rawPhone);
+        addToast('Revisa tu celular: en Colombia son 10 dígitos y empieza por 3. No escribas +57.','error');
         return;
       }
       setWhatsappNotice('');
@@ -176,13 +182,13 @@ export const ClienteReservas: React.FC = () => {
         await addBooking(tenantId,{barberId:selectedBarber.id,
           serviceId:selectedService.id,date:selectedDate,startTime:selectedTime,
           customerName:customerProfile?.full_name||currentUser?.name||currentUser?.email||'Cliente',
-          customerPhone:notifyWhatsApp?e164!:rawPhone,
+          customerPhone:rawPhone,
           notes,whatsappOptIn:notifyWhatsApp});
         // Refreshing the agenda invalidates the old availability slots. Preserve
         // what was actually booked before that refresh clears selectedTime.
         setConfirmedBooking(details);
         setWhatsappNotice(notifyWhatsApp
-          ? 'Autorizaste los avisos de esta cita por WhatsApp. Tu reserva está confirmada, aunque la entrega del mensaje depende de Meta.'
+          ? 'Reserva confirmada. Solicitamos el aviso por WhatsApp al celular de tu perfil; recibirlo depende de la entrega de Meta.'
           : 'Tu reserva quedó confirmada sin avisos por WhatsApp.');
         try{await refreshLiveData();}
         catch{addToast('Tu cita está guardada, pero no se pudo actualizar el panel. Recárgalo para verla.','info');}
@@ -539,9 +545,9 @@ export const ClienteReservas: React.FC = () => {
               <span>Servicio:</span>
               <strong className="text-white">{selectedService?.name}</strong>
             </div>
-            <div className="flex justify-between text-neutral-400">
-              <span>Fecha & Hora:</span>
-              <strong className="text-white font-mono">{selectedDate} a las {formatTime(selectedTime)}</strong>
+            <div className="flex flex-col gap-1 text-neutral-400 sm:flex-row sm:justify-between">
+              <span>Fecha y hora:</span>
+              <strong className="text-white font-mono text-sm sm:text-right">{dayLabel} · {formatTime(selectedTime)}</strong>
             </div>
             <div className="flex justify-between text-neutral-400">
               <span>Duración Estimada:</span>
@@ -555,33 +561,48 @@ export const ClienteReservas: React.FC = () => {
             </div>
           </div>
 
-          {isLiveBackend&&<div className="space-y-3">
-            <label className="block text-xs text-neutral-200">Tu teléfono de contacto
-              <input type="tel" inputMode="tel" autoComplete="tel" value={bookingPhone}
-                onChange={e=>setBookingPhone(e.target.value)}
-                placeholder="3001234567 o +573001234567"
-                className="mt-2 block w-full rounded-xl border border-neutral-600 bg-[#202024] px-3 py-3 text-white"/>
-            </label>
+          {isLiveBackend&&<div className="space-y-2 rounded-xl border border-neutral-700/70 bg-[#181818] p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+              <span className="text-neutral-400">Celular registrado en tu perfil</span>
+              <div className="flex flex-wrap items-center gap-3">
+                <strong className="text-white">{contactPhone||'Sin registrar'}</strong>
+                {phoneOverride===null&&validWhatsAppPhone&&<button type="button"
+                  onClick={()=>setPhoneOverride(contactPhone)}
+                  className="text-[var(--gold-primary)] underline underline-offset-2">Corregir</button>}
+              </div>
+            </div>
+            {(phoneOverride!==null||!validWhatsAppPhone)&&<>
+              <label className="block text-xs text-neutral-300">Revisa tu celular (10 dígitos, sin +57)
+                <input type="tel" inputMode="numeric" autoComplete="tel" value={contactPhone}
+                  onChange={e=>setPhoneOverride(e.target.value)} placeholder="3001234567"
+                  className="mt-2 block w-full rounded-lg border border-neutral-600 bg-[#202024] px-3 py-3 text-white"/>
+              </label>
+              {!validWhatsAppPhone&&<p role="alert" className="text-[11px] text-amber-300">
+                {contactPhone.replace(/\D/g,'').length===11
+                  ? 'Ese número tiene 11 dígitos. Comprueba el dígito de más; no lo quitaremos automáticamente.'
+                  : 'En Colombia el celular tiene 10 dígitos y empieza por 3. No necesitas escribir +57.'}
+              </p>}
+            </>}
             <p className="text-[11px] leading-relaxed text-neutral-400">
-              Al pulsar «Confirmar y recibir WhatsApp», autorizas a {selectedShop?.name||'la barbería'}
-              a enviarte la confirmación, recordatorios y cambios de esta cita al número indicado.
-              Puedes dejar de recibir estos avisos cuando quieras. No incluye publicidad.
+              Al confirmar autorizas a {selectedShop?.name||'la barbería'} a enviarte por WhatsApp
+              la confirmación, recordatorios y cambios de esta cita. Sin publicidad.
+              Puedes dejar de recibirlos cuando quieras.
             </p>
           </div>}
-          <div className="flex justify-between pt-4 border-t border-neutral-800">
-            <button onClick={() => setStep(4)} className="px-4 py-2 text-neutral-400 text-xs hover:text-white flex items-center gap-1">
+          <div className="flex flex-col gap-3 border-t border-neutral-800 pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <button onClick={() => setStep(4)} className="px-2 py-2 text-neutral-400 text-xs hover:text-white flex items-center gap-1">
               <ChevronLeft className="w-4 h-4" />
               <span>Modificar Fecha</span>
             </button>
-            <div className="flex flex-col items-end gap-2">
+            <div className="flex flex-col items-stretch gap-2 pb-8 sm:items-end sm:pb-0">
               <button type="button" disabled={submitting} onClick={()=>void handleConfirmReservation(true)}
-                className="px-6 py-2.5 rounded-xl bg-emerald-500 text-black font-extrabold text-xs hover:bg-emerald-400 disabled:opacity-50 flex items-center gap-1.5 shadow-lg shadow-emerald-500/10">
+                className="min-h-12 justify-center px-4 py-3 rounded-xl bg-emerald-500 text-black font-extrabold text-xs hover:bg-emerald-400 disabled:opacity-50 flex items-center gap-1.5 shadow-lg shadow-emerald-500/10">
                 <span>{submitting?'Confirmando...':isLiveBackend?'Confirmar y recibir WhatsApp':'Confirmar mi reserva'}</span>
                 <CheckCircle2 className="w-4 h-4"/>
               </button>
               {isLiveBackend&&<button type="button" disabled={submitting}
                 onClick={()=>void handleConfirmReservation(false)}
-                className="text-xs text-neutral-300 underline underline-offset-2 hover:text-white disabled:opacity-50">
+                className="px-3 py-2 text-center text-xs text-neutral-300 underline underline-offset-2 hover:text-white disabled:opacity-50">
                 Reservar sin WhatsApp
               </button>}
             </div>

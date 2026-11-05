@@ -50,7 +50,7 @@ test('a new customer booking is automatically confirmed and idempotent without s
  try{
   const payload={barberId:barber,serviceId:service,
    startsAt:new Date(Date.now()+60*60*1000).toISOString(),
-   customerName:'Cliente QR',customerPhone:'+573001112233',whatsappOptIn:true};
+   customerName:'Cliente QR',customerPhone:'3001112233',whatsappOptIn:true};
   const options={method:'POST',url:'/api/v1/tenants/'+tenant+'/bookings',
    headers:{'Idempotency-Key':'auto-confirm-test-2026'},payload};
   const crossTenant=await app.inject({...options,url:'/api/v1/tenants/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/bookings',headers:{'Idempotency-Key':'qr-block-tenant-test'}});
@@ -60,8 +60,11 @@ test('a new customer booking is automatically confirmed and idempotent without s
   assert.equal(rows.length,0,'Rejected requests must not create bookings');
   assert.equal(queries.filter(q=>q.sql.includes('INSERT INTO public.whatsapp_consents')).length,0,
     'Cross-tenant and cross-barber requests cannot authorize WhatsApp');
-  const invalid=await app.inject({...options,payload:{...payload,customerPhone:'3001112233'},headers:{'Idempotency-Key':'whatsapp-phone-local-test'}});
-  assert.equal(invalid.statusCode,400,'Explicit WhatsApp opt-in requires an international phone');
+  const invalid=await app.inject({...options,payload:{...payload,customerPhone:'30011122339'},headers:{'Idempotency-Key':'whatsapp-phone-local-test'}});
+  assert.equal(invalid.statusCode,400,'A Colombian number with 11 digits must be rejected instead of adding +57');
+  assert.match(invalid.json().error,/10 dígitos/i);
+  const wrongInternational=await app.inject({...options,payload:{...payload,customerPhone:'+5730011122339'},headers:{'Idempotency-Key':'invalid-colombian-prefix-test'}});
+  assert.equal(wrongInternational.statusCode,400,'An invalid +57 number must not reach Meta');
   const first=await app.inject(options);
   assert.equal(first.statusCode,201,first.body);
   assert.equal(first.json().status,'confirmed');
@@ -70,7 +73,8 @@ test('a new customer booking is automatically confirmed and idempotent without s
   const appointmentIndex=queries.findIndex(q=>q.sql.includes('INSERT INTO public.appointments'));
   assert.ok(consentIndex>=0&&consentIndex<appointmentIndex,'Opt-in must be persisted before the appointment trigger queues messages');
   assert.deepEqual(queries[consentIndex].args,[tenant,customer,'+573001112233']);
-  const replay=await app.inject(options);
+  assert.equal(queries[appointmentIndex].args[5],'+573001112233','The booking and consent must share the exact E.164 phone');
+  const replay=await app.inject({...options,payload:{...payload,customerPhone:'+573001112233'}});
   assert.equal(replay.statusCode,200,replay.body);
   assert.equal(replay.json().status,'confirmed');
   assert.equal(rows.length,1,'Retry must not create or approve a second appointment');

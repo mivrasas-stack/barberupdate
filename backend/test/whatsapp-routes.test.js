@@ -142,3 +142,26 @@ test('owners cannot manually disable or overwrite the centrally approved templat
   assert.equal(calls.filter(x=>x.sql.includes('INSERT INTO public.whatsapp_messages')).length,0);
  }finally{await app.close();}
 });
+
+test('verified Meta failed receipt persists numeric delivery error without sensitive details',async()=>{
+ const {app,calls}=await fixture({webhookEnabled:true});
+ try{
+  const payload=JSON.stringify({object:'whatsapp_business_account',entry:[{changes:[{
+   field:'messages',value:{metadata:{phone_number_id:'12345678901'},statuses:[{
+    id:'wamid.failed.code.test',status:'failed',errors:[{
+     code:131026,title:'Message undeliverable',message:'Do not store personal message details'
+    }]
+   }]}
+  }]}]});
+  const signature='sha256='+createHmac('sha256','app-secret').update(Buffer.from(payload)).digest('hex');
+  const r=await app.inject({method:'POST',url:'/api/v1/whatsapp/webhook',headers:{
+   'content-type':'application/json','x-hub-signature-256':signature
+  },payload});
+  assert.equal(r.statusCode,200,r.body);
+  const update=calls.find(c=>c.sql.includes('UPDATE public.whatsapp_messages')&&c.args?.[0]==='wamid.failed.code.test');
+  assert.ok(update);
+  assert.equal(update.args[1],'failed');
+  assert.equal(update.args[2],'meta_131026');
+  assert.equal(JSON.stringify(update).includes('Do not store personal message details'),false);
+ }finally{await app.close();}
+});

@@ -1,4 +1,4 @@
-import {createTemplateMessage,isWhatsAppDeliveryAllowed,normalizeWhatsAppPhone,sendWhatsAppTemplate,validateTemplateName} from './whatsapp-cloud.js';
+import {createTemplateMessage,isWhatsAppDeliveryAllowed,normalizeWhatsAppPhone,normalizeBookingPhone,sendWhatsAppTemplate,validateTemplateName} from './whatsapp-cloud.js';
 
 const validStatuses=['pending','confirmed'];
 const paramsAllowed=new Set(['customer_name','business_name','barber_name','service_name','date','time','cancellation_reason']);
@@ -53,6 +53,15 @@ export async function processWhatsAppJobs({db,config,fetcher=fetch,maxBatch=10})
     if(!job)break;
     attempted++;
     try{
+      // Legacy appointments may contain an 11-digit Colombian mobile with +57
+      // attached. A Meta HTTP 200 only means accepted; those messages later fail.
+      // Do not retry or send a reminder to an invalid recipient.
+      let validRecipient=false;
+      try{validRecipient=normalizeBookingPhone(job.phone_e164)===job.phone_e164;}catch{}
+      if(!validRecipient){
+        await setStatus(db,job.id,'suppressed','invalid_recipient');
+        continue;
+      }
       const found=await db.query(
         "SELECT a.customer_name,a.customer_phone,a.starts_at,a.status,a.reschedule_count,a.cancellation_reason,t.name AS business_name,t.time_zone,s.name AS service_name,b.name AS barber_name,c.enabled,c.language_code,c.templates,op.consented_at,op.revoked_at FROM public.whatsapp_messages m JOIN public.appointments a ON a.id=m.appointment_id AND a.tenant_id=m.tenant_id JOIN public.tenants t ON t.id=m.tenant_id AND t.status='active' JOIN public.services s ON s.id=a.service_id AND s.tenant_id=a.tenant_id JOIN public.barbers b ON b.id=a.barber_id AND b.tenant_id=a.tenant_id LEFT JOIN public.whatsapp_tenant_settings c ON c.tenant_id=m.tenant_id LEFT JOIN public.whatsapp_consents op ON op.tenant_id=m.tenant_id AND op.user_id=m.user_id AND op.phone_e164=m.phone_e164 WHERE m.id=$1",
         [job.id]);

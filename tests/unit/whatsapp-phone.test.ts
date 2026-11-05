@@ -9,5 +9,9 @@ test('Colombian mobile numbers become the same E.164 value in booking and consen
   assert.equal(normalizeBookingWhatsAppPhone('+34600111222'),'+34600111222');
   assert.equal(normalizeBookingWhatsAppPhone('600111222'),null);
   assert.equal(normalizeBookingWhatsAppPhone('300123456'),null);
+  assert.equal(normalizeBookingWhatsAppPhone('31831018597'),null);
+  assert.equal(normalizeBookingWhatsAppPhone('+5731831018597'),null);
+  assert.equal(normalizeBookingWhatsAppPhone('5731831018597'),null);
+  assert.equal(normalizeBookingWhatsAppPhone('3183101859'),'+573183101859');
   assert.equal(normalizeBookingWhatsAppPhone(''),null);
 });

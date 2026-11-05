@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHmac} from 'node:crypto';
-import {createTemplateMessage,isWhatsAppDeliveryAllowed,normalizeWhatsAppPhone,sendWhatsAppTemplate,verifyWhatsAppSignature} from '../src/whatsapp-cloud.js';
+import {createTemplateMessage,isWhatsAppDeliveryAllowed,normalizeWhatsAppPhone,normalizeBookingPhone,sendWhatsAppTemplate,verifyWhatsAppSignature} from '../src/whatsapp-cloud.js';
 
 test('only valid international phone numbers and template components are accepted',()=>{
   assert.equal(normalizeWhatsAppPhone('+57 300 123 4567'),'573001234567');
@@ -99,4 +99,14 @@ test('no opt-in, revoked opt-in or disabled business can send',()=>{
   assert.equal(isWhatsAppDeliveryAllowed(allowed),true);
   for(const edit of [{tenantEnabled:false},{consentAt:null},{revokedAt:new Date().toISOString()},{templateName:''},{appointmentStatus:'cancelled'}])
     assert.equal(isWhatsAppDeliveryAllowed({...allowed,...edit}),false);
+});
+
+test('WhatsApp booking uses profile mobile without +57 and never guesses an extra digit',()=>{
+ assert.equal(normalizeBookingPhone('3183101859'),'+573183101859');
+ assert.equal(normalizeBookingPhone('+57 318 310 1859'),'+573183101859');
+ assert.equal(normalizeBookingPhone('573183101859'),'+573183101859');
+ assert.equal(normalizeBookingPhone('+34600111222'),'+34600111222');
+ assert.throws(()=>normalizeBookingPhone('31831018597'),/10 dígitos/);
+ assert.throws(()=>normalizeBookingPhone('+5731831018597'),/10 dígitos/);
+ assert.throws(()=>normalizeBookingPhone('5731831018597'),/10 dígitos/);
 });
