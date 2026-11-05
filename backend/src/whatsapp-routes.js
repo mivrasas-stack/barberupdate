@@ -5,16 +5,6 @@ import {normalizeWhatsAppPhone,verifyWhatsAppSignature} from './whatsapp-cloud.j
 import {resolveWhatsAppIntegration} from './integration-secrets.js';
 
 const id=z.uuid();
-const kinds=['created','reminder','rescheduled','cancelled'];
-const params=z.enum(['customer_name','business_name','barber_name','service_name','date','time','cancellation_reason']);
-const template=z.object({name:z.string().regex(/^[a-z][a-z0-9_]{0,511}$/),params:z.array(params).max(10),headerText:z.string().trim().min(1).max(60).optional()}).strict();
-const settings=z.object({
-  enabled:z.boolean(),
-  languageCode:z.string().regex(/^[a-z]{2,3}(?:_[A-Z]{2})?$/).default('es_CO'),
-  reminderHours:z.number().int().min(1).max(168).default(24),
-  templates:z.object({created:template.optional(),reminder:template.optional(),
-    rescheduled:template.optional(),cancelled:template.optional()}).strict(),
-}).strict();
 const consentSchema=z.object({tenantId:id,phone:z.string().min(8).max(32),consent:z.boolean()}).strict();
 function constantTimeMatch(a,b){
   if(!a||!b)return false;
@@ -75,47 +65,13 @@ export async function registerWhatsAppRoutes(app,{config,db,security}){
         blockers,
       };
     });
+    // This legacy endpoint is intentionally read-only. BarberNow manages one set
+    // of approved Meta templates for every shop; business owners never approve,
+    // configure or disable the shared appointment notifications.
     api.put('/api/v1/tenants/:tenantId/whatsapp/settings',async req=>{
       const tenant=parseOrThrow(id,req.params.tenantId);
       await requireTenant(db,tenant,req.actor.id,['owner','manager']);
-      const x=parseOrThrow(settings,req.body);
-      const runtime=await resolveWhatsAppIntegration(db,config);
-      if(x.enabled&&(!runtime.whatsappSendEnabled||!runtime.whatsappAccessToken||!runtime.whatsappPhoneNumberId))
-        failure(409,'WhatsApp Cloud API aun no esta habilitada en el servidor');
-      if(x.enabled&&!Object.values(x.templates).some(Boolean))
-        failure(400,'Configura al menos una plantilla aprobada antes de activar WhatsApp');
-      return db.transaction(async tx=>{
-        const row=await tx.query('INSERT INTO public.whatsapp_tenant_settings(tenant_id,enabled,language_code,reminder_hours,templates) VALUES($1,$2,$3,$4,$5::jsonb) ON CONFLICT(tenant_id) DO UPDATE SET enabled=EXCLUDED.enabled,language_code=EXCLUDED.language_code,reminder_hours=EXCLUDED.reminder_hours,templates=EXCLUDED.templates,updated_at=now() RETURNING enabled,language_code,reminder_hours,templates',
-          [tenant,x.enabled,x.languageCode,x.reminderHours,JSON.stringify(x.templates)]);
-        if(!x.enabled)await tx.query("UPDATE public.whatsapp_messages SET status='suppressed',failure_code='tenant_disabled',updated_at=now() WHERE tenant_id=$1 AND status='queued'",[tenant]);
-        if(x.enabled){
-          // Customers may already have opted in before this shop activated its
-          // approved templates. Queue only FUTURE bookings with matching active
-          // consent; the unique appointment/event index prevents duplicates.
-          if(x.templates.created?.name)await tx.query(`
-            INSERT INTO public.whatsapp_messages(tenant_id,appointment_id,user_id,phone_e164,event_kind,event_version,scheduled_at)
-            SELECT a.tenant_id,a.id,a.customer_user_id,c.phone_e164,'created',0,now()
-            FROM public.appointments a
-            JOIN public.whatsapp_consents c ON c.tenant_id=a.tenant_id
-              AND c.user_id=a.customer_user_id AND c.revoked_at IS NULL
-              AND c.phone_e164=regexp_replace(a.customer_phone,'[[:space:]().-]','','g')
-            WHERE a.tenant_id=$1 AND a.status IN ('pending','confirmed') AND a.starts_at>now()
-            ON CONFLICT(tenant_id,appointment_id,event_kind,event_version) DO NOTHING`,[tenant]);
-          if(x.templates.reminder?.name)await tx.query(`
-            INSERT INTO public.whatsapp_messages(tenant_id,appointment_id,user_id,phone_e164,event_kind,event_version,scheduled_at)
-            SELECT a.tenant_id,a.id,a.customer_user_id,c.phone_e164,'reminder',
-              a.reschedule_count,a.starts_at-make_interval(hours=>$2)
-            FROM public.appointments a
-            JOIN public.whatsapp_consents c ON c.tenant_id=a.tenant_id
-              AND c.user_id=a.customer_user_id AND c.revoked_at IS NULL
-              AND c.phone_e164=regexp_replace(a.customer_phone,'[[:space:]().-]','','g')
-            WHERE a.tenant_id=$1 AND a.status IN ('pending','confirmed')
-              AND a.starts_at>now()+make_interval(hours=>$2)
-            ON CONFLICT(tenant_id,appointment_id,event_kind,event_version) DO NOTHING`,
-            [tenant,x.reminderHours]);
-        }
-        return row.rows[0];
-      });
+      failure(403,'BarberNow configura automáticamente las notificaciones de todas las barberías');
     });
     api.get('/api/v1/me/whatsapp/consents',async req=>{
       const rows=await db.query('SELECT tenant_id,phone_e164,consented_at,revoked_at FROM public.whatsapp_consents WHERE user_id=$1 ORDER BY consented_at DESC LIMIT 100',[req.actor.id]);
