@@ -3,7 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { barberStore } from '../../services/store';
 import {isLiveBackend,addBooking,backendRequest,refreshLiveData,getAvailabilitySlots} from '../../services/liveBackend';
 import {useCustomerLinks} from '../../services/useCustomerLinks';
-import { formatCurrency } from '../../utils/formatters';
+import { formatCurrency,formatTime } from '../../utils/formatters';
 import {
   Calendar,
   Scissors,
@@ -467,13 +467,13 @@ export const ClienteReservas: React.FC = () => {
               onClick={()=>setSelectedTime(time)}
               className={`w-full rounded-xl border px-3 py-3 text-left font-mono text-xs font-semibold transition-colors ${time===selectedTime?
                'border-[var(--gold-primary)] bg-[var(--gold-primary)] text-black':'border-[#353539] bg-[#202024] text-neutral-200 hover:border-[var(--gold-primary)]'}`}>
-              {time}{time===selectedTime&&<CheckCircle2 className="w-4 h-4 float-right"/>}
+              {formatTime(time)}{time===selectedTime&&<CheckCircle2 className="w-4 h-4 float-right"/>}
              </button>)
             }
            </div>
           </div>
           <div className="border-t border-white/[0.08] pt-3 text-center text-[10px] font-bold text-neutral-400">
-           Seleccionado: <span className="font-mono text-[var(--gold-primary)]">{selectedTime||'Ninguno'}</span>
+           Seleccionado: <span className="font-mono text-[var(--gold-primary)]">{selectedTime?formatTime(selectedTime):'Ninguno'}</span>
           </div>
          </section>
         </div>
@@ -514,7 +514,7 @@ export const ClienteReservas: React.FC = () => {
             </div>
             <div className="flex justify-between text-neutral-400">
               <span>Fecha & Hora:</span>
-              <strong className="text-white font-mono">{selectedDate} a las {selectedTime}</strong>
+              <strong className="text-white font-mono">{selectedDate} a las {formatTime(selectedTime)}</strong>
             </div>
             <div className="flex justify-between text-neutral-400">
               <span>Duración Estimada:</span>
@@ -553,7 +553,7 @@ export const ClienteReservas: React.FC = () => {
 
           <h2 className="text-xl font-bold text-white">¡Tu Cita Ha Sido Agendada con Éxito!</h2>
           <p className="text-xs text-neutral-400 max-w-md mx-auto">
-            Hemos reservado tu franja de {selectedTime} el {selectedDate}. Recuerda llegar 5 minutos antes para disfrutar de tu café en la sala de espera.
+            Hemos reservado tu franja de {formatTime(selectedTime)} el {selectedDate}. Recuerda llegar 5 minutos antes para disfrutar de tu café en la sala de espera.
           </p>
 
           <div className="p-4 bg-[#181818] rounded-xl border border-neutral-800 max-w-sm mx-auto text-xs space-y-1 text-left">
