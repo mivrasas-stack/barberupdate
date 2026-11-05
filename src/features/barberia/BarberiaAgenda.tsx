@@ -474,7 +474,7 @@ export const BarberiaAgenda: React.FC = () => {
                                       className={`p-2.5 rounded-2xl border ${badgeColor} backdrop-blur-md shadow-md transition-all duration-200 hover:scale-[1.03] active:scale-[0.98] cursor-pointer text-left group/card`}
                                     >
                                       <div className="flex items-center justify-between text-[10px] font-mono">
-                                        <span className="font-extrabold">{apt.startTime}</span>
+                                        <span className="font-extrabold">{formatTime(apt.startTime)}</span>
                                         <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.2 rounded-full bg-black/30 backdrop-blur-sm border border-white/[0.05]">
                                           {apt.status === 'in_service' ? 'En corte' : apt.status === 'waiting' ? 'En espera' : apt.status}
                                         </span>
@@ -659,7 +659,7 @@ export const BarberiaAgenda: React.FC = () => {
                 return (
                   <tr key={apt.id} className="hover:bg-[#181818] transition-colors">
                     <td className="py-3 px-4 font-mono font-bold text-white">
-                      {apt.startTime} <span className="text-neutral-500 font-normal">({apt.date})</span>
+                      {formatTime(apt.startTime)} <span className="text-neutral-500 font-normal">({apt.date})</span>
                     </td>
                     <td className="py-3 px-4">
                       <div className="font-bold text-white">{apt.customerName}</div>
@@ -761,7 +761,7 @@ export const BarberiaAgenda: React.FC = () => {
           </div>
           <div className="rounded-xl border border-[#343434] bg-[#202020] p-3">
            <p className="text-sm font-semibold text-white">{cancelRequest.appointment.customerName}</p>
-           <p className="mt-1 text-xs text-neutral-400">{cancelRequest.appointment.serviceName} · {cancelRequest.appointment.date} · {cancelRequest.appointment.startTime}</p>
+           <p className="mt-1 text-xs text-neutral-400">{cancelRequest.appointment.serviceName} · {cancelRequest.appointment.date} · {formatTime(cancelRequest.appointment.startTime)}</p>
           </div>
           <div>
            <label htmlFor="barbernow-cancel-reason" className="mb-1.5 block text-xs font-semibold text-neutral-300">Motivo</label>
