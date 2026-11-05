@@ -144,7 +144,7 @@ export const ClienteReservas: React.FC = () => {
     if(isLiveBackend){
       const tenantId=selectedShop?.id;
       if(!tenantId){addToast('Selecciona un negocio o profesional disponible.','error');return;}
-      const phone=customerProfile?.phone||currentUser?.phone?.trim()||window.prompt('Ingresa tu teléfono para confirmar la reserva:')?.trim();
+      const phone=(whatsappConsent?whatsappPhone.trim():'')||customerProfile?.phone||currentUser?.phone?.trim()||window.prompt('Ingresa tu teléfono para confirmar la reserva:')?.trim();
       if(!phone){addToast('Necesitamos tu teléfono para la reserva.','error');return;}
       const bookingPhone=whatsappConsent?normalizeBookingWhatsAppPhone(whatsappPhone.trim()||phone):phone;
       if(!bookingPhone){addToast('Para recibir WhatsApp, indica un número válido con indicativo internacional, por ejemplo +57 300 123 4567.','error');return;}
