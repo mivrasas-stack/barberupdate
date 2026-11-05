@@ -41,6 +41,34 @@ test('Graph API uses a fixed Meta host, server-side bearer and approved template
   await assert.rejects(sendWhatsAppTemplate({accessToken:'fake',phoneNumberId:'1234567890',message:{type:'text'},fetcher}),/Only approved/);
 });
 
+test('approved BarberNow Meta templates support base es locale, a header parameter and ordered body values',async()=>{
+  const m=createTemplateMessage({
+    to:'+573001234567',name:'confirmacion_de_reserva',language:'es',
+    headerText:'💈',parameters:['Ana','5 noviembre','3:00 p. m.','Pedro','Icon Barber','Icon Barber']
+  });
+  assert.equal(m.template.language.code,'es');
+  assert.deepEqual(m.template.components[0],{type:'header',parameters:[{type:'text',text:'💈'}]});
+  assert.equal(m.template.components[1].parameters.length,6);
+  let sent=null;
+  const result=await sendWhatsAppTemplate({
+    accessToken:'test-access-token',phoneNumberId:'1234567890',message:m,
+    fetcher:async(url,options)=>{
+      sent=JSON.parse(options.body);
+      return {ok:true,json:async()=>({messages:[{id:'wamid.approved-header-test'}]})};
+    }
+  });
+  assert.equal(result.messageId,'wamid.approved-header-test');
+  assert.deepEqual(sent.template.components,m.template.components);
+  assert.equal(sent.template.language.code,'es');
+  assert.throws(()=>createTemplateMessage({to:'+573001234567',name:'ok',language:'en-US'}));
+  assert.throws(()=>createTemplateMessage({to:'+573001234567',name:'ok',headerText:''}));
+  await assert.rejects(sendWhatsAppTemplate({
+    accessToken:'test-access-token',phoneNumberId:'1234567890',
+    message:{...m,template:{...m.template,components:[...m.template.components,{type:'document'}]}},
+    fetcher:async()=>{throw Error('should not send malformed template')}
+  }),/Unexpected WhatsApp template components/);
+});
+
 test('Meta rejects are not silently retried or exposed to logs',async()=>{
   const msg=createTemplateMessage({to:'+573001234567',name:'aviso_cita'});
   await assert.rejects(

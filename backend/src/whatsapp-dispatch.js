@@ -1,7 +1,7 @@
 import {createTemplateMessage,isWhatsAppDeliveryAllowed,normalizeWhatsAppPhone,sendWhatsAppTemplate,validateTemplateName} from './whatsapp-cloud.js';
 
 const validStatuses=['pending','confirmed'];
-const paramsAllowed=new Set(['customer_name','business_name','barber_name','service_name','date','time']);
+const paramsAllowed=new Set(['customer_name','business_name','barber_name','service_name','date','time','cancellation_reason']);
 function getParams(row,template){
   if(!template||typeof template!=='object'||!Array.isArray(template.params)||template.params.length>10)throw new TypeError('Template mappings must define 0-10 parameters');
   const date=new Date(row.starts_at);
@@ -14,6 +14,7 @@ function getParams(row,template){
     service_name:row.service_name,
     date:new Intl.DateTimeFormat(locale,{timeZone:timezone,dateStyle:'long'}).format(date),
     time:new Intl.DateTimeFormat(locale,{timeZone:timezone,timeStyle:'short'}).format(date),
+    cancellation_reason:row.cancellation_reason||'una solicitud de cancelación',
   };
   return template.params.map(key=>{
     if(!paramsAllowed.has(key))throw new TypeError('Unknown WhatsApp template placeholder');
@@ -53,7 +54,7 @@ export async function processWhatsAppJobs({db,config,fetcher=fetch,maxBatch=10})
     attempted++;
     try{
       const found=await db.query(
-        "SELECT a.customer_name,a.customer_phone,a.starts_at,a.status,a.reschedule_count,t.name AS business_name,t.time_zone,s.name AS service_name,b.name AS barber_name,c.enabled,c.language_code,c.templates,op.consented_at,op.revoked_at FROM public.whatsapp_messages m JOIN public.appointments a ON a.id=m.appointment_id AND a.tenant_id=m.tenant_id JOIN public.tenants t ON t.id=m.tenant_id AND t.status='active' JOIN public.services s ON s.id=a.service_id AND s.tenant_id=a.tenant_id JOIN public.barbers b ON b.id=a.barber_id AND b.tenant_id=a.tenant_id LEFT JOIN public.whatsapp_tenant_settings c ON c.tenant_id=m.tenant_id LEFT JOIN public.whatsapp_consents op ON op.tenant_id=m.tenant_id AND op.user_id=m.user_id AND op.phone_e164=m.phone_e164 WHERE m.id=$1",
+        "SELECT a.customer_name,a.customer_phone,a.starts_at,a.status,a.reschedule_count,a.cancellation_reason,t.name AS business_name,t.time_zone,s.name AS service_name,b.name AS barber_name,c.enabled,c.language_code,c.templates,op.consented_at,op.revoked_at FROM public.whatsapp_messages m JOIN public.appointments a ON a.id=m.appointment_id AND a.tenant_id=m.tenant_id JOIN public.tenants t ON t.id=m.tenant_id AND t.status='active' JOIN public.services s ON s.id=a.service_id AND s.tenant_id=a.tenant_id JOIN public.barbers b ON b.id=a.barber_id AND b.tenant_id=a.tenant_id LEFT JOIN public.whatsapp_tenant_settings c ON c.tenant_id=m.tenant_id LEFT JOIN public.whatsapp_consents op ON op.tenant_id=m.tenant_id AND op.user_id=m.user_id AND op.phone_e164=m.phone_e164 WHERE m.id=$1",
         [job.id]);
       const row=found.rows[0];
       const spec=row?.templates?.[job.event_kind];
@@ -68,7 +69,7 @@ export async function processWhatsAppJobs({db,config,fetcher=fetch,maxBatch=10})
         });
       if(!eligible){await setStatus(db,job.id,'suppressed','not_eligible');continue;}
       const message=createTemplateMessage({to:job.phone_e164,name:validateTemplateName(spec.name),
-        language:row.language_code,parameters:getParams(row,spec)});
+        language:row.language_code,parameters:getParams(row,spec),headerText:spec.headerText??null});
       const {messageId}=await sendWhatsAppTemplate({
         accessToken:config.whatsappAccessToken,
         phoneNumberId:config.whatsappPhoneNumberId,
