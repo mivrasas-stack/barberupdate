@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { failure, parseOrThrow } from './security.js';
+import {normalizeBusinessHours,businessOpenOnDate,checkBusinessSlot} from './business-hours.js';
 
 const id=z.uuid();
 const date=z.iso.date();
@@ -85,6 +86,9 @@ export async function registerSchedulingRoutes(app,{db,security}) {
       if(!Number.isFinite(duration)||duration<300000||duration>600*60000)
         failure(409,'Duracion original invalida');
       const newEnd=new Date(newStart.getTime()+duration);
+      const business=await tx.query("SELECT opening_hours,time_zone FROM public.tenants WHERE id=$1 AND status='active'",[tenantId]);
+      if(!business.rowCount||!checkBusinessSlot(business.rows[0].opening_hours,business.rows[0].time_zone,newStart,newEnd))
+        failure(409,'La nueva cita está fuera de los días u horas de atención de la barbería');
       return (await tx.query(
         'UPDATE public.appointments SET barber_id=$3,starts_at=$4,ends_at=$5,updated_at=now() WHERE id=$2 AND tenant_id=$1 RETURNING id,tenant_id,barber_id,service_id,starts_at,ends_at,status,reschedule_count',
         [tenantId,appointmentId,newBarber,newStart.toISOString(),newEnd.toISOString()]
@@ -184,10 +188,16 @@ export async function registerSchedulingRoutes(app,{db,security}) {
     const tenant=parseOrThrow(id,req.params.tenantId);
     const q=parseOrThrow(z.object({barberId:id,serviceId:id,date}).strict(),req.query);
     validateSlotDate(q.date);
+    const business=await db.query("SELECT opening_hours FROM public.tenants WHERE id=$1 AND status='active'",[tenant]);
+    if(!business.rowCount)failure(404,'Barbería no disponible');
+    const shopHours=normalizeBusinessHours(business.rows[0].opening_hours);
+    if(!businessOpenOnDate(shopHours,q.date))
+      return {date:q.date,barberId:q.barberId,serviceId:q.serviceId,slots:[]};
     const {rows}=await db.query(
-      "SELECT g.starts_at,g.ends_at FROM public.tenants t JOIN public.barbers b ON b.tenant_id=t.id AND b.id=$2 AND b.status='active' JOIN public.services s ON s.tenant_id=t.id AND s.id=$3 AND s.is_active=true JOIN public.barber_work_intervals w ON w.tenant_id=t.id AND w.barber_id=b.id AND w.weekday=EXTRACT(DOW FROM $4::date)::integer CROSS JOIN LATERAL (SELECT (($4::date + make_interval(mins=>m)) AT TIME ZONE t.time_zone) AS starts_at, (($4::date + make_interval(mins=>m+s.duration_minutes)) AT TIME ZONE t.time_zone) AS ends_at FROM generate_series(w.start_minute,w.end_minute-s.duration_minutes,15) AS m) g WHERE t.id=$1 AND t.status='active' AND g.starts_at>now()+interval '5 minutes' AND NOT EXISTS (SELECT 1 FROM public.tenant_closed_days d WHERE d.tenant_id=t.id AND d.closed_date=$4::date) AND NOT EXISTS (SELECT 1 FROM public.appointments a WHERE a.tenant_id=t.id AND a.barber_id=b.id AND a.status IN ('pending','confirmed','waiting','in_service') AND a.starts_at<g.ends_at AND a.ends_at>g.starts_at) AND NOT EXISTS (SELECT 1 FROM public.barber_time_off o WHERE o.tenant_id=t.id AND o.barber_id=b.id AND o.starts_at<g.ends_at AND o.ends_at>g.starts_at) ORDER BY g.starts_at LIMIT 100",
-      [tenant,q.barberId,q.serviceId,q.date]
+      "SELECT g.starts_at,g.ends_at FROM public.tenants t JOIN public.barbers b ON b.tenant_id=t.id AND b.id=$2 AND b.status='active' JOIN public.services s ON s.tenant_id=t.id AND s.id=$3 AND s.is_active=true JOIN public.barber_work_intervals w ON w.tenant_id=t.id AND w.barber_id=b.id AND w.weekday=EXTRACT(DOW FROM $4::date)::integer CROSS JOIN LATERAL (SELECT (($4::date + make_interval(mins=>m)) AT TIME ZONE t.time_zone) AS starts_at, (($4::date + make_interval(mins=>m+s.duration_minutes)) AT TIME ZONE t.time_zone) AS ends_at FROM generate_series(GREATEST(w.start_minute,$5::integer),LEAST(w.end_minute,$6::integer)-s.duration_minutes,15) AS m) g WHERE t.id=$1 AND t.status='active' AND g.starts_at>now()+interval '5 minutes' AND NOT EXISTS (SELECT 1 FROM public.tenant_closed_days d WHERE d.tenant_id=t.id AND d.closed_date=$4::date) AND NOT EXISTS (SELECT 1 FROM public.appointments a WHERE a.tenant_id=t.id AND a.barber_id=b.id AND a.status IN ('pending','confirmed','waiting','in_service') AND a.starts_at<g.ends_at AND a.ends_at>g.starts_at) AND NOT EXISTS (SELECT 1 FROM public.barber_time_off o WHERE o.tenant_id=t.id AND o.barber_id=b.id AND o.starts_at<g.ends_at AND o.ends_at>g.starts_at) ORDER BY g.starts_at LIMIT 100",
+      [tenant,q.barberId,q.serviceId,q.date,shopHours.startMinute,shopHours.endMinute]
     );
+    // Business hours are authoritative even when a barber has a broader shift.
     return {date:q.date,barberId:q.barberId,serviceId:q.serviceId,slots:rows};
   });
 }
