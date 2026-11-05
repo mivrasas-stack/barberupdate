@@ -21,6 +21,10 @@ test('a new customer booking is automatically confirmed and idempotent without s
    if(sql.includes('pg_advisory_xact_lock'))return {rowCount:1,rows:[{}]};
    if(sql.includes('SELECT tenant_id,barber_id FROM public.customer_links WHERE user_id='))
     return {rowCount:1,rows:[{tenant_id:tenant,barber_id:barber}]};
+   if(sql.includes('SELECT opening_hours,time_zone FROM public.tenants'))
+    return {rowCount:1,rows:[{opening_hours:{days:'Todos los días',open:'00:00',close:'23:59'},time_zone:'America/Bogota'}]};
+   if(sql.includes('SELECT duration_minutes FROM public.services'))
+    return {rowCount:1,rows:[{duration_minutes:30}]};
    if(sql.includes('SELECT * FROM public.appointments WHERE tenant_id='))
     return {rowCount:rows.length,rows:[...rows]};
    if(sql.includes('INSERT INTO public.appointments')){
