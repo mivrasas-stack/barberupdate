@@ -35,6 +35,22 @@ function configuredFor(provider,row){
   if(provider==='email'&&!row.settings.fromEmail)failure(422,'Falta el remitente verificado');
   if(provider==='openai'&&!row.settings.model)failure(422,'Falta el modelo');
 }
+/** A Graph API 200 for the phone number does not prove that template delivery is possible. */
+export function whatsappHealthBlocker(health){
+  if(!health||health.can_send_message!=='BLOCKED')return null;
+  const problems=(health.entities||[]).flatMap(entity=>entity.errors||[]);
+  if(problems.some(error=>Number(error.error_code)===141006||Number(error.error_code)===131042))
+    return 'Meta tiene bloqueado el envío de WhatsApp por un problema de pago (141006). Abre Meta Business Suite → Cuentas de mensajes → BarberNow → Configuración de pago y agrega un método de pago válido.';
+  if(problems.some(error=>Number(error.error_code)===141008))
+    return 'Meta tiene la cuenta de WhatsApp bloqueada o pendiente de activación (141008). Revisa el estado de la cuenta en WhatsApp Manager.';
+  if(problems.some(error=>Number(error.error_code)===141010))
+    return 'Meta ha bloqueado el envío porque la verificación del negocio está pendiente (141010). Revisa el Centro de seguridad de Meta.';
+  const first=problems.find(error=>Number.isFinite(Number(error.error_code)));
+  return 'Meta informa que el envío de WhatsApp está BLOQUEADO'+
+    (first?' (código '+String(first.error_code)+')':'')+
+    '. Revisa la salud de tu cuenta de mensajes en Meta.';
+}
+
 async function providerFetch(url,options={}){
   let res;
   try{res=await fetch(url,{...options,signal:AbortSignal.timeout(10000)});}
@@ -74,7 +90,17 @@ export async function registerPlatformIntegrationRoutes(app,{config,db,security}
         const {phoneNumberId,graphVersion}=row.settings;
         const result=await providerFetch('https://graph.facebook.com/'+encodeURIComponent(graphVersion)+'/'+encodeURIComponent(phoneNumberId)+'?fields=id,display_phone_number,verified_name',{
           headers:{Authorization:'Bearer '+row.secrets.accessToken}});
-        return {ok:true,detail:'WhatsApp Cloud API respondió. Número: '+String(result.display_phone_number||'verificado')};
+        // Meta may accept requests but fail to deliver them asynchronously.
+        // Health status includes WABA billing, verification and app prerequisites.
+        const health=await providerFetch('https://graph.facebook.com/'+encodeURIComponent(graphVersion)+'/'+encodeURIComponent(phoneNumberId)+'?fields=health_status',{
+          headers:{Authorization:'Bearer '+row.secrets.accessToken}});
+        const blocker=whatsappHealthBlocker(health.health_status);
+        if(blocker)failure(409,blocker);
+        const state=health.health_status?.can_send_message;
+        return {ok:true,deliveryReady:state==='AVAILABLE',detail:state==='AVAILABLE'
+          ? 'WhatsApp tiene capacidad de envío disponible según Meta. Número: '+String(result.display_phone_number||'verificado')+'. La entrega de cada mensaje se confirma mediante webhooks.'
+          : 'WhatsApp Cloud API respondió, pero la capacidad de entrega aún no está confirmada'+
+            (state?' (estado: '+state+')':'')+'. Verifica las advertencias en WhatsApp Manager.'};
       }
       if(provider==='openai'){
         await providerFetch('https://api.openai.com/v1/models/'+encodeURIComponent(row.settings.model),{

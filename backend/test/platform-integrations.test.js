@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {randomBytes} from 'node:crypto';
 import Fastify from 'fastify';
 import {encryptSecret,decryptSecret,masterKey,safeIntegrationView,resolveWhatsAppIntegration} from '../src/integration-secrets.js';
-import {registerPlatformIntegrationRoutes} from '../src/platform-integrations.js';
+import {registerPlatformIntegrationRoutes,whatsappHealthBlocker} from '../src/platform-integrations.js';
 
 test('AES-GCM integration secrets round trip, no ciphertext/plaintext in admin response',()=>{
  const key=masterKey(randomBytes(32).toString('base64'));
@@ -81,4 +81,59 @@ test('WhatsApp outbound only needs access token and phone number; WABA id is opt
  assert.equal(resolved.whatsappBusinessAccountId,'9876543210');
  assert.equal(resolved.whatsappWebhookVerifyToken,'');
  assert.equal(resolved.whatsappAppSecret,'');
+});
+
+test('Meta billing health BLOCKED (141006) is not mistaken for a successful WhatsApp send',()=>{
+ const blocked={
+  can_send_message:'BLOCKED',
+  entities:[
+   {entity_type:'PHONE_NUMBER',can_send_message:'AVAILABLE',errors:[]},
+   {entity_type:'WABA',can_send_message:'BLOCKED',errors:[{
+     error_code:141006,
+     error_description:'There is an error with the payment method. This will block business initiated conversations.'
+   }]},
+   {entity_type:'BUSINESS',can_send_message:'LIMITED',errors:[{error_code:141010}]}
+  ]
+ };
+ assert.match(whatsappHealthBlocker(blocked),/método de pago válido|pago/i);
+ assert.match(whatsappHealthBlocker(blocked),/141006/);
+ assert.equal(whatsappHealthBlocker({...blocked,can_send_message:'AVAILABLE'}),null);
+ assert.equal(whatsappHealthBlocker(null),null);
+ assert.match(whatsappHealthBlocker({can_send_message:'BLOCKED',entities:[]}),/BLOQUEADO/);
+});
+
+test('superadmin WhatsApp connection test flags blocked WABA billing and never reveals token',async()=>{
+ const key=randomBytes(32).toString('base64');
+ const master=masterKey(key);
+ const token='isolated-health-test-token';
+ const db={query:async(sql,args=[])=>{
+  if(sql.includes('public.platform_admins'))return {rowCount:1,rows:[{ok:true}]};
+  if(sql.includes('SELECT enabled,settings,secrets,updated_at FROM public.platform_integrations'))
+   return {rowCount:1,rows:[{enabled:true,settings:{
+    phoneNumberId:'123456789012345',businessAccountId:'9876543210',graphVersion:'v23.0'
+   },secrets:{accessToken:encryptSecret(token,master)},updated_at:new Date().toISOString()}]};
+  throw new Error('Unexpected SQL');
+ }};
+ const security={authenticated:async req=>{req.actor={id:'test-admin',email:'admin@example.com'};},limited:async()=>{}};
+ const app=Fastify();
+ const originalFetch=globalThis.fetch;
+ const urls=[];
+ globalThis.fetch=async(url,options)=>{
+  urls.push(String(url));
+  assert.equal(options.headers.Authorization,'Bearer '+token);
+  if(String(url).includes('health_status'))return {ok:true,status:200,json:async()=>({health_status:{
+   can_send_message:'BLOCKED',entities:[{
+    entity_type:'WABA',can_send_message:'BLOCKED',errors:[{error_code:141006}]
+   }]
+  }})};
+  return {ok:true,status:200,json:async()=>({id:'123456789012345',display_phone_number:'+57 323 2418093'})};
+ };
+ try{
+  await registerPlatformIntegrationRoutes(app,{db,config:{platformSecretsKey:key},security});
+  const response=await app.inject({method:'POST',url:'/api/v1/platform/integrations/whatsapp/test'});
+  assert.equal(response.statusCode,409,response.body);
+  assert.match(response.body,/141006/);
+  assert.equal(response.body.includes(token),false);
+  assert.ok(urls.some(url=>url.includes('health_status')));
+ }finally{globalThis.fetch=originalFetch;await app.close();}
 });
