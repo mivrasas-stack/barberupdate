@@ -555,7 +555,7 @@ export const ClienteReservas: React.FC = () => {
             <div className="flex flex-col items-end gap-2">
               <button type="button" disabled={submitting} onClick={()=>void handleConfirmReservation(true)}
                 className="px-6 py-2.5 rounded-xl bg-emerald-500 text-black font-extrabold text-xs hover:bg-emerald-400 disabled:opacity-50 flex items-center gap-1.5 shadow-lg shadow-emerald-500/10">
-                <span>{submitting?'Confirmando...':'Confirmar y recibir WhatsApp'}</span>
+                <span>{submitting?'Confirmando...':isLiveBackend?'Confirmar y recibir WhatsApp':'Confirmar mi reserva'}</span>
                 <CheckCircle2 className="w-4 h-4"/>
               </button>
               {isLiveBackend&&<button type="button" disabled={submitting}
