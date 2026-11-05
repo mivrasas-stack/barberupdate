@@ -4,6 +4,7 @@ import {backendRequest} from '../../services/liveBackend';
 type Kind='created'|'reminder'|'rescheduled'|'cancelled';
 type Spec={name:string;params:string[]};
 type State={enabled:boolean;language_code:string;reminder_hours:number;templates:Partial<Record<Kind,Spec>>};
+type Diagnostics={sendReady:boolean;serverEnabled:boolean;providerConfigured:boolean;tenantEnabled:boolean;configuredEvents:string[];activeConsents:number;deliveryCounts:Record<string,number>;deliveryTrackingEnabled:boolean;blockers:string[]};
 const kinds:Kind[]=['created','reminder','rescheduled','cancelled'];
 const labels:Record<Kind,string>={
   created:'Nueva reserva',reminder:'Recordatorio previo',
@@ -14,6 +15,8 @@ const defaultParameters='customer_name,business_name,date,time';
 
 export function BarberiaWhatsapp({tenant,addToast}:{tenant:string;addToast:(message:string,type:'success'|'error'|'info')=>void}){
   const [loaded,setLoaded]=useState(false);
+  const [diagnostics,setDiagnostics]=useState<Diagnostics|null>(null);
+  const [diagnosticsError,setDiagnosticsError]=useState('');
   const [saving,setSaving]=useState(false);
   const [enabled,setEnabled]=useState(false);
   const [languageCode,setLanguageCode]=useState('es_CO');
@@ -22,9 +25,16 @@ export function BarberiaWhatsapp({tenant,addToast}:{tenant:string;addToast:(mess
   const [parameters,setParameters]=useState<Record<Kind,string>>({
     created:defaultParameters,reminder:defaultParameters,rescheduled:defaultParameters,cancelled:defaultParameters,
   });
+  const reloadDiagnostics=async()=>{
+    try{
+      const value=await backendRequest<Diagnostics>('/tenants/'+tenant+'/whatsapp/diagnostics');
+      setDiagnostics(value);setDiagnosticsError('');
+    }catch(error){setDiagnostics(null);setDiagnosticsError(error instanceof Error?error.message:'No se pudo consultar el diagnóstico');}
+  };
   useEffect(()=>{
     let active=true;
     setLoaded(false);
+    void reloadDiagnostics();
     backendRequest<State>('/tenants/'+tenant+'/whatsapp/settings')
       .then(value=>{
         if(!active)return;
@@ -65,6 +75,7 @@ export function BarberiaWhatsapp({tenant,addToast}:{tenant:string;addToast:(mess
         method:'PUT',body:JSON.stringify({enabled,languageCode,reminderHours,templates})
       });
       addToast('Configuración de plantillas de WhatsApp guardada','success');
+      await reloadDiagnostics();
     }catch(error){addToast(error instanceof Error?error.message:'Error al guardar plantillas','error')}
     finally{setSaving(false)}
   };
@@ -73,6 +84,22 @@ export function BarberiaWhatsapp({tenant,addToast}:{tenant:string;addToast:(mess
       <h2 className="text-sm font-bold text-white">Avisos automáticos por WhatsApp Cloud API</h2>
       <p className="text-xs text-neutral-400 mt-1">Las plantillas deben existir y estar aprobadas en Meta. Los avisos solo se envían a clientes que autorizaron WhatsApp. Inicialmente desactivado.</p>
     </div>
+    <section aria-label="Diagnóstico de WhatsApp" className="rounded-xl border border-neutral-700 bg-[#1b1b1b] p-4 space-y-2 text-xs">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <strong className="text-white">Estado de envío de WhatsApp</strong>
+        <button type="button" onClick={()=>void reloadDiagnostics()} className="rounded-lg border border-neutral-600 px-3 py-1.5 text-neutral-200 hover:border-amber-400">Actualizar diagnóstico</button>
+      </div>
+      {diagnosticsError?<p role="alert" className="text-rose-300">{diagnosticsError}</p>:
+       diagnostics?<div className="space-y-2">
+        <p className={diagnostics.sendReady?'text-emerald-300':'text-amber-300'}>
+          {diagnostics.sendReady?'Envío configurado para esta barbería':'Faltan requisitos para enviar notificaciones'}
+        </p>
+        {diagnostics.blockers.map(reason=><p key={reason} className="text-amber-200">• {reason}</p>)}
+        <p className="text-neutral-300">Consentimientos activos: {diagnostics.activeConsents}. Plantillas configuradas: {diagnostics.configuredEvents.join(', ')||'ninguna'}.</p>
+        <p className="text-neutral-300">Cola: {diagnostics.deliveryCounts.queued||0} · Aceptados por Meta: {diagnostics.deliveryCounts.sent||0} · Entregados: {diagnostics.deliveryCounts.delivered||0} · Fallidos: {diagnostics.deliveryCounts.failed||0} · Revisión manual: {diagnostics.deliveryCounts.manual_review||0}.</p>
+        {!diagnostics.deliveryTrackingEnabled&&<p className="text-neutral-400">La confirmación de entrega requiere habilitar y configurar los webhooks de Meta; «aceptado» no significa «entregado».</p>}
+       </div>:<p className="text-neutral-400">Consultando el estado de los envíos...</p>}
+    </section>
     <label className="flex items-center gap-2 text-xs text-neutral-300">
       <input type="checkbox" checked={enabled} onChange={e=>setEnabled(e.target.checked)} className="accent-emerald-500"/>
       Activar avisos para esta barbería
