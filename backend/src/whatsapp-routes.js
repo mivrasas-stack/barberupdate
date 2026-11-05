@@ -97,6 +97,9 @@ export async function registerWhatsAppRoutes(app,{config,db,security}){
     });
     api.post('/api/v1/me/whatsapp/consent',async req=>{
       const x=parseOrThrow(consentSchema,req.body);
+      // Require an explicit international prefix. A national 300... must not
+      // silently become +300... and then fail to match the booked phone.
+      if(!x.phone.trim().startsWith('+'))failure(400,'Incluye el indicativo internacional, por ejemplo +57 300 123 4567');
       let phone;
       try{phone='+'+normalizeWhatsAppPhone(x.phone);}
       catch{failure(400,'Numero de WhatsApp invalido. Incluye indicativo de pais');}
