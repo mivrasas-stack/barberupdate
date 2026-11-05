@@ -35,6 +35,44 @@ export async function registerWhatsAppRoutes(app,{config,db,security}){
       const row=await db.query('SELECT enabled,language_code,reminder_hours,templates FROM public.whatsapp_tenant_settings WHERE tenant_id=$1',[tenant]);
       return row.rows[0]||{enabled:false,language_code:'es_CO',reminder_hours:24,templates:{}};
     });
+    // Owner-only read-only diagnostics. Never expose tokens or customer phone numbers.
+    api.get('/api/v1/tenants/:tenantId/whatsapp/diagnostics',async req=>{
+      const tenant=parseOrThrow(id,req.params.tenantId);
+      await requireTenant(db,tenant,req.actor.id,['owner','manager']);
+      const [settingsRows,consentRows,messageRows]=await Promise.all([
+        db.query('SELECT enabled,templates FROM public.whatsapp_tenant_settings WHERE tenant_id=$1',[tenant]),
+        db.query('SELECT count(*)::int AS active_consents FROM public.whatsapp_consents WHERE tenant_id=$1 AND revoked_at IS NULL',[tenant]),
+        db.query('SELECT status,count(*)::int AS total FROM public.whatsapp_messages WHERE tenant_id=$1 GROUP BY status',[tenant])
+      ]);
+      const tenantSettings=settingsRows.rows[0]||{enabled:false,templates:{}};
+      const configuredEvents=Object.entries(tenantSettings.templates||{})
+        .filter(([,template])=>typeof template?.name==='string'&&template.name.length>0)
+        .map(([kind])=>kind);
+      const deliveryCounts=Object.fromEntries(messageRows.rows.map(row=>[row.status,Number(row.total)]));
+      let providerConfigured=false,providerCheckFailed=false;
+      try{
+        const runtime=await resolveWhatsAppIntegration(db,config);
+        providerConfigured=Boolean(runtime.whatsappAccessToken&&runtime.whatsappPhoneNumberId);
+      }catch{
+        providerCheckFailed=true; // Missing/invalid master key or unreadable vault.
+      }
+      const activeConsents=Number(consentRows.rows[0]?.active_consents||0);
+      const blockers=[];
+      if(!config.whatsappSendEnabled)blockers.push('El envío global WHATSAPP_SEND_ENABLED está desactivado en el servidor.');
+      if(!providerConfigured)blockers.push('Faltan credenciales de Meta válidas en la configuración del servidor.');
+      if(providerCheckFailed)blockers.push('No se pudieron leer las credenciales cifradas; revisa PLATFORM_SECRETS_KEY.');
+      if(!tenantSettings.enabled)blockers.push('Esta barbería todavía no ha activado las notificaciones.');
+      if(!configuredEvents.length)blockers.push('Faltan los nombres y parámetros de las plantillas aprobadas en Meta.');
+      if(!activeConsents)blockers.push('Aún no hay clientes que hayan autorizado WhatsApp.');
+      return {
+        sendReady:config.whatsappSendEnabled&&providerConfigured&&tenantSettings.enabled&&configuredEvents.length>0,
+        serverEnabled:Boolean(config.whatsappSendEnabled),
+        providerConfigured,tenantEnabled:Boolean(tenantSettings.enabled),
+        configuredEvents,activeConsents,deliveryCounts,
+        deliveryTrackingEnabled:Boolean(config.whatsappWebhookEnabled),
+        blockers,
+      };
+    });
     api.put('/api/v1/tenants/:tenantId/whatsapp/settings',async req=>{
       const tenant=parseOrThrow(id,req.params.tenantId);
       await requireTenant(db,tenant,req.actor.id,['owner','manager']);
