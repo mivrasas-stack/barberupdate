@@ -97,7 +97,7 @@ export async function registerPlatformIntegrationRoutes(app,{config,db,security}
         const blocker=whatsappHealthBlocker(health.health_status);
         if(blocker)failure(409,blocker);
         const state=health.health_status?.can_send_message;
-        return {ok:true,detail:state==='AVAILABLE'
+        return {ok:true,deliveryReady:state==='AVAILABLE',detail:state==='AVAILABLE'
           ? 'WhatsApp tiene capacidad de envío disponible según Meta. Número: '+String(result.display_phone_number||'verificado')+'. La entrega de cada mensaje se confirma mediante webhooks.'
           : 'WhatsApp Cloud API respondió, pero la capacidad de entrega aún no está confirmada'+
             (state?' (estado: '+state+')':'')+'. Verifica las advertencias en WhatsApp Manager.'};
