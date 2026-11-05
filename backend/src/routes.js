@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { failure, parseOrThrow, uuid } from './security.js';
 import { createProfessionalProfile } from './platform-admin.js';
 import {checkBusinessSlot} from './business-hours.js';
+import {normalizeWhatsAppPhone} from './whatsapp-cloud.js';
 
 const id = z.uuid();
 const word = (max=160) => z.string().trim().min(1).max(max);
@@ -22,7 +23,7 @@ const servicePayload=z.object({
  durationMinutes:z.number().int().min(5).max(600),category:word(60),
  earnsLoyaltyPoints:z.boolean().optional()
 }).strict();
-const bookingSchema = z.object({ barberId:id,serviceId:id,startsAt:z.iso.datetime({offset:true}),customerName:word(120),customerPhone:word(32),notes:z.string().max(2000).default('') }).strict();
+const bookingSchema = z.object({ barberId:id,serviceId:id,startsAt:z.iso.datetime({offset:true}),customerName:word(120),customerPhone:word(32),notes:z.string().max(2000).default(''),whatsappOptIn:z.boolean().optional() }).strict();
 
 export async function registerRoutes(app,{config,db,security}) {
   const {authenticated,limited,requireTenant,service}=security;
@@ -129,7 +130,7 @@ export async function registerRoutes(app,{config,db,security}) {
       if(typeof key!=='string'||!/^[a-zA-Z0-9_-]{12,100}$/.test(key)) failure(400,'Idempotency-Key requerido (12-100 caracteres)');
       const startsAt=new Date(x.startsAt).toISOString();
       endOfBooking(startsAt,30);
-      const requestHash=createHash('sha256').update(JSON.stringify([x.barberId,x.serviceId,startsAt,x.customerName,x.customerPhone,x.notes])).digest('hex');
+      const requestHash=createHash('sha256').update(JSON.stringify([x.barberId,x.serviceId,startsAt,x.customerName,x.customerPhone,x.notes,x.whatsappOptIn??null])).digest('hex');
       const booking=await db.transaction(async tx=>{
         await tx.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[tenant+':'+req.actor.id+':booking:'+key]);
         const existing=await tx.query('SELECT * FROM public.appointments WHERE tenant_id=$1 AND created_by=$2 AND idempotency_key=$3',[tenant,req.actor.id,key]);
@@ -155,6 +156,34 @@ export async function registerRoutes(app,{config,db,security}) {
         const endsAt=new Date(Date.parse(startsAt)+Number(serviceDuration.rows[0].duration_minutes)*60000);
         if(!checkBusinessSlot(shop.rows[0].opening_hours,shop.rows[0].time_zone,startsAt,endsAt))
           failure(409,'La reserva está fuera de los días u horas de atención de la barbería');
+        // The booking confirmation action can explicitly authorize WhatsApp
+        // without a separate checkbox or a second API request. Persist opt-in
+        // before the appointment INSERT so the DB trigger queues the notice
+        // atomically, after all authorization and availability checks.
+        if(x.whatsappOptIn===true){
+          if(!x.customerPhone.startsWith('+'))
+            failure(400,'Para avisos por WhatsApp escribe el teléfono con indicativo internacional');
+          let e164;
+          try{e164='+'+normalizeWhatsAppPhone(x.customerPhone);}
+          catch{failure(400,'Número de WhatsApp inválido');}
+          await tx.query(
+            'INSERT INTO public.whatsapp_consents(tenant_id,user_id,phone_e164) VALUES($1,$2,$3) ON CONFLICT(tenant_id,user_id,phone_e164) DO UPDATE SET consented_at=now(),revoked_at=NULL',
+            [tenant,req.actor.id,e164]);
+        }else if(x.whatsappOptIn===false){
+          // The clearly labelled "Reservar sin WhatsApp" action also honours
+          // an existing opt-out, including old 10-digit Colombian phone records.
+          const digits=x.customerPhone.trim().replace(/[\s().-]/g,'');
+          const candidate=/^3\d{9}$/.test(digits)?'+57'+digits:
+            /^57[1-9]\d{9}$/.test(digits)?'+'+digits:
+            digits.startsWith('+')?digits:null;
+          if(candidate){
+            let e164=null;
+            try{e164='+'+normalizeWhatsAppPhone(candidate);}catch{}
+            if(e164)await tx.query(
+              'UPDATE public.whatsapp_consents SET revoked_at=COALESCE(revoked_at,now()) WHERE tenant_id=$1 AND user_id=$2 AND phone_e164=$3',
+              [tenant,req.actor.id,e164]);
+          }
+        }
         // The following INSERT still checks active barber, service and price,
         // computes authoritative duration/price and inserts an ALREADY CONFIRMED reservation.
         // Keep DB's legacy default for existing rows/other flows; new customer bookings

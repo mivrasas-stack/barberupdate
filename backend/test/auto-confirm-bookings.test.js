@@ -25,6 +25,8 @@ test('a new customer booking is automatically confirmed and idempotent without s
     return {rowCount:1,rows:[{opening_hours:{days:'Todos los días',open:'00:00',close:'23:59'},time_zone:'America/Bogota'}]};
    if(sql.includes('SELECT duration_minutes FROM public.services'))
     return {rowCount:1,rows:[{duration_minutes:30}]};
+   if(sql.includes('INSERT INTO public.whatsapp_consents'))
+    return {rowCount:1,rows:[]};
    if(sql.includes('SELECT * FROM public.appointments WHERE tenant_id='))
     return {rowCount:rows.length,rows:[...rows]};
    if(sql.includes('INSERT INTO public.appointments')){
@@ -48,7 +50,7 @@ test('a new customer booking is automatically confirmed and idempotent without s
  try{
   const payload={barberId:barber,serviceId:service,
    startsAt:new Date(Date.now()+60*60*1000).toISOString(),
-   customerName:'Cliente QR',customerPhone:'3001112233'};
+   customerName:'Cliente QR',customerPhone:'+573001112233',whatsappOptIn:true};
   const options={method:'POST',url:'/api/v1/tenants/'+tenant+'/bookings',
    headers:{'Idempotency-Key':'auto-confirm-test-2026'},payload};
   const crossTenant=await app.inject({...options,url:'/api/v1/tenants/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/bookings',headers:{'Idempotency-Key':'qr-block-tenant-test'}});
@@ -56,14 +58,24 @@ test('a new customer booking is automatically confirmed and idempotent without s
   const wrongBarber=await app.inject({...options,payload:{...payload,barberId:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'},headers:{'Idempotency-Key':'qr-block-barber-test'}});
   assert.equal(wrongBarber.statusCode,403,'Professional QR must not book a different barber');
   assert.equal(rows.length,0,'Rejected requests must not create bookings');
+  assert.equal(queries.filter(q=>q.sql.includes('INSERT INTO public.whatsapp_consents')).length,0,
+    'Cross-tenant and cross-barber requests cannot authorize WhatsApp');
+  const invalid=await app.inject({...options,payload:{...payload,customerPhone:'3001112233'},headers:{'Idempotency-Key':'whatsapp-phone-local-test'}});
+  assert.equal(invalid.statusCode,400,'Explicit WhatsApp opt-in requires an international phone');
   const first=await app.inject(options);
   assert.equal(first.statusCode,201,first.body);
   assert.equal(first.json().status,'confirmed');
   assert.equal(rows.length,1);
+  const consentIndex=queries.findIndex(q=>q.sql.includes('INSERT INTO public.whatsapp_consents'));
+  const appointmentIndex=queries.findIndex(q=>q.sql.includes('INSERT INTO public.appointments'));
+  assert.ok(consentIndex>=0&&consentIndex<appointmentIndex,'Opt-in must be persisted before the appointment trigger queues messages');
+  assert.deepEqual(queries[consentIndex].args,[tenant,customer,'+573001112233']);
   const replay=await app.inject(options);
   assert.equal(replay.statusCode,200,replay.body);
   assert.equal(replay.json().status,'confirmed');
   assert.equal(rows.length,1,'Retry must not create or approve a second appointment');
   assert.equal(queries.filter(q=>q.sql.includes('INSERT INTO public.appointments')).length,1);
+  assert.equal(queries.filter(q=>q.sql.includes('INSERT INTO public.whatsapp_consents')).length,1,
+    'Idempotent retry cannot opt in or queue a duplicate booking');
  }finally{await app.close();}
 });

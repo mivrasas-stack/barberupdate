@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { barberStore } from '../../services/store';
-import {isLiveBackend,addBooking,backendRequest,refreshLiveData,getAvailabilitySlots} from '../../services/liveBackend';
+import {isLiveBackend,addBooking,refreshLiveData,getAvailabilitySlots} from '../../services/liveBackend';
 import {useCustomerLinks} from '../../services/useCustomerLinks';
 import {normalizeBookingWhatsAppPhone} from '../../utils/whatsappPhone';
 import { formatCurrency,formatTime } from '../../utils/formatters';
@@ -55,9 +55,12 @@ export const ClienteReservas: React.FC = () => {
   });
   const [selectedTime, setSelectedTime] = useState('');
   const [notes, setNotes] = useState('');
-  const [whatsappConsent,setWhatsappConsent]=useState(false);
-  const [whatsappPhone,setWhatsappPhone]=useState('');
+  const [bookingPhone,setBookingPhone]=useState('');
+  const [submitting,setSubmitting]=useState(false);
   const [whatsappNotice,setWhatsappNotice]=useState('');
+  useEffect(()=>{
+    if(!bookingPhone.trim())setBookingPhone(customerProfile?.phone||currentUser?.phone||'');
+  },[customerProfile?.phone,currentUser?.phone]);
   useEffect(()=>{
     if(!isLiveBackend||linksLoading)return;
     const preferred=shopsToShow.find(shop=>shop.id===selectedShop?.id)
@@ -139,36 +142,34 @@ export const ClienteReservas: React.FC = () => {
   const nextDisabled=(calYear-new Date(today+'T12:00:00').getFullYear())*12+
     calMonth-new Date(today+'T12:00:00').getMonth()>=11;
 
-  const handleConfirmReservation = async () => {
-    if (!selectedService || !selectedBarber) return;
+  const handleConfirmReservation = async (notifyWhatsApp:boolean) => {
+    if (!selectedService || !selectedBarber || submitting) return;
     if(isLiveBackend){
       const tenantId=selectedShop?.id;
       if(!tenantId){addToast('Selecciona un negocio o profesional disponible.','error');return;}
-      const phone=(whatsappConsent?whatsappPhone.trim():'')||customerProfile?.phone||currentUser?.phone?.trim()||window.prompt('Ingresa tu teléfono para confirmar la reserva:')?.trim();
-      if(!phone){addToast('Necesitamos tu teléfono para la reserva.','error');return;}
-      const bookingPhone=whatsappConsent?normalizeBookingWhatsAppPhone(whatsappPhone.trim()||phone):phone;
-      if(!bookingPhone){addToast('Para recibir WhatsApp, indica un número válido con indicativo internacional, por ejemplo +57 300 123 4567.','error');return;}
+      const rawPhone=bookingPhone.trim();
+      if(!rawPhone){addToast('Ingresa tu teléfono de contacto para confirmar la cita.','error');return;}
+      const e164=normalizeBookingWhatsAppPhone(rawPhone);
+      if(notifyWhatsApp&&!e164){
+        addToast('Escribe un celular válido con indicativo; por ejemplo, 3001234567 o +573001234567.','error');
+        return;
+      }
       setWhatsappNotice('');
+      setSubmitting(true);
       try{
         await addBooking(tenantId,{barberId:selectedBarber.id,
           serviceId:selectedService.id,date:selectedDate,startTime:selectedTime,
           customerName:customerProfile?.full_name||currentUser?.name||currentUser?.email||'Cliente',
-          customerPhone:bookingPhone,notes});
-        if(whatsappConsent){
-          try{
-            await backendRequest('/me/whatsapp/consent',{method:'POST',body:JSON.stringify({tenantId,phone:bookingPhone,consent:true})});
-            setWhatsappNotice('Autorización de WhatsApp registrada. Los avisos se enviarán si la barbería tiene sus plantillas aprobadas y activadas.');
-            addToast('Autorización de WhatsApp registrada; el mensaje aún no está confirmado como enviado','info');
-          }catch(err){
-            const message=err instanceof Error?err.message:'No se pudo habilitar WhatsApp';
-            setWhatsappNotice('La cita se confirmó, pero no se pudo activar WhatsApp: '+message);
-            addToast('La cita se guardó, pero no se activaron los avisos de WhatsApp: '+message,'error');
-          }
-        }
+          customerPhone:notifyWhatsApp?e164!:rawPhone,
+          notes,whatsappOptIn:notifyWhatsApp});
+        setWhatsappNotice(notifyWhatsApp
+          ? 'Autorizaste avisos de esta cita por WhatsApp. Se enviarán cuando la barbería tenga habilitadas sus plantillas aprobadas; la entrega depende de WhatsApp.'
+          : 'Tu cita se reservó sin WhatsApp. Puedes modificar tus preferencias más adelante.');
         await refreshLiveData();
         addToast('¡Cita confirmada! Tu barbero ya tiene la reserva en su agenda.','success');
         setStep(6);
       }catch(error){addToast(error instanceof Error?error.message:'No se pudo reservar','error');}
+      finally{setSubmitting(false);}
       return;
     }
 
@@ -486,15 +487,6 @@ export const ClienteReservas: React.FC = () => {
           </div>
          </section>
         </div>
-        {isLiveBackend&&<label className="flex items-start gap-3 rounded-xl border border-neutral-700 p-3 sm:p-4 text-xs text-neutral-300">
-         <input type="checkbox" checked={whatsappConsent} onChange={e=>{setWhatsappConsent(e.target.checked);if(e.target.checked&&!whatsappPhone.trim())setWhatsappPhone(customerProfile?.phone||currentUser?.phone||'')}} className="mt-0.5 accent-amber-400"/>
-         <span>Autorizo a esta barbería a enviarme por WhatsApp confirmaciones, recordatorios y cambios de esta cita. Es opcional y puedo revocar mi autorización.</span>
-        </label>}
-        {isLiveBackend&&whatsappConsent&&<label className="block text-xs text-neutral-300">Número autorizado para WhatsApp (incluye indicativo del país)
-          <input type="tel" value={whatsappPhone} onChange={e=>setWhatsappPhone(e.target.value)} placeholder="+57 300 123 4567" autoComplete="tel"
-            className="mt-2 block w-full rounded-xl border border-neutral-600 bg-[#202024] px-3 py-3 text-white"/>
-          <span className="mt-1 block text-[11px] text-neutral-400">Para celulares colombianos puedes usar 3001234567; se guardará como +573001234567. Solo se enviarán avisos si la barbería tiene WhatsApp configurado.</span>
-        </label>}
         <div className="flex justify-between items-center border-t border-white/[0.08] pt-4 gap-3">
          <button type="button" onClick={()=>setStep(3)} className="flex items-center gap-1 text-xs text-neutral-400 hover:text-white">
           <ChevronLeft className="w-4 h-4"/>Atrás
@@ -542,18 +534,36 @@ export const ClienteReservas: React.FC = () => {
             </div>
           </div>
 
+          {isLiveBackend&&<div className="space-y-3">
+            <label className="block text-xs text-neutral-200">Tu teléfono de contacto
+              <input type="tel" inputMode="tel" autoComplete="tel" value={bookingPhone}
+                onChange={e=>setBookingPhone(e.target.value)}
+                placeholder="3001234567 o +573001234567"
+                className="mt-2 block w-full rounded-xl border border-neutral-600 bg-[#202024] px-3 py-3 text-white"/>
+            </label>
+            <p className="text-[11px] leading-relaxed text-neutral-400">
+              Al pulsar «Confirmar y recibir WhatsApp», autorizas a {selectedShop?.name||'la barbería'}
+              a enviarte la confirmación, recordatorios y cambios de esta cita al número indicado.
+              Puedes dejar de recibir estos avisos cuando quieras. No incluye publicidad.
+            </p>
+          </div>}
           <div className="flex justify-between pt-4 border-t border-neutral-800">
             <button onClick={() => setStep(4)} className="px-4 py-2 text-neutral-400 text-xs hover:text-white flex items-center gap-1">
               <ChevronLeft className="w-4 h-4" />
               <span>Modificar Fecha</span>
             </button>
-            <button
-              onClick={handleConfirmReservation}
-              className="px-6 py-2.5 rounded-xl bg-emerald-500 text-black font-extrabold text-xs hover:bg-emerald-400 flex items-center gap-1.5 shadow-lg shadow-emerald-500/10"
-            >
-              <span>Confirmar Mi Reserva</span>
-              <CheckCircle2 className="w-4 h-4" />
-            </button>
+            <div className="flex flex-col items-end gap-2">
+              <button type="button" disabled={submitting} onClick={()=>void handleConfirmReservation(true)}
+                className="px-6 py-2.5 rounded-xl bg-emerald-500 text-black font-extrabold text-xs hover:bg-emerald-400 disabled:opacity-50 flex items-center gap-1.5 shadow-lg shadow-emerald-500/10">
+                <span>{submitting?'Confirmando...':isLiveBackend?'Confirmar y recibir WhatsApp':'Confirmar mi reserva'}</span>
+                <CheckCircle2 className="w-4 h-4"/>
+              </button>
+              {isLiveBackend&&<button type="button" disabled={submitting}
+                onClick={()=>void handleConfirmReservation(false)}
+                className="text-xs text-neutral-300 underline underline-offset-2 hover:text-white disabled:opacity-50">
+                Reservar sin WhatsApp
+              </button>}
+            </div>
           </div>
         </div>
       )}
