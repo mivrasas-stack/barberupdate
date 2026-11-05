@@ -49,23 +49,25 @@ export async function registerWhatsAppRoutes(app,{config,db,security}){
         .filter(([,template])=>typeof template?.name==='string'&&template.name.length>0)
         .map(([kind])=>kind);
       const deliveryCounts=Object.fromEntries(messageRows.rows.map(row=>[row.status,Number(row.total)]));
-      let providerConfigured=false,providerCheckFailed=false;
+      let providerConfigured=false,providerCheckFailed=false,runtimeEnabled=false;
       try{
         const runtime=await resolveWhatsAppIntegration(db,config);
         providerConfigured=Boolean(runtime.whatsappAccessToken&&runtime.whatsappPhoneNumberId);
+        runtimeEnabled=Boolean(runtime.whatsappSendEnabled);
       }catch{
         providerCheckFailed=true; // Missing/invalid master key or unreadable vault.
       }
       const activeConsents=Number(consentRows.rows[0]?.active_consents||0);
       const blockers=[];
       if(!config.whatsappSendEnabled)blockers.push('El envío global WHATSAPP_SEND_ENABLED está desactivado en el servidor.');
+      if(!runtimeEnabled&&config.whatsappSendEnabled)blockers.push('La integración de WhatsApp está desactivada o no disponible en la plataforma.');
       if(!providerConfigured)blockers.push('Faltan credenciales de Meta válidas en la configuración del servidor.');
       if(providerCheckFailed)blockers.push('No se pudieron leer las credenciales cifradas; revisa PLATFORM_SECRETS_KEY.');
       if(!tenantSettings.enabled)blockers.push('Esta barbería todavía no ha activado las notificaciones.');
       if(!configuredEvents.length)blockers.push('Faltan los nombres y parámetros de las plantillas aprobadas en Meta.');
       if(!activeConsents)blockers.push('Aún no hay clientes que hayan autorizado WhatsApp.');
       return {
-        sendReady:config.whatsappSendEnabled&&providerConfigured&&tenantSettings.enabled&&configuredEvents.length>0,
+        sendReady:runtimeEnabled&&providerConfigured&&tenantSettings.enabled&&configuredEvents.length>0,
         serverEnabled:Boolean(config.whatsappSendEnabled),
         providerConfigured,tenantEnabled:Boolean(tenantSettings.enabled),
         configuredEvents,activeConsents,deliveryCounts,
