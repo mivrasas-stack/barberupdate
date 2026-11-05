@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {BarberoPerfil} from '../barbero/BarberoPerfil';
 import { useApp } from '../../context/AppContext';
 import { BarberInvites } from './BarberInvites';
+import {formatTime} from '../../utils/formatters';
 import {BarberiaWhatsapp} from './BarberiaWhatsapp';
 import { ImageUploader } from './ImageUploader';
 import {backendRequest,isLiveBackend,refreshLiveData} from '../../services/liveBackend';
@@ -207,7 +208,7 @@ export const BarberiaPerfil: React.FC = () => {
           </div>
           <div className="flex items-center gap-2">
             <Clock className="w-4 h-4 text-[var(--gold-primary)] shrink-0" />
-            <span>{shop.openingHours.days} ({shop.openingHours.open} - {shop.openingHours.close})</span>
+            <span>{shop.openingHours.days} ({formatTime(shop.openingHours.open)} – {formatTime(shop.openingHours.close)})</span>
           </div>
         </div>
       </div>
