@@ -144,7 +144,7 @@ test('Agendamiento recupera calendario de tres columnas sin profesionales indepe
   await page.getByLabel('Correo electrónico').fill('camilo.torres@gmail.com');
   await page.getByRole('button',{name:/iniciar sesión/i}).click();
   await page.evaluate(()=>{location.hash='#/clientes/citas/nueva';});
-  await expect(page.getByText('Paso 1: Elige tu Barbería')).toBeVisible();
+  await expect(page.getByText('Paso 1: Tu barbería o profesional vinculado')).toBeVisible();
   await expect(page.getByText('Barberos Independientes')).toHaveCount(0);
   await page.getByRole('button',{name:/Continuar a Servicios/i}).click();
   await page.locator('button:has(h3)').first().click();
