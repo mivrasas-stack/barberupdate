@@ -6,18 +6,19 @@ import {registerWhatsAppRoutes} from '../src/whatsapp-routes.js';
 import {HttpProblem} from '../src/security.js';
 const TENANT='11111111-1111-4111-8111-111111111111';
 const ACTOR='22222222-2222-4222-8222-222222222222';
-async function fixture({webhookEnabled=false}={}){
+async function fixture({webhookEnabled=false,sendEnabled=false}={}){
   const app=Fastify(),calls=[];
   const db={
     query:async(sql,args)=>{
       calls.push({sql,args});
+      if(sql.includes('INSERT INTO public.whatsapp_tenant_settings'))return {rowCount:1,rows:[{enabled:true,language_code:'es_CO',reminder_hours:24,templates:{}}]};
       if(sql.includes('SELECT 1 FROM public.appointments'))return {rowCount:0,rows:[]};
       if(sql.includes('whatsapp_tenant_settings WHERE'))return {rowCount:0,rows:[]};
       return {rowCount:0,rows:[]};
     },
     transaction:async work=>work(db),
   };
-  const config={whatsappWebhookEnabled:webhookEnabled,whatsappSendEnabled:false,whatsappAccessToken:'',
+  const config={whatsappWebhookEnabled:webhookEnabled,whatsappSendEnabled:sendEnabled,whatsappAccessToken:sendEnabled?'test-only-access-token':'',
     whatsappPhoneNumberId:'12345678901',whatsappWebhookVerifyToken:'verify-123',whatsappAppSecret:'app-secret'};
   const security={
     authenticated:async(req)=>{req.actor={id:ACTOR};},
@@ -95,5 +96,57 @@ test('outbound-only mode does not expose GET or POST webhook endpoints',async()=
   assert.equal(post.statusCode,404,post.body);
   const config=await app.inject({method:'GET',url:'/api/v1/tenants/'+TENANT+'/whatsapp/settings'});
   assert.equal(config.statusCode,200,'Outbound settings remain available');
+ }finally{await app.close();}
+});
+
+test('owner sees actionable, credential-free delivery diagnostics before activation',async()=>{
+ const {app,calls}=await fixture();
+ try{
+  const result=await app.inject({method:'GET',url:'/api/v1/tenants/'+TENANT+'/whatsapp/diagnostics'});
+  assert.equal(result.statusCode,200,result.body);
+  const body=result.json();
+  assert.equal(body.sendReady,false);
+  assert.equal(body.tenantEnabled,false);
+  assert.equal(body.providerConfigured,false);
+  assert.equal(body.activeConsents,0);
+  assert.ok(body.blockers.length>=3);
+  assert.equal(JSON.stringify(body).includes('accessToken'),false);
+  assert.ok(calls.some(x=>x.sql.includes('FROM public.whatsapp_consents')));
+  assert.ok(calls.some(x=>x.sql.includes('FROM public.whatsapp_messages')));
+  const denied=await app.inject({method:'GET',url:'/api/v1/tenants/33333333-3333-4333-8333-333333333333/whatsapp/diagnostics'});
+  assert.equal(denied.statusCode,403);
+ }finally{await app.close();}
+});
+
+test('opt-in requires country code; local mobile numbers must not become +300...',async()=>{
+ const {app,calls}=await fixture();
+ try{
+  const result=await app.inject({method:'POST',url:'/api/v1/me/whatsapp/consent',payload:{
+   tenantId:TENANT,phone:'3001234567',consent:true
+  }});
+  assert.equal(result.statusCode,400,result.body);
+  assert.match(result.json().message,/indicativo|internacional/i);
+  assert.equal(calls.some(x=>x.sql.includes('SELECT 1 FROM public.appointments')),false);
+ }finally{await app.close();}
+});
+
+test('enabling approved templates backfills only future bookings with active matching consent',async()=>{
+ const {app,calls}=await fixture({sendEnabled:true});
+ try{
+  const result=await app.inject({method:'PUT',url:'/api/v1/tenants/'+TENANT+'/whatsapp/settings',
+   payload:{enabled:true,languageCode:'es_CO',reminderHours:24,
+    templates:{created:{name:'cita_confirmada',params:['customer_name']},
+     reminder:{name:'recordatorio_cita',params:['customer_name']}}}
+  });
+  assert.equal(result.statusCode,200,result.body);
+  const insertions=calls.filter(x=>x.sql.includes('INSERT INTO public.whatsapp_messages'));
+  assert.equal(insertions.length,2);
+  for(const q of insertions){
+    assert.match(q.sql,/JOIN public.whatsapp_consents c/);
+    assert.match(q.sql,/c.revoked_at IS NULL/);
+    assert.match(q.sql,/c.phone_e164=regexp_replace\(a.customer_phone/);
+    assert.match(q.sql,/a.starts_at>now\(\)/);
+    assert.match(q.sql,/ON CONFLICT\(tenant_id,appointment_id,event_kind,event_version\) DO NOTHING/);
+  }
  }finally{await app.close();}
 });
