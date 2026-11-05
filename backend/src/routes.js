@@ -172,9 +172,9 @@ export async function registerRoutes(app,{config,db,security}) {
         }else if(x.whatsappOptIn===false){
           // The clearly labelled "Reservar sin WhatsApp" action also honours
           // an existing opt-out, including old 10-digit Colombian phone records.
-          const digits=x.customerPhone.trim().replace(/[\\s().-]/g,'');
-          const candidate=/^3\\d{9}$/.test(digits)?'+57'+digits:
-            /^57[1-9]\\d{9}$/.test(digits)?'+'+digits:
+          const digits=x.customerPhone.trim().replace(/[\s().-]/g,'');
+          const candidate=/^3\d{9}$/.test(digits)?'+57'+digits:
+            /^57[1-9]\d{9}$/.test(digits)?'+'+digits:
             digits.startsWith('+')?digits:null;
           if(candidate){
             let e164=null;
