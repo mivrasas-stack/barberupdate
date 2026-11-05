@@ -290,6 +290,7 @@ export const BarberiaPerfil: React.FC = () => {
               <label>Hora de cierre<input type="time" value={formClose}
                 onChange={e=>setFormClose(e.target.value)} className="mt-1 w-full bg-[#181818] border border-neutral-700 rounded-lg px-3 py-2"/></label>
             </div>
+            <p className="text-[11px] text-neutral-400">Las citas respetan los días y horarios comerciales. Los turnos personalizados de cada barbero pueden ser más cortos; los horarios predeterminados se ajustan al guardar.</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label>Instagram<input type="text" maxLength={120} value={formInstagram}
                 onChange={e=>setFormInstagram(e.target.value)} placeholder="@barberia"
