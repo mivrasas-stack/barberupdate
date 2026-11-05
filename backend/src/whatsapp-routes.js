@@ -6,11 +6,11 @@ import {resolveWhatsAppIntegration} from './integration-secrets.js';
 
 const id=z.uuid();
 const kinds=['created','reminder','rescheduled','cancelled'];
-const params=z.enum(['customer_name','business_name','barber_name','service_name','date','time']);
-const template=z.object({name:z.string().regex(/^[a-z][a-z0-9_]{0,511}$/),params:z.array(params).max(10)}).strict();
+const params=z.enum(['customer_name','business_name','barber_name','service_name','date','time','cancellation_reason']);
+const template=z.object({name:z.string().regex(/^[a-z][a-z0-9_]{0,511}$/),params:z.array(params).max(10),headerText:z.string().trim().min(1).max(60).optional()}).strict();
 const settings=z.object({
   enabled:z.boolean(),
-  languageCode:z.string().regex(/^[a-z]{2,3}_[A-Z]{2}$/).default('es_CO'),
+  languageCode:z.string().regex(/^[a-z]{2,3}(?:_[A-Z]{2})?$/).default('es_CO'),
   reminderHours:z.number().int().min(1).max(168).default(24),
   templates:z.object({created:template.optional(),reminder:template.optional(),
     rescheduled:template.optional(),cancelled:template.optional()}).strict(),
