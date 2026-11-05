@@ -25,11 +25,11 @@ export const formatDate = (dateStr: string): string => {
 
 export const formatTime = (timeStr: string): string => {
   if (!timeStr) return '';
-  const [hours, minutes] = timeStr.split(':');
-  const h = parseInt(hours, 10);
-  const ampm = h >= 12 ? 'PM' : 'AM';
+  const found = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(timeStr);
+  if (!found) return timeStr;
+  const h = Number(found[1]);
   const displayH = h % 12 || 12;
-  return `${displayH}:${minutes} ${ampm}`;
+  return `${displayH}:${found[2]} ${h >= 12 ? 'p. m.' : 'a. m.'}`;
 };
 
 export const generatePickupCode = (): string => {

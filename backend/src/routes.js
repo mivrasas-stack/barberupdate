@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { createHash } from 'node:crypto';
 import { failure, parseOrThrow, uuid } from './security.js';
 import { createProfessionalProfile } from './platform-admin.js';
+import {checkBusinessSlot} from './business-hours.js';
 
 const id = z.uuid();
 const word = (max=160) => z.string().trim().min(1).max(max);
@@ -148,7 +149,13 @@ export async function registerRoutes(app,{config,db,security}) {
         }
         // Serialize slot reservation with work-hour and time-off changes.
         await tx.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[tenant+':schedule:'+x.barberId]);
-        // One PostgreSQL round trip validates tenant + active barber + service,
+        const shop=await tx.query("SELECT opening_hours,time_zone FROM public.tenants WHERE id=$1 AND status='active'",[tenant]);
+        const serviceDuration=await tx.query("SELECT duration_minutes FROM public.services WHERE tenant_id=$1 AND id=$2 AND is_active=true",[tenant,x.serviceId]);
+        if(!shop.rowCount||!serviceDuration.rowCount)failure(404,'Servicio o barbería no disponible');
+        const endsAt=new Date(Date.parse(startsAt)+Number(serviceDuration.rows[0].duration_minutes)*60000);
+        if(!checkBusinessSlot(shop.rows[0].opening_hours,shop.rows[0].time_zone,startsAt,endsAt))
+          failure(409,'La reserva está fuera de los días u horas de atención de la barbería');
+        // The following INSERT still checks active barber, service and price,
         // computes authoritative duration/price and inserts an ALREADY CONFIRMED reservation.
         // Keep DB's legacy default for existing rows/other flows; new customer bookings
         // must not require an employee's confirmation.

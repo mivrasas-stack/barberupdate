@@ -1,7 +1,7 @@
 import React,{useState} from 'react';
 import {useApp} from '../../context/AppContext';
 import {barberStore} from '../../services/store';
-import {formatCurrency} from '../../utils/formatters';
+import {formatCurrency,formatTime} from '../../utils/formatters';
 import {isLiveBackend,publishReview,refreshLiveData} from '../../services/liveBackend';
 import {History,Star,MessageSquare,Check,X,ChevronDown} from 'lucide-react';
 import type {Appointment} from '../../types';
@@ -52,7 +52,7 @@ export const ClienteHistorial:React.FC=()=>{
     <div className="flex flex-wrap items-center justify-between gap-4">
      <div>
       <h2 className="text-sm font-bold text-white">{apt.serviceName||'Servicio'} · {shop?.name||'Barbería'}</h2>
-      <p className="text-neutral-400 mt-1">{apt.date} a las {apt.startTime} · Barbero: {barber?.name||'Por confirmar'}</p>
+      <p className="text-neutral-400 mt-1">{apt.date} a las {formatTime(apt.startTime)} · Barbero: {barber?.name||'Por confirmar'}</p>
       <p className="text-neutral-500 mt-1">Estado: {apt.status}</p>
      </div>
      <div className="flex items-center gap-3">
@@ -68,7 +68,7 @@ export const ClienteHistorial:React.FC=()=>{
      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-neutral-300">
       <div><dt className="text-neutral-500">Servicio</dt><dd>{apt.serviceName}</dd></div>
       <div><dt className="text-neutral-500">Barbero</dt><dd>{barber?.name||'No disponible'}</dd></div>
-      <div><dt className="text-neutral-500">Fecha y hora</dt><dd>{apt.date} · {apt.startTime}</dd></div>
+      <div><dt className="text-neutral-500">Fecha y hora</dt><dd>{apt.date} · {formatTime(apt.startTime)}</dd></div>
       <div><dt className="text-neutral-500">Duración</dt><dd>{apt.durationMinutes} minutos</dd></div>
       <div><dt className="text-neutral-500">Total</dt><dd>{formatCurrency(apt.finalPrice,currency)}</dd></div>
       <div><dt className="text-neutral-500">Estado</dt><dd>{apt.status}</dd></div>

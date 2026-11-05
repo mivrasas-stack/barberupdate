@@ -1,6 +1,7 @@
 import {randomUUID} from 'node:crypto';
 import {z} from 'zod';
 import {failure,parseOrThrow} from './security.js';
+import {normalizeBusinessHours,defaultWorkIntervals,checkBusinessSlot} from './business-hours.js';
 
 const id=z.uuid();
 const url=z.string().url().max(2048);
@@ -82,20 +83,55 @@ export async function registerMediaProfileRoutes(app,{db,security,config}){
    const tenant=parseOrThrow(id,req.params.tenantId);
    await requireTenant(db,tenant,req.actor.id,['owner','manager']);
    const x=parseOrThrow(shopProfile,req.body);
-   const result=await db.query(`UPDATE public.tenants
-     SET name=$2,tagline=$3,address=$4,city=$5,phone=$6,
-         email=COALESCE($7,email),
-         latitude=CASE WHEN $8::boolean THEN $9::numeric ELSE latitude END,
-         longitude=CASE WHEN $8::boolean THEN $10::numeric ELSE longitude END,
-         opening_hours=COALESCE($11::jsonb,opening_hours),
-         social_links=COALESCE($12::jsonb,social_links)
-     WHERE id=$1 AND status='active' RETURNING *`,
-     [tenant,x.name,x.tagline,x.address,x.city,x.phone,x.email??null,
-       x.latitude!==undefined,x.latitude??null,x.longitude??null,
-       x.openingHours?JSON.stringify(x.openingHours):null,
-       x.socialLinks?JSON.stringify(x.socialLinks):null]);
-   if(!result.rowCount)failure(404,'Barbería no encontrada');
-   return result.rows[0];
+   const requested=x.openingHours?normalizeBusinessHours(x.openingHours):null;
+   return db.transaction(async tx=>{
+     // Lock business configuration while checking future bookings and defaults.
+     const current=await tx.query("SELECT opening_hours,time_zone FROM public.tenants WHERE id=$1 AND status='active' FOR UPDATE",[tenant]);
+     if(!current.rowCount)failure(404,'Barbería no encontrada');
+     if(requested){
+       const future=await tx.query("SELECT starts_at,ends_at FROM public.appointments WHERE tenant_id=$1 AND starts_at>now() AND status IN ('pending','confirmed','waiting','in_service') LIMIT 500",[tenant]);
+       for(const booking of future.rows){
+         if(!checkBusinessSlot(requested,current.rows[0].time_zone,booking.starts_at,booking.ends_at))
+           failure(409,'Hay citas futuras fuera del nuevo horario. Reprográmalas antes de cambiar los días u horas de atención');
+       }
+     }
+     const result=await tx.query(`UPDATE public.tenants
+       SET name=$2,tagline=$3,address=$4,city=$5,phone=$6,
+           email=COALESCE($7,email),
+           latitude=CASE WHEN $8::boolean THEN $9::numeric ELSE latitude END,
+           longitude=CASE WHEN $8::boolean THEN $10::numeric ELSE longitude END,
+           opening_hours=COALESCE($11::jsonb,opening_hours),
+           social_links=COALESCE($12::jsonb,social_links)
+       WHERE id=$1 AND status='active' RETURNING *`,
+       [tenant,x.name,x.tagline,x.address,x.city,x.phone,x.email??null,
+         x.latitude!==undefined,x.latitude??null,x.longitude??null,
+         requested?JSON.stringify({days:requested.days,open:requested.open,close:requested.close,weekdays:requested.weekdays}):null,
+         x.socialLinks?JSON.stringify(x.socialLinks):null]);
+     if(!result.rowCount)failure(404,'Barbería no encontrada');
+     if(requested){
+       // Preserve individually-customized shifts. Only schedules still matching
+       // the shop's prior hours or the old 09:00–18:00 factory preset inherit
+       // the new commercial hours.
+       const existing=await tx.query('SELECT barber_id,weekday,start_minute,end_minute FROM public.barber_work_intervals WHERE tenant_id=$1 ORDER BY barber_id,weekday,start_minute',[tenant]);
+       const groups=new Map();
+       for(const row of existing.rows){
+         if(!groups.has(row.barber_id))groups.set(row.barber_id,[]);
+         groups.get(row.barber_id).push({weekday:row.weekday,startMinute:row.start_minute,endMinute:row.end_minute});
+       }
+       const oldSchedule=defaultWorkIntervals(current.rows[0].opening_hours);
+       const legacySchedule=[1,2,3,4,5,6].map(weekday=>({weekday,startMinute:540,endMinute:1080}));
+       const upcoming=defaultWorkIntervals(requested);
+       const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+       for(const [barber,items] of groups){
+         if(!same(items,oldSchedule)&&!same(items,legacySchedule))continue;
+         if(same(items,upcoming))continue;
+         await tx.query('DELETE FROM public.barber_work_intervals WHERE tenant_id=$1 AND barber_id=$2',[tenant,barber]);
+         for(const item of upcoming)
+           await tx.query('INSERT INTO public.barber_work_intervals(tenant_id,barber_id,weekday,start_minute,end_minute) VALUES($1,$2,$3,$4,$5)',[tenant,barber,item.weekday,item.startMinute,item.endMinute]);
+       }
+     }
+     return result.rows[0];
+   });
   });
   routes.patch('/api/v1/tenants/:tenantId/products/:productId/photo',async req=>{
    const tenant=parseOrThrow(id,req.params.tenantId),product=parseOrThrow(id,req.params.productId);

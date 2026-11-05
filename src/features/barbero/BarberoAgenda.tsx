@@ -3,7 +3,7 @@ import {rollingAgendaDays,shiftAgendaDate,useRollingAgendaDate,todayInBogota} fr
 import {isLiveBackend,addBooking,updateBooking,refreshLiveData,finishAndPayAppointment,fetchAppointmentReceipt,type AppointmentPaymentReceipt} from '../../services/liveBackend';
 import { useApp } from '../../context/AppContext';
 import { barberStore } from '../../services/store';
-import { formatCurrency } from '../../utils/formatters';
+import { formatCurrency,formatTime } from '../../utils/formatters';
 import {Appointment,AppointmentStatus,PaymentMethod} from '../../types';
 import {
   Calendar,
@@ -504,7 +504,7 @@ export const BarberoAgenda: React.FC = () => {
                                       className={`w-full text-left p-2.5 rounded-2xl border ${badgeColor} backdrop-blur-md shadow-md transition-all duration-200 hover:scale-[1.03] active:scale-[0.98] cursor-pointer block group/card`}
                                     >
                                       <div className="flex items-center justify-between text-[10px] font-mono">
-                                        <span className="font-extrabold">{apt.startTime}</span>
+                                        <span className="font-extrabold">{formatTime(apt.startTime)}</span>
                                         <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.2 rounded-full bg-black/30 backdrop-blur-sm border border-white/[0.05]">
                                           {apt.status === 'in_service' ? 'En corte' : apt.status === 'waiting' ? 'En espera' : apt.status}
                                         </span>
@@ -574,7 +574,7 @@ export const BarberoAgenda: React.FC = () => {
                 >
                   <div className="flex items-center gap-3">
                     <span className="font-mono font-bold text-base text-white bg-neutral-900 px-3 py-1.5 rounded-lg border border-neutral-800">
-                      {apt.startTime}
+                      {formatTime(apt.startTime)}
                     </span>
                     <div>
                       <div className="font-bold text-white text-sm">{apt.customerName}</div>
@@ -617,7 +617,7 @@ export const BarberoAgenda: React.FC = () => {
               {weekAppointments.map(apt => (
                 <tr key={apt.id} className="hover:bg-[#181818] transition-colors">
                   <td className="py-3 px-4 font-mono font-bold text-white">
-                    {apt.date} a las {apt.startTime}
+                    {apt.date} a las {formatTime(apt.startTime)}
                   </td>
                   <td className="py-3 px-4">
                     <div className="font-bold text-white">{apt.customerName}</div>
@@ -656,7 +656,7 @@ export const BarberoAgenda: React.FC = () => {
             </div>
             <div className="rounded-xl bg-[#222] p-4 text-sm space-y-2">
               <p className="text-white font-bold">{inspectingApt.serviceName}</p>
-              <p className="text-neutral-300">{inspectingApt.date} · {inspectingApt.startTime} · {inspectingApt.durationMinutes} min</p>
+              <p className="text-neutral-300">{inspectingApt.date} · {formatTime(inspectingApt.startTime)} · {inspectingApt.durationMinutes} min</p>
               <p className="text-[var(--gold-primary)] font-bold">{formatCurrency(inspectingApt.finalPrice,currency)}</p>
               <p className="text-xs text-neutral-400">Estado: {inspectingApt.status} · {inspectingApt.customerPhone}</p>
               {inspectingApt.notes&&<p className="text-xs text-neutral-300">Notas: {inspectingApt.notes}</p>}
@@ -714,7 +714,7 @@ export const BarberoAgenda: React.FC = () => {
           <h2 id="quick-cancel-heading" className="text-lg font-bold text-white">{cancelKind==='no_show'?'Cliente no llegó':'Cancelar cita'}</h2>
           <button type="button" onClick={()=>setCancelTarget(null)} aria-label="Cerrar cancelación" className="p-2 text-neutral-400"><X className="w-5 h-5"/></button>
          </div>
-         <p className="text-xs text-neutral-400">{cancelTarget.customerName} · {cancelTarget.serviceName} · {cancelTarget.startTime}</p>
+         <p className="text-xs text-neutral-400">{cancelTarget.customerName} · {cancelTarget.serviceName} · {formatTime(cancelTarget.startTime)}</p>
          <label htmlFor="quick-cancel-reason" className="text-xs font-semibold text-neutral-200">Motivo</label>
          <select id="quick-cancel-reason" value={cancelReason} onChange={e=>setCancelReason(e.target.value)}
           className="w-full rounded-xl border border-[#353535] bg-[#202020] p-3 text-sm text-white">

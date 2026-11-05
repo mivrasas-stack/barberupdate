@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { failure, parseOrThrow } from './security.js';
+import {defaultWorkIntervals} from './business-hours.js';
 
 const id = z.uuid();
 const text = (n) => z.string().trim().min(1).max(n);
@@ -32,11 +33,13 @@ export async function createProfessionalProfile(tx, tenantId, userId, name, pref
     [tenantId,userId,name,urlSlug,'']
   );
   const barber = inserted.rows[0];
-  // The public booking endpoint only offers slots when work intervals exist.
-  for (let day=1; day<=6; day++) {
+  // New professionals inherit their shop's REAL schedule, not hard-coded 09:00–18:00.
+  const business=await tx.query('SELECT opening_hours FROM public.tenants WHERE id=$1',[tenantId]);
+  if(!business.rowCount)failure(404,'Barbería no disponible');
+  for (const item of defaultWorkIntervals(business.rows[0].opening_hours)) {
     await tx.query(
-      'INSERT INTO public.barber_work_intervals(tenant_id,barber_id,weekday,start_minute,end_minute) VALUES($1,$2,$3,540,1080)',
-      [tenantId,barber.id,day]
+      'INSERT INTO public.barber_work_intervals(tenant_id,barber_id,weekday,start_minute,end_minute) VALUES($1,$2,$3,$4,$5)',
+      [tenantId,barber.id,item.weekday,item.startMinute,item.endMinute]
     );
   }
   return barber;
