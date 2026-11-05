@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
-import { formatCurrency } from '../../utils/formatters';
+import { formatCurrency,formatTime } from '../../utils/formatters';
 import {
   Calendar,
   CheckCircle2,
@@ -245,7 +245,7 @@ export const BarberiaDashboard: React.FC = () => {
                   >
                     <div className="flex items-center gap-3">
                       <div className="font-mono font-bold text-white text-sm bg-neutral-900 px-2 py-1.5 rounded-lg border border-neutral-800 text-center min-w-[58px]">
-                        {apt.startTime}
+                        {formatTime(apt.startTime)}
                       </div>
                       <div>
                         <div className="flex items-center gap-2">
