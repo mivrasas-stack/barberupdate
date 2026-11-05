@@ -50,8 +50,8 @@ export const AdminIntegrations:React.FC=()=>{
    if(Object.values(inputs[tab]).some(Boolean)){setNotice({kind:'info',message:'Guarda primero las claves nuevas.'});return;}
    setNotice(null);setBusy(true);
    try{
-     const result=await backendRequest<{ok:boolean;detail:string}>('/platform/integrations/'+tab+'/test',{method:'POST'});
-     setNotice({kind:'ok',message:result.detail});
+     const result=await backendRequest<{ok:boolean;detail:string;deliveryReady?:boolean}>('/platform/integrations/'+tab+'/test',{method:'POST'});
+     setNotice({kind:tab==='whatsapp'&&!result.deliveryReady?'info':'ok',message:result.detail});
    }catch(e){setNotice({kind:'error',message:String((e as Error).message)});}
    finally{setBusy(false);}
  };
@@ -108,14 +108,14 @@ export const AdminIntegrations:React.FC=()=>{
     </div>
    </div>
    {tab==='whatsapp'&&<p className="text-xs rounded-xl p-3 border border-neutral-800 bg-neutral-900 text-neutral-400">
-    Modo solo envío: no necesitas webhook, App Secret ni token de verificación. Para enviar se requieren token de acceso, Phone Number ID, plantillas aprobadas, consentimiento y habilitar el envío en el servidor. El ID de cuenta Business es opcional.
+    Modo solo envío: las credenciales, plantillas y autorizaciones se administran desde BarberNow. Meta también exige una cuenta de mensajes activa y un método de pago válido para los avisos iniciados por el negocio. La prueba comprueba el bloqueo por facturación, no solo el acceso al número. Para confirmar la entrega de cada mensaje se necesitan webhooks.
    </p>}
    {tab==='email'&&<p className="text-xs rounded-xl p-3 border border-neutral-800 bg-neutral-900 text-neutral-400">Primero verifica tu dominio en Resend. La prueba envía un correo real exclusivamente al email de tu cuenta superadmin.</p>}
    {tab==='openai'&&<p className="text-xs rounded-xl p-3 border border-neutral-800 bg-neutral-900 text-neutral-400">Configurar OpenAI prepara las credenciales para futuros bots; no activa respuestas automáticas por sí solo.</p>}
    {notice&&<p role="status" className={'rounded-xl border p-3 text-xs '+(notice.kind==='ok'?'text-emerald-300 border-emerald-700/50':notice.kind==='error'?'text-red-300 border-red-700/50':'text-sky-300 border-sky-700/50')}>{notice.message}</p>}
    <div className="flex flex-wrap items-center gap-3">
     <button type="button" disabled={!isLiveBackend||loading||busy} onClick={save} className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-[var(--gold-primary)] text-black font-bold text-sm disabled:opacity-40"><Save className="w-4 h-4"/>{busy?'Espera...':'Guardar configuración'}</button>
-    <button type="button" disabled={!isLiveBackend||loading||busy||!config.ready} onClick={check} className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-neutral-800 text-white font-semibold text-sm disabled:opacity-40"><TestTube2 className="w-4 h-4"/>{tab==='email'?'Enviar correo de prueba':'Probar conexión'}</button>
+    <button type="button" disabled={!isLiveBackend||loading||busy||!config.ready} onClick={check} className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-neutral-800 text-white font-semibold text-sm disabled:opacity-40"><TestTube2 className="w-4 h-4"/>{tab==='email'?'Enviar correo de prueba':tab==='whatsapp'?'Validar envío de WhatsApp':'Probar conexión'}</button>
     <span className="inline-flex items-center gap-2 text-xs text-neutral-500"><ShieldCheck className="w-4 h-4 text-emerald-400"/> Solo Superadmin</span>
    </div>
   </section>
