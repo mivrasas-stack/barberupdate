@@ -3,7 +3,7 @@ import {BarberoPerfil} from '../barbero/BarberoPerfil';
 import { useApp } from '../../context/AppContext';
 import { BarberInvites } from './BarberInvites';
 import {formatTime} from '../../utils/formatters';
-import {BarberiaWhatsapp} from './BarberiaWhatsapp';
+
 import { ImageUploader } from './ImageUploader';
 import {backendRequest,isLiveBackend,refreshLiveData} from '../../services/liveBackend';
 import { barberStore } from '../../services/store';
@@ -148,7 +148,7 @@ export const BarberiaPerfil: React.FC = () => {
       )}
       {activeTab==='commercial' && <>
       <BarberInvites/>
-      {isLiveBackend && <BarberiaWhatsapp tenant={shop.id} addToast={addToast}/>}
+
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#242424]">
         <div>
