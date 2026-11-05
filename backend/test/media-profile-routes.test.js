@@ -12,13 +12,17 @@ async function setup(role='owner'){
  const calls=[],uploads=[];
  const db={query:async(sql,args)=>{
   calls.push({sql,args});
+  if(sql.includes('SELECT opening_hours,time_zone FROM public.tenants'))
+   return {rowCount:1,rows:[{opening_hours:{days:'Lunes a Sábado',open:'09:00',close:'20:00'},time_zone:'America/Bogota'}]};
+  if(sql.includes('SELECT starts_at,ends_at FROM public.appointments'))return {rowCount:0,rows:[]};
+  if(sql.includes('SELECT barber_id,weekday,start_minute,end_minute FROM public.barber_work_intervals'))return {rowCount:0,rows:[]};
   if(sql.includes('SELECT 1 FROM public.barbers'))return {rowCount:args?.[1]===ownBarber?1:0,rows:args?.[1]===ownBarber?[{}]:[]};
   if(sql.includes('UPDATE public.barbers SET name=$4,bio=$5')) {
     const allowed=args?.[0]===tenant&&args?.[1]===ownBarber&&args?.[2]==='33333333-3333-4333-8333-333333333333';
     return {rowCount:allowed?1:0,rows:allowed?[{id:ownBarber,name:args?.[3]}]:[]};
   }
   return {rowCount:1,rows:[{id:tenant,portfolio:args?.[1]||[]}]};
- }};
+ },transaction:async fn=>fn(db)};
  const security={
   authenticated:async req=>{req.actor={id:'33333333-3333-4333-8333-333333333333'};},
   limited:async()=>{},
