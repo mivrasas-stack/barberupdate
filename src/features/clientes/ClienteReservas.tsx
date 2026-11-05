@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { barberStore } from '../../services/store';
 import {isLiveBackend,addBooking,backendRequest,refreshLiveData,getAvailabilitySlots} from '../../services/liveBackend';
 import {useCustomerLinks} from '../../services/useCustomerLinks';
+import {normalizeBookingWhatsAppPhone} from '../../utils/whatsappPhone';
 import { formatCurrency,formatTime } from '../../utils/formatters';
 import {
   Calendar,
@@ -55,6 +56,8 @@ export const ClienteReservas: React.FC = () => {
   const [selectedTime, setSelectedTime] = useState('');
   const [notes, setNotes] = useState('');
   const [whatsappConsent,setWhatsappConsent]=useState(false);
+  const [whatsappPhone,setWhatsappPhone]=useState('');
+  const [whatsappNotice,setWhatsappNotice]=useState('');
   useEffect(()=>{
     if(!isLiveBackend||linksLoading)return;
     const preferred=shopsToShow.find(shop=>shop.id===selectedShop?.id)
@@ -143,17 +146,23 @@ export const ClienteReservas: React.FC = () => {
       if(!tenantId){addToast('Selecciona un negocio o profesional disponible.','error');return;}
       const phone=customerProfile?.phone||currentUser?.phone?.trim()||window.prompt('Ingresa tu teléfono para confirmar la reserva:')?.trim();
       if(!phone){addToast('Necesitamos tu teléfono para la reserva.','error');return;}
+      const bookingPhone=whatsappConsent?normalizeBookingWhatsAppPhone(whatsappPhone.trim()||phone):phone;
+      if(!bookingPhone){addToast('Para recibir WhatsApp, indica un número válido con indicativo internacional, por ejemplo +57 300 123 4567.','error');return;}
+      setWhatsappNotice('');
       try{
         await addBooking(tenantId,{barberId:selectedBarber.id,
           serviceId:selectedService.id,date:selectedDate,startTime:selectedTime,
           customerName:customerProfile?.full_name||currentUser?.name||currentUser?.email||'Cliente',
-          customerPhone:phone,notes});
+          customerPhone:bookingPhone,notes});
         if(whatsappConsent){
           try{
-            await backendRequest('/me/whatsapp/consent',{method:'POST',body:JSON.stringify({tenantId,phone,consent:true})});
-            addToast('Autorización de avisos por WhatsApp registrada','success');
+            await backendRequest('/me/whatsapp/consent',{method:'POST',body:JSON.stringify({tenantId,phone:bookingPhone,consent:true})});
+            setWhatsappNotice('Autorización de WhatsApp registrada. Los avisos se enviarán si la barbería tiene sus plantillas aprobadas y activadas.');
+            addToast('Autorización de WhatsApp registrada; el mensaje aún no está confirmado como enviado','info');
           }catch(err){
-            addToast('La reserva se guardó, pero no se habilitaron los avisos de WhatsApp. Usa un número con indicativo de país.','info');
+            const message=err instanceof Error?err.message:'No se pudo habilitar WhatsApp';
+            setWhatsappNotice('La cita se confirmó, pero no se pudo activar WhatsApp: '+message);
+            addToast('La cita se guardó, pero no se activaron los avisos de WhatsApp: '+message,'error');
           }
         }
         await refreshLiveData();
@@ -478,8 +487,13 @@ export const ClienteReservas: React.FC = () => {
          </section>
         </div>
         {isLiveBackend&&<label className="flex items-start gap-3 rounded-xl border border-neutral-700 p-3 sm:p-4 text-xs text-neutral-300">
-         <input type="checkbox" checked={whatsappConsent} onChange={e=>setWhatsappConsent(e.target.checked)} className="mt-0.5 accent-amber-400"/>
+         <input type="checkbox" checked={whatsappConsent} onChange={e=>{setWhatsappConsent(e.target.checked);if(e.target.checked&&!whatsappPhone.trim())setWhatsappPhone(customerProfile?.phone||currentUser?.phone||'')}} className="mt-0.5 accent-amber-400"/>
          <span>Autorizo a esta barbería a enviarme por WhatsApp confirmaciones, recordatorios y cambios de esta cita. Es opcional y puedo revocar mi autorización.</span>
+        </label>}
+        {isLiveBackend&&whatsappConsent&&<label className="block text-xs text-neutral-300">Número autorizado para WhatsApp (incluye indicativo del país)
+          <input type="tel" value={whatsappPhone} onChange={e=>setWhatsappPhone(e.target.value)} placeholder="+57 300 123 4567" autoComplete="tel"
+            className="mt-2 block w-full rounded-xl border border-neutral-600 bg-[#202024] px-3 py-3 text-white"/>
+          <span className="mt-1 block text-[11px] text-neutral-400">Para celulares colombianos puedes usar 3001234567; se guardará como +573001234567. Solo se enviarán avisos si la barbería tiene WhatsApp configurado.</span>
         </label>}
         <div className="flex justify-between items-center border-t border-white/[0.08] pt-4 gap-3">
          <button type="button" onClick={()=>setStep(3)} className="flex items-center gap-1 text-xs text-neutral-400 hover:text-white">
@@ -554,6 +568,7 @@ export const ClienteReservas: React.FC = () => {
           <h2 className="text-xl font-bold text-white">¡Tu Cita Ha Sido Agendada con Éxito!</h2>
           <p className="text-xs text-neutral-400 max-w-md mx-auto">
             Hemos reservado tu franja de {formatTime(selectedTime)} el {selectedDate}. Recuerda llegar 5 minutos antes para disfrutar de tu café en la sala de espera.
+            {whatsappNotice&&<span role="status" className="block mt-3 text-xs text-amber-300">{whatsappNotice}</span>}
           </p>
 
           <div className="p-4 bg-[#181818] rounded-xl border border-neutral-800 max-w-sm mx-auto text-xs space-y-1 text-left">
