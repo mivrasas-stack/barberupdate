@@ -30,6 +30,15 @@ function colombiaToday(){
  return `${v('year')}-${v('month')}-${v('day')}`;
 }
 
+type ConfirmedBooking={
+  shopName:string;
+  serviceName:string;
+  barberName:string;
+  date:string;
+  time:string;
+  price:number;
+};
+
 export const ClienteReservas: React.FC = () => {
   const { state, currentUser, currency, navigate, addToast } = useApp();
   const {items:linkedBusinesses,loading:linksLoading,profile:customerProfile}=useCustomerLinks(currentUser?.id);
@@ -58,6 +67,7 @@ export const ClienteReservas: React.FC = () => {
   const [bookingPhone,setBookingPhone]=useState('');
   const [submitting,setSubmitting]=useState(false);
   const [whatsappNotice,setWhatsappNotice]=useState('');
+  const [confirmedBooking,setConfirmedBooking]=useState<ConfirmedBooking|null>(null);
   useEffect(()=>{
     if(!bookingPhone.trim())setBookingPhone(customerProfile?.phone||currentUser?.phone||'');
   },[customerProfile?.phone,currentUser?.phone]);
@@ -143,7 +153,13 @@ export const ClienteReservas: React.FC = () => {
     calMonth-new Date(today+'T12:00:00').getMonth()>=11;
 
   const handleConfirmReservation = async (notifyWhatsApp:boolean) => {
-    if (!selectedService || !selectedBarber || submitting) return;
+    if (!selectedService || !selectedBarber || !selectedTime || submitting) return;
+    const details:ConfirmedBooking={
+      shopName:selectedShop?.name||'Barbería',
+      serviceName:selectedService.name,
+      barberName:selectedBarber.name,
+      date:selectedDate,time:selectedTime,price:selectedService.price,
+    };
     if(isLiveBackend){
       const tenantId=selectedShop?.id;
       if(!tenantId){addToast('Selecciona un negocio o profesional disponible.','error');return;}
@@ -162,11 +178,15 @@ export const ClienteReservas: React.FC = () => {
           customerName:customerProfile?.full_name||currentUser?.name||currentUser?.email||'Cliente',
           customerPhone:notifyWhatsApp?e164!:rawPhone,
           notes,whatsappOptIn:notifyWhatsApp});
+        // Refreshing the agenda invalidates the old availability slots. Preserve
+        // what was actually booked before that refresh clears selectedTime.
+        setConfirmedBooking(details);
         setWhatsappNotice(notifyWhatsApp
-          ? 'Autorizaste avisos de esta cita por WhatsApp. Se enviarán cuando la barbería tenga habilitadas sus plantillas aprobadas; la entrega depende de WhatsApp.'
-          : 'Tu cita se reservó sin WhatsApp. Puedes modificar tus preferencias más adelante.');
-        await refreshLiveData();
-        addToast('¡Cita confirmada! Tu barbero ya tiene la reserva en su agenda.','success');
+          ? 'Autorizaste los avisos de esta cita por WhatsApp. Tu reserva está confirmada, aunque la entrega del mensaje depende de Meta.'
+          : 'Tu reserva quedó confirmada sin avisos por WhatsApp.');
+        try{await refreshLiveData();}
+        catch{addToast('Tu cita está guardada, pero no se pudo actualizar el panel. Recárgalo para verla.','info');}
+        addToast('¡Cita confirmada! Ya está registrada en la agenda del profesional.','success');
         setStep(6);
       }catch(error){addToast(error instanceof Error?error.message:'No se pudo reservar','error');}
       finally{setSubmitting(false);}
@@ -197,6 +217,7 @@ export const ClienteReservas: React.FC = () => {
       return;
     }
 
+    setConfirmedBooking(details);
     addToast('¡Cita confirmada exitosamente! Se ha sincronizado en la agenda del profesional.', 'success');
     setStep(6); // Confirmation screen
   };
@@ -206,7 +227,7 @@ export const ClienteReservas: React.FC = () => {
       {/* Wizard Header */}
       <div className="text-center pb-4 border-b border-[#242424]">
         <span className="text-xs font-semibold uppercase tracking-wider text-[var(--gold-primary)]">
-          Paso {step} de 5
+          {step===6?'Confirmación de cita':`Paso ${step} de 5`}
         </span>
         <h1 className="text-2xl font-extrabold text-white tracking-tight">
           {step === 1 && 'Paso 1: Tu barbería o profesional vinculado'}
@@ -217,7 +238,7 @@ export const ClienteReservas: React.FC = () => {
           {step === 6 && '¡Reserva Completada!'}
         </h1>
         <p className="text-xs text-neutral-400 mt-1">
-          {step < 6 ? 'Agenda tu cita en segundos con disponibilidad en tiempo real' : 'Tu barbero ya fue notificado'}
+          {step < 6 ? 'Agenda tu cita en segundos con disponibilidad en tiempo real' : 'Tu cita ya está registrada en la agenda'}
         </p>
 
         {/* Progress Dots */}
@@ -577,14 +598,15 @@ export const ClienteReservas: React.FC = () => {
 
           <h2 className="text-xl font-bold text-white">¡Tu Cita Ha Sido Agendada con Éxito!</h2>
           <p className="text-xs text-neutral-400 max-w-md mx-auto">
-            Hemos reservado tu franja de {formatTime(selectedTime)} el {selectedDate}. Recuerda llegar 5 minutos antes para disfrutar de tu café en la sala de espera.
+            Tu cita está reservada para el {confirmedBooking?.date||selectedDate} a las {formatTime(confirmedBooking?.time||selectedTime)}. Recuerda llegar 5 minutos antes de la hora acordada.
             {whatsappNotice&&<span role="status" className="block mt-3 text-xs text-amber-300">{whatsappNotice}</span>}
           </p>
 
           <div className="p-4 bg-[#181818] rounded-xl border border-neutral-800 max-w-sm mx-auto text-xs space-y-1 text-left">
-            <div className="text-neutral-400">Servicio: <strong className="text-white">{selectedService?.name}</strong></div>
-            <div className="text-neutral-400">Profesional: <strong className="text-[var(--gold-primary)]">{selectedBarber?.name}</strong></div>
-            <div className="text-neutral-400">Total: <strong className="font-mono text-white">{formatCurrency(selectedService?.price || 0, currency)}</strong></div>
+            <div className="text-neutral-400">Barbería: <strong className="text-white">{confirmedBooking?.shopName||selectedShop?.name||'Barbería'}</strong></div>
+            <div className="text-neutral-400">Servicio: <strong className="text-white">{confirmedBooking?.serviceName||selectedService?.name}</strong></div>
+            <div className="text-neutral-400">Profesional: <strong className="text-[var(--gold-primary)]">{confirmedBooking?.barberName||selectedBarber?.name}</strong></div>
+            <div className="text-neutral-400">Total: <strong className="font-mono text-white">{formatCurrency(confirmedBooking?.price??selectedService?.price??0, currency)}</strong></div>
           </div>
 
           <div className="pt-4 flex justify-center gap-3">
