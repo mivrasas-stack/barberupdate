@@ -63,13 +63,13 @@ export async function sendWhatsAppTemplate({accessToken,phoneNumberId,graphVersi
   const header=components.find(x=>x.type==='header');
   if(header&&(!Array.isArray(header.parameters)||header.parameters.length!==1||header.parameters[0]?.type!=='text'))
     throw new TypeError('Invalid WhatsApp template header');
-  const body=components.find(x=>x.type==='body');
-  if(body&&(!Array.isArray(body.parameters)||body.parameters.some(p=>p.type!=='text')))
+  const bodyComponent=components.find(x=>x.type==='body');
+  if(bodyComponent&&(!Array.isArray(bodyComponent.parameters)||bodyComponent.parameters.some(p=>p.type!=='text')))
     throw new TypeError('Invalid WhatsApp template body');
   const validated=createTemplateMessage({
     to:message.to,name:message.template?.name,language:message.template?.language?.code,
     headerText:header?.parameters[0].text??null,
-    parameters:(body?.parameters||[]).map(p=>p.text),
+    parameters:(bodyComponent?.parameters||[]).map(p=>p.text),
   });
   const response=await fetcher('https://graph.facebook.com/'+graphVersion+'/'+phoneNumberId+'/messages',{
     method:'POST',
