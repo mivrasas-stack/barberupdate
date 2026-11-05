@@ -32,7 +32,7 @@ async function fixture({webhookEnabled=false,sendEnabled=false}={}){
   return {app,calls};
 }
 
-test('tenant settings are restricted and sending cannot be activated without Meta server keys',async()=>{
+test('tenant settings are read-only; nobody must approve or map templates per barbershop',async()=>{
   const {app}=await fixture();
   try{
     const settings=await app.inject({method:'GET',url:'/api/v1/tenants/'+TENANT+'/whatsapp/settings'});
@@ -44,7 +44,8 @@ test('tenant settings are restricted and sending cannot be activated without Met
       enabled:true,languageCode:'es_CO',reminderHours:24,
       templates:{created:{name:'cita_confirmada',params:['customer_name']}}
     }});
-    assert.equal(rejected.statusCode,409,rejected.body);
+    assert.equal(rejected.statusCode,403,rejected.body);
+    assert.match(rejected.json().message,/automáticamente/i);
   }finally{await app.close();}
 });
 
@@ -130,23 +131,14 @@ test('opt-in requires country code; local mobile numbers must not become +300...
  }finally{await app.close();}
 });
 
-test('enabling approved templates backfills only future bookings with active matching consent',async()=>{
+test('owners cannot manually disable or overwrite the centrally approved templates',async()=>{
  const {app,calls}=await fixture({sendEnabled:true});
  try{
-  const result=await app.inject({method:'PUT',url:'/api/v1/tenants/'+TENANT+'/whatsapp/settings',
-   payload:{enabled:true,languageCode:'es_CO',reminderHours:24,
-    templates:{created:{name:'cita_confirmada',params:['customer_name']},
-     reminder:{name:'recordatorio_cita',params:['customer_name']}}}
-  });
-  assert.equal(result.statusCode,200,result.body);
-  const insertions=calls.filter(x=>x.sql.includes('INSERT INTO public.whatsapp_messages'));
-  assert.equal(insertions.length,2);
-  for(const q of insertions){
-    assert.match(q.sql,/JOIN public.whatsapp_consents c/);
-    assert.match(q.sql,/c.revoked_at IS NULL/);
-    assert.match(q.sql,/c.phone_e164=regexp_replace\(a.customer_phone/);
-    assert.match(q.sql,/a.starts_at>now\(\)/);
-    assert.match(q.sql,/ON CONFLICT\(tenant_id,appointment_id,event_kind,event_version\) DO NOTHING/);
-  }
+  const r=await app.inject({method:'PUT',url:'/api/v1/tenants/'+TENANT+'/whatsapp/settings',
+   payload:{enabled:false,languageCode:'en_US',reminderHours:72,templates:{created:{name:'other',params:[]}}}});
+  assert.equal(r.statusCode,403,r.body);
+  assert.equal(calls.filter(x=>x.sql.includes('INSERT INTO public.whatsapp_tenant_settings')).length,0);
+  assert.equal(calls.filter(x=>x.sql.includes('UPDATE public.whatsapp_tenant_settings')).length,0);
+  assert.equal(calls.filter(x=>x.sql.includes('INSERT INTO public.whatsapp_messages')).length,0);
  }finally{await app.close();}
 });
