@@ -18,6 +18,8 @@ function fakeDb(admin=true) {
       if(sql.includes('FROM public.platform_admins WHERE user_id=$1'))return {rowCount:admin?1:0,rows:admin?[{}]:[]};
       if(sql.includes('FROM public.tenant_members WHERE user_id=ANY'))return {rowCount:0,rows:[]};
       if(sql.includes('FROM public.platform_admins WHERE user_id=ANY'))return {rowCount:0,rows:[]};
+      if(sql.includes('SELECT opening_hours FROM public.tenants'))
+        return {rowCount:1,rows:[{opening_hours:{days:'Lunes a Sábado',open:'09:00',close:'20:00'}}]};
       if(sql.includes('SELECT id FROM public.tenants'))return {rowCount:1,rows:[{id:shop}]};
       if(sql.includes('SELECT * FROM public.barbers WHERE tenant_id=$1 AND user_id=$2')){
         const found=barbers.find(b=>b.tenant_id===args[0]&&b.user_id===args[1]);
