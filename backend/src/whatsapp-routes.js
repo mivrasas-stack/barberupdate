@@ -35,6 +35,46 @@ export async function registerWhatsAppRoutes(app,{config,db,security}){
       const row=await db.query('SELECT enabled,language_code,reminder_hours,templates FROM public.whatsapp_tenant_settings WHERE tenant_id=$1',[tenant]);
       return row.rows[0]||{enabled:false,language_code:'es_CO',reminder_hours:24,templates:{}};
     });
+    // Owner-only read-only diagnostics. Never expose tokens or customer phone numbers.
+    api.get('/api/v1/tenants/:tenantId/whatsapp/diagnostics',async req=>{
+      const tenant=parseOrThrow(id,req.params.tenantId);
+      await requireTenant(db,tenant,req.actor.id,['owner','manager']);
+      const [settingsRows,consentRows,messageRows]=await Promise.all([
+        db.query('SELECT enabled,templates FROM public.whatsapp_tenant_settings WHERE tenant_id=$1',[tenant]),
+        db.query('SELECT count(*)::int AS active_consents FROM public.whatsapp_consents WHERE tenant_id=$1 AND revoked_at IS NULL',[tenant]),
+        db.query('SELECT status,count(*)::int AS total FROM public.whatsapp_messages WHERE tenant_id=$1 GROUP BY status',[tenant])
+      ]);
+      const tenantSettings=settingsRows.rows[0]||{enabled:false,templates:{}};
+      const configuredEvents=Object.entries(tenantSettings.templates||{})
+        .filter(([,template])=>typeof template?.name==='string'&&template.name.length>0)
+        .map(([kind])=>kind);
+      const deliveryCounts=Object.fromEntries(messageRows.rows.map(row=>[row.status,Number(row.total)]));
+      let providerConfigured=false,providerCheckFailed=false,runtimeEnabled=false;
+      try{
+        const runtime=await resolveWhatsAppIntegration(db,config);
+        providerConfigured=Boolean(runtime.whatsappAccessToken&&runtime.whatsappPhoneNumberId);
+        runtimeEnabled=Boolean(runtime.whatsappSendEnabled);
+      }catch{
+        providerCheckFailed=true; // Missing/invalid master key or unreadable vault.
+      }
+      const activeConsents=Number(consentRows.rows[0]?.active_consents||0);
+      const blockers=[];
+      if(!config.whatsappSendEnabled)blockers.push('El envío global WHATSAPP_SEND_ENABLED está desactivado en el servidor.');
+      if(!runtimeEnabled&&config.whatsappSendEnabled)blockers.push('La integración de WhatsApp está desactivada o no disponible en la plataforma.');
+      if(!providerConfigured)blockers.push('Faltan credenciales de Meta válidas en la configuración del servidor.');
+      if(providerCheckFailed)blockers.push('No se pudieron leer las credenciales cifradas; revisa PLATFORM_SECRETS_KEY.');
+      if(!tenantSettings.enabled)blockers.push('Esta barbería todavía no ha activado las notificaciones.');
+      if(!configuredEvents.length)blockers.push('Faltan los nombres y parámetros de las plantillas aprobadas en Meta.');
+      if(!activeConsents)blockers.push('Aún no hay clientes que hayan autorizado WhatsApp.');
+      return {
+        sendReady:runtimeEnabled&&providerConfigured&&tenantSettings.enabled&&configuredEvents.length>0,
+        serverEnabled:Boolean(config.whatsappSendEnabled),
+        providerConfigured,tenantEnabled:Boolean(tenantSettings.enabled),
+        configuredEvents,activeConsents,deliveryCounts,
+        deliveryTrackingEnabled:Boolean(config.whatsappWebhookEnabled),
+        blockers,
+      };
+    });
     api.put('/api/v1/tenants/:tenantId/whatsapp/settings',async req=>{
       const tenant=parseOrThrow(id,req.params.tenantId);
       await requireTenant(db,tenant,req.actor.id,['owner','manager']);
@@ -48,6 +88,32 @@ export async function registerWhatsAppRoutes(app,{config,db,security}){
         const row=await tx.query('INSERT INTO public.whatsapp_tenant_settings(tenant_id,enabled,language_code,reminder_hours,templates) VALUES($1,$2,$3,$4,$5::jsonb) ON CONFLICT(tenant_id) DO UPDATE SET enabled=EXCLUDED.enabled,language_code=EXCLUDED.language_code,reminder_hours=EXCLUDED.reminder_hours,templates=EXCLUDED.templates,updated_at=now() RETURNING enabled,language_code,reminder_hours,templates',
           [tenant,x.enabled,x.languageCode,x.reminderHours,JSON.stringify(x.templates)]);
         if(!x.enabled)await tx.query("UPDATE public.whatsapp_messages SET status='suppressed',failure_code='tenant_disabled',updated_at=now() WHERE tenant_id=$1 AND status='queued'",[tenant]);
+        if(x.enabled){
+          // Customers may already have opted in before this shop activated its
+          // approved templates. Queue only FUTURE bookings with matching active
+          // consent; the unique appointment/event index prevents duplicates.
+          if(x.templates.created?.name)await tx.query(`
+            INSERT INTO public.whatsapp_messages(tenant_id,appointment_id,user_id,phone_e164,event_kind,event_version,scheduled_at)
+            SELECT a.tenant_id,a.id,a.customer_user_id,c.phone_e164,'created',0,now()
+            FROM public.appointments a
+            JOIN public.whatsapp_consents c ON c.tenant_id=a.tenant_id
+              AND c.user_id=a.customer_user_id AND c.revoked_at IS NULL
+              AND c.phone_e164=regexp_replace(a.customer_phone,'[[:space:]().-]','','g')
+            WHERE a.tenant_id=$1 AND a.status IN ('pending','confirmed') AND a.starts_at>now()
+            ON CONFLICT(tenant_id,appointment_id,event_kind,event_version) DO NOTHING`,[tenant]);
+          if(x.templates.reminder?.name)await tx.query(`
+            INSERT INTO public.whatsapp_messages(tenant_id,appointment_id,user_id,phone_e164,event_kind,event_version,scheduled_at)
+            SELECT a.tenant_id,a.id,a.customer_user_id,c.phone_e164,'reminder',
+              a.reschedule_count,a.starts_at-make_interval(hours=>$2)
+            FROM public.appointments a
+            JOIN public.whatsapp_consents c ON c.tenant_id=a.tenant_id
+              AND c.user_id=a.customer_user_id AND c.revoked_at IS NULL
+              AND c.phone_e164=regexp_replace(a.customer_phone,'[[:space:]().-]','','g')
+            WHERE a.tenant_id=$1 AND a.status IN ('pending','confirmed')
+              AND a.starts_at>now()+make_interval(hours=>$2)
+            ON CONFLICT(tenant_id,appointment_id,event_kind,event_version) DO NOTHING`,
+            [tenant,x.reminderHours]);
+        }
         return row.rows[0];
       });
     });
@@ -57,6 +123,9 @@ export async function registerWhatsAppRoutes(app,{config,db,security}){
     });
     api.post('/api/v1/me/whatsapp/consent',async req=>{
       const x=parseOrThrow(consentSchema,req.body);
+      // Require an explicit international prefix. A national 300... must not
+      // silently become +300... and then fail to match the booked phone.
+      if(!x.phone.trim().startsWith('+'))failure(400,'Incluye el indicativo internacional, por ejemplo +57 300 123 4567');
       let phone;
       try{phone='+'+normalizeWhatsAppPhone(x.phone);}
       catch{failure(400,'Numero de WhatsApp invalido. Incluye indicativo de pais');}

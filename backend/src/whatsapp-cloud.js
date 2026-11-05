@@ -1,6 +1,6 @@
 import {createHmac,timingSafeEqual} from 'node:crypto';
 
-export const TEMPLATE_KINDS=Object.freeze(['confirmation','reminder','rescheduled','cancelled']);
+export const TEMPLATE_KINDS=Object.freeze(['created','reminder','rescheduled','cancelled']);
 const namePattern=/^[a-z][a-z0-9_]{0,511}$/;
 const graphVersionPattern=/^v[0-9]{1,2}\.[0-9]$/;
 const phoneIdPattern=/^[0-9]{5,25}$/;
