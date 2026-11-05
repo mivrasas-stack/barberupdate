@@ -494,7 +494,7 @@ export async function getAvailabilitySlots(tenant:string,barberId:string,service
  const list:{starts_at:string}[]=Array.isArray(json.slots)?json.slots:[];
  return [...new Set<string>(list.map(s=>dayParts(s.starts_at,zone).time))].sort();
 }
-export async function addBooking(tenant:string,data:{barberId:string;serviceId:string;date:string;startTime:string;customerName:string;customerPhone:string;notes?:string},zone='America/Bogota'){
+export async function addBooking(tenant:string,data:{barberId:string;serviceId:string;date:string;startTime:string;customerName:string;customerPhone:string;notes?:string;whatsappOptIn?:boolean},zone='America/Bogota'){
  // Obtain a server-computed instant instead of constructing a misleading UTC timestamp in the browser.
  const slots=await fetch(apiOrigin+'/public/tenants/'+encodeURIComponent(tenant)+
    '/availability?barberId='+encodeURIComponent(data.barberId)+
@@ -506,7 +506,7 @@ export async function addBooking(tenant:string,data:{barberId:string;serviceId:s
  return backendRequest<Db>('/tenants/'+tenant+'/bookings',{method:'POST',
    body:JSON.stringify({barberId:data.barberId,serviceId:data.serviceId,
      startsAt:selected.starts_at,customerName:data.customerName,customerPhone:data.customerPhone,
-     notes:data.notes||''})},idempotencyKey);
+     notes:data.notes||'',...(data.whatsappOptIn!==undefined?{whatsappOptIn:data.whatsappOptIn}:{})})},idempotencyKey);
 }
 export type AppointmentPaymentReceipt={
  appointmentId:string;customerName:string;serviceName:string;startsAt:string;
