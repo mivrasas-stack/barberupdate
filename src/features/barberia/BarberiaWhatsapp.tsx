@@ -2,7 +2,7 @@ import React,{useEffect,useState} from 'react';
 import {backendRequest} from '../../services/liveBackend';
 
 type Kind='created'|'reminder'|'rescheduled'|'cancelled';
-type Spec={name:string;params:string[]};
+type Spec={name:string;params:string[];headerText?:string};
 type State={enabled:boolean;language_code:string;reminder_hours:number;templates:Partial<Record<Kind,Spec>>};
 type Diagnostics={sendReady:boolean;serverEnabled:boolean;providerConfigured:boolean;tenantEnabled:boolean;configuredEvents:string[];activeConsents:number;deliveryCounts:Record<string,number>;deliveryTrackingEnabled:boolean;blockers:string[]};
 const kinds:Kind[]=['created','reminder','rescheduled','cancelled'];
@@ -10,7 +10,7 @@ const labels:Record<Kind,string>={
   created:'Nueva reserva',reminder:'Recordatorio previo',
   rescheduled:'Reprogramación',cancelled:'Cancelación',
 };
-const allowed=['customer_name','business_name','barber_name','service_name','date','time'];
+const allowed=['customer_name','business_name','barber_name','service_name','date','time','cancellation_reason'];
 const defaultParameters='customer_name,business_name,date,time';
 
 export function BarberiaWhatsapp({tenant,addToast}:{tenant:string;addToast:(message:string,type:'success'|'error'|'info')=>void}){
@@ -22,6 +22,7 @@ export function BarberiaWhatsapp({tenant,addToast}:{tenant:string;addToast:(mess
   const [languageCode,setLanguageCode]=useState('es_CO');
   const [reminderHours,setReminderHours]=useState<number|null>(null);
   const [names,setNames]=useState<Record<Kind,string>>({created:'',reminder:'',rescheduled:'',cancelled:''});
+  const [headers,setHeaders]=useState<Record<Kind,string>>({created:'',reminder:'',rescheduled:'',cancelled:''});
   const [parameters,setParameters]=useState<Record<Kind,string>>({
     created:defaultParameters,reminder:defaultParameters,rescheduled:defaultParameters,cancelled:defaultParameters,
   });
@@ -43,6 +44,8 @@ export function BarberiaWhatsapp({tenant,addToast}:{tenant:string;addToast:(mess
         setReminderHours(value.reminder_hours);
         setNames({created:value.templates.created?.name||'',reminder:value.templates.reminder?.name||'',
           rescheduled:value.templates.rescheduled?.name||'',cancelled:value.templates.cancelled?.name||''});
+        setHeaders({created:value.templates.created?.headerText||'',reminder:value.templates.reminder?.headerText||'',
+          rescheduled:value.templates.rescheduled?.headerText||'',cancelled:value.templates.cancelled?.headerText||''});
         setParameters(Object.fromEntries(kinds.map(kind=>[kind,
           (value.templates[kind]?.params||defaultParameters.split(',')).join(',')])) as Record<Kind,string>);
       })
@@ -67,7 +70,7 @@ export function BarberiaWhatsapp({tenant,addToast}:{tenant:string;addToast:(mess
       if(params.length>10||params.some(x=>!allowed.includes(x))){
         addToast('Parámetros permitidos: '+allowed.join(', '),'error');return;
       }
-      templates[kind]={name,params};
+      templates[kind]={name,params,...(headers[kind].trim()?{headerText:headers[kind].trim()}:{})};
     }
     setSaving(true);
     try{
@@ -106,7 +109,7 @@ export function BarberiaWhatsapp({tenant,addToast}:{tenant:string;addToast:(mess
     </label>
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <label className="text-xs text-neutral-400 space-y-1">Idioma aprobado en Meta
-        <input value={languageCode} onChange={e=>setLanguageCode(e.target.value)} placeholder="es_CO" maxLength={6}
+        <input value={languageCode} onChange={e=>setLanguageCode(e.target.value)} placeholder="es" maxLength={6}
           className="w-full bg-[#181818] border border-neutral-700 rounded-lg p-2 text-white"/>
       </label>
       <label className="text-xs text-neutral-400 space-y-1">Anticipación del recordatorio (horas)
@@ -120,6 +123,10 @@ export function BarberiaWhatsapp({tenant,addToast}:{tenant:string;addToast:(mess
         <label className="text-xs text-neutral-300 block">{labels[kind]}
           <input value={names[kind]} onChange={e=>setNames(cur=>({...cur,[kind]:e.target.value}))}
             placeholder="Nombre exacto de plantilla aprobada" className="mt-1 block w-full p-2 bg-[#101010] border border-neutral-700 rounded-lg text-white" />
+        </label>
+        <label className="text-[11px] text-neutral-400 block">Variable del encabezado (solo si la plantilla la requiere)
+          <input value={headers[kind]} onChange={e=>setHeaders(cur=>({...cur,[kind]:e.target.value}))} placeholder="Ejemplo: 💈"
+            maxLength={60} className="mt-1 block w-full p-2 bg-[#101010] border border-neutral-700 rounded-lg text-white"/>
         </label>
         <label className="text-[11px] text-neutral-400 block">Parámetros, separados por comas
           <input value={parameters[kind]} onChange={e=>setParameters(cur=>({...cur,[kind]:e.target.value}))}
