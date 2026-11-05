@@ -2,7 +2,7 @@ import React from 'react';
 import { useApp } from '../../context/AppContext';
 import {useCustomerLinks} from '../../services/useCustomerLinks';
 import {isLiveBackend} from '../../services/liveBackend';
-import { formatCurrency, formatDate } from '../../utils/formatters';
+import { formatCurrency, formatDate,formatTime } from '../../utils/formatters';
 import {
   Calendar,
   Clock,
@@ -87,7 +87,7 @@ export const ClienteDashboard: React.FC = () => {
                   </span>
                   <span className="flex items-center gap-1.5">
                     <Clock className="w-4 h-4 text-[var(--gold-primary)]" />
-                    {nextAppointment.startTime} ({nextAppointment.durationMinutes} min)
+                    {formatTime(nextAppointment.startTime)} ({nextAppointment.durationMinutes} min)
                   </span>
                   <span className="font-bold text-white">{formatCurrency(nextAppointment.finalPrice, currency)}</span>
                 </div>
