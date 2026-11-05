@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import {formatTime} from '../../utils/formatters';
 import { useApp } from '../../context/AppContext';
 import {useCustomerLinks} from '../../services/useCustomerLinks';
 import {isLiveBackend} from '../../services/liveBackend';
@@ -156,7 +157,7 @@ export const ClienteInicio: React.FC = () => {
                       {nextAppointment.serviceName} • {nextAppointmentBarber?.name || 'Barbero'}
                     </p>
                     <p className="text-[11px] text-neutral-400 font-mono">
-                      {nextAppointment.date} a las {nextAppointment.startTime} ({nextAppointment.durationMinutes} min)
+                      {nextAppointment.date} a las {formatTime(nextAppointment.startTime)} ({nextAppointment.durationMinutes} min)
                     </p>
                   </div>
                 </div>
