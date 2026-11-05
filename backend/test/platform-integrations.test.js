@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {randomBytes} from 'node:crypto';
 import Fastify from 'fastify';
 import {encryptSecret,decryptSecret,masterKey,safeIntegrationView,resolveWhatsAppIntegration} from '../src/integration-secrets.js';
-import {registerPlatformIntegrationRoutes} from '../src/platform-integrations.js';
+import {registerPlatformIntegrationRoutes,whatsappHealthBlocker} from '../src/platform-integrations.js';
 
 test('AES-GCM integration secrets round trip, no ciphertext/plaintext in admin response',()=>{
  const key=masterKey(randomBytes(32).toString('base64'));
@@ -81,4 +81,23 @@ test('WhatsApp outbound only needs access token and phone number; WABA id is opt
  assert.equal(resolved.whatsappBusinessAccountId,'9876543210');
  assert.equal(resolved.whatsappWebhookVerifyToken,'');
  assert.equal(resolved.whatsappAppSecret,'');
+});
+
+test('Meta billing health BLOCKED (141006) is not mistaken for a successful WhatsApp send',()=>{
+ const blocked={
+  can_send_message:'BLOCKED',
+  entities:[
+   {entity_type:'PHONE_NUMBER',can_send_message:'AVAILABLE',errors:[]},
+   {entity_type:'WABA',can_send_message:'BLOCKED',errors:[{
+     error_code:141006,
+     error_description:'There is an error with the payment method. This will block business initiated conversations.'
+   }]},
+   {entity_type:'BUSINESS',can_send_message:'LIMITED',errors:[{error_code:141010}]}
+  ]
+ };
+ assert.match(whatsappHealthBlocker(blocked),/método de pago válido|pago/i);
+ assert.match(whatsappHealthBlocker(blocked),/141006/);
+ assert.equal(whatsappHealthBlocker({...blocked,can_send_message:'AVAILABLE'}),null);
+ assert.equal(whatsappHealthBlocker(null),null);
+ assert.match(whatsappHealthBlocker({can_send_message:'BLOCKED',entities:[]}),/BLOQUEADO/);
 });
