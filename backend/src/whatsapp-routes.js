@@ -140,8 +140,15 @@ export async function registerWhatsAppRoutes(app,{config,db,security}){
           if(value?.metadata?.phone_number_id!==runtime.whatsappPhoneNumberId)continue;
           for(const status of value.statuses||[]){
             if(typeof status.id!=='string'||!['sent','delivered','read','failed'].includes(status.status))continue;
-            await db.query("UPDATE public.whatsapp_messages SET status=CASE WHEN status='read' THEN status WHEN status='delivered' AND $2='sent' THEN status WHEN status IN ('sent','delivered') AND $2 IN ('sent','delivered','read','failed') THEN $2 ELSE status END,updated_at=now() WHERE provider_message_id=$1",
-              [status.id,status.status]);
+            // Keep Meta's exact numeric delivery failure code (never store the
+            // provider's message text or the recipient's number in diagnostics).
+            const providerCode=status.status==='failed'
+              ? (status.errors||[]).find(e=>Number.isInteger(e?.code))?.code : null;
+            const failureCode=status.status==='failed'
+              ? 'meta_'+(providerCode??'delivery_failed') : null;
+            await db.query(
+              "UPDATE public.whatsapp_messages SET status=CASE WHEN status='read' THEN status WHEN status='delivered' AND $2 IN ('sent','failed') THEN status WHEN status IN ('sent','delivered') AND $2 IN ('sent','delivered','read','failed') THEN $2 ELSE status END,failure_code=CASE WHEN $2='failed' AND status NOT IN ('delivered','read') THEN $3 ELSE failure_code END,updated_at=now() WHERE provider_message_id=$1",
+              [status.id,status.status,failureCode]);
           }
         }
       }
