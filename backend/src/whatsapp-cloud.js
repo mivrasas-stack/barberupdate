@@ -18,11 +18,16 @@ export function validateTemplateName(name){
   return name;
 }
 
-export function createTemplateMessage({to,name,language='es_CO',parameters=[]}){
-  if(!/^[a-z]{2,3}_[A-Z]{2}$/.test(language))throw new TypeError('Invalid template language');
+export function createTemplateMessage({to,name,language='es_CO',parameters=[],headerText=null}){
+  if(!/^[a-z]{2,3}(?:_[A-Z]{2})?$/.test(language))throw new TypeError('Invalid template language');
   if(!Array.isArray(parameters)||parameters.length>10||parameters.some(x=>typeof x!=='string'||x.length>1024||!x.trim())){
     throw new TypeError('Invalid template parameters');
   }
+  if(headerText!==null&&(typeof headerText!=='string'||!headerText.trim()||headerText.length>60))
+    throw new TypeError('Invalid WhatsApp template header text');
+  const components=[];
+  if(headerText!==null)components.push({type:'header',parameters:[{type:'text',text:headerText}]});
+  if(parameters.length)components.push({type:'body',parameters:parameters.map(text=>({type:'text',text}))});
   return {
     messaging_product:'whatsapp',
     recipient_type:'individual',
@@ -31,7 +36,7 @@ export function createTemplateMessage({to,name,language='es_CO',parameters=[]}){
     template:{
       name:validateTemplateName(name),
       language:{code:language},
-      components:parameters.length?[{type:'body',parameters:parameters.map(text=>({type:'text',text}))}]:[],
+      components,
     },
   };
 }
@@ -51,9 +56,20 @@ export async function sendWhatsAppTemplate({accessToken,phoneNumberId,graphVersi
   if(!graphVersionPattern.test(graphVersion))throw new TypeError('Invalid WhatsApp Graph API version');
   if(!message||message.type!=='template')throw new TypeError('Only approved WhatsApp templates may be sent');
   // Revalidate the payload; callers may not bypass constraints with arbitrary URLs/types.
+  const components=message.template?.components||[];
+  if(!Array.isArray(components)||components.some(x=>!['header','body'].includes(x.type))||
+     components.filter(x=>x.type==='header').length>1||components.filter(x=>x.type==='body').length>1)
+    throw new TypeError('Unexpected WhatsApp template components');
+  const header=components.find(x=>x.type==='header');
+  if(header&&(!Array.isArray(header.parameters)||header.parameters.length!==1||header.parameters[0]?.type!=='text'))
+    throw new TypeError('Invalid WhatsApp template header');
+  const body=components.find(x=>x.type==='body');
+  if(body&&(!Array.isArray(body.parameters)||body.parameters.some(p=>p.type!=='text')))
+    throw new TypeError('Invalid WhatsApp template body');
   const validated=createTemplateMessage({
     to:message.to,name:message.template?.name,language:message.template?.language?.code,
-    parameters:(message.template?.components||[]).flatMap(x=>(x.parameters||[]).map(p=>p.text)),
+    headerText:header?.parameters[0].text??null,
+    parameters:(body?.parameters||[]).map(p=>p.text),
   });
   const response=await fetcher('https://graph.facebook.com/'+graphVersion+'/'+phoneNumberId+'/messages',{
     method:'POST',
