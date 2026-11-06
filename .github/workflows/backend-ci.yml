@@ -39,8 +39,9 @@ jobs:
       - name: Validate Docker Compose
         env:
           DATABASE_URL: postgresql://notreal:notreal@localhost:5432/postgres
-          SUPABASE_URL: https://example.supabase.co
-          SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_fake
           REDIS_PASSWORD: ci_fake_password_not_used
           CORS_ORIGINS: https://example.com
+          AUTH_OTP_SECRET: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          MEDIA_SIGNING_KEY: BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=
+          MEDIA_PUBLIC_ORIGIN: https://example.com
         run: docker compose -f infra/compose.yaml config --quiet
