@@ -94,13 +94,14 @@ export async function registerPlatformAdminRoutes(app,{db,security,config}) {
         const shop=await db.query("SELECT id FROM public.tenants WHERE id=$1 AND status='active'",[x.tenantId]);
         if(!shop.rowCount)failure(404,'La barbería seleccionada no existe o no está activa');
       }
-      // Supabase sends a secure invitation; no plaintext password ever passes through this dashboard.
+      // The platform sends a WhatsApp OTP; the invited user sets their own password.
+      // No password or SMS code is ever shown to the administrator.
       const approvedOrigin=config?.origins?.find(origin=>origin.startsWith('https://')) || config?.origins?.[0];
       const {data,error}=await service.auth.admin.inviteUserByEmail(x.email,{
         data:{name:x.name,phone:x.phone},
         ...(approvedOrigin?{redirectTo:approvedOrigin+'/login'}:{}),
       });
-      if(error||!data?.user?.id) failure(409,'No se pudo invitar al usuario; comprueba el correo y la configuración de invitaciones');
+      if(error||!data?.user?.id) failure(409,'No se pudo enviar la invitación al WhatsApp del usuario');
       const created=data.user;
       try {
         if(x.tenantId && x.role!=='client'){
@@ -116,7 +117,11 @@ export async function registerPlatformAdminRoutes(app,{db,security,config}) {
         // Do not silently claim success after Auth succeeded but membership failed.
         throw Object.assign(new Error('Invitación enviada, pero falló la vinculación a la barbería. Requiere revisión del administrador.'),{statusCode:409});
       }
-      return reply.code(201).send({id:created.id,email:x.email,invited:true});
+      const challengeId=data?.challenge?.challengeId;
+      const inviteUrl=config?.authBackend==='local'&&challengeId
+        ? new URL('/login?invite='+encodeURIComponent(challengeId),approvedOrigin).toString()
+        : null;
+      return reply.code(201).send({id:created.id,email:x.email,invited:true,...(inviteUrl?{inviteUrl}:{})});
     });
 
     api.post('/api/v1/platform/tenants', async(req,reply) => {

@@ -1,11 +1,20 @@
 export function configFromEnv(env = process.env) {
   const production = env.NODE_ENV === 'production';
   const origins = (env.CORS_ORIGINS || '').split(',').map(x => x.trim()).filter(Boolean);
-  if (production && (!env.DATABASE_URL || !env.SUPABASE_URL || !env.SUPABASE_PUBLISHABLE_KEY || !env.REDIS_URL || !origins.length)) {
-    throw new Error('Production requires DATABASE_URL, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, REDIS_URL and CORS_ORIGINS');
+  const authBackend=env.AUTH_BACKEND==='local'?'local':'supabase';
+  if (production && (!env.DATABASE_URL || !env.REDIS_URL || !origins.length ||
+      (authBackend==='supabase'&&(!env.SUPABASE_URL||!env.SUPABASE_PUBLISHABLE_KEY)))) {
+    throw new Error('Production requires DATABASE_URL, REDIS_URL, CORS_ORIGINS and credentials for the configured authentication backend');
   }
   return {
     production,
+    authBackend,
+    authOtpSecret:env.AUTH_OTP_SECRET||'',
+    smtpHost:env.SMTP_HOST||'',
+    smtpPort:Number(env.SMTP_PORT||587),
+    smtpUser:env.SMTP_USER||'',
+    smtpPassword:env.SMTP_PASSWORD||'',
+    smtpFrom:env.SMTP_FROM||'',
     port: Number(env.PORT || 8080),
     databaseUrl: env.DATABASE_URL || '',
     poolMax: Math.max(1, Math.min(20, Number(env.DATABASE_POOL_MAX || 8))),
@@ -16,6 +25,10 @@ export function configFromEnv(env = process.env) {
     origins,
     rateLimit: Math.max(10, Number(env.RATE_LIMIT_PER_MINUTE || 90)),
     mediaBucket: env.MEDIA_BUCKET || 'barberos-images',
+    mediaRoot:env.MEDIA_ROOT||'',
+    mediaPublicOrigin:env.MEDIA_PUBLIC_ORIGIN||origins[0]||'',
+    mediaSigningKey:env.MEDIA_SIGNING_KEY||'',
+
     platformSecretsKey: env.PLATFORM_SECRETS_KEY || '',
     whatsappSendEnabled: env.WHATSAPP_SEND_ENABLED === 'true',
     whatsappAccessToken: env.WHATSAPP_ACCESS_TOKEN || '',

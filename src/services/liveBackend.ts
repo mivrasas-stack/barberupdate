@@ -11,30 +11,28 @@ const arr=(v:unknown):Db[]=>Array.isArray(v)?v as Db[]:[];
 const money=(o:Db,k:string)=>num(o,k);
 export const isLiveBackend=import.meta.env.VITE_BACKEND_MODE==='live';
 const apiOrigin=String(import.meta.env.VITE_API_BASE_URL||'/api/v1').replace(/\/$/,'');
-const supabaseUrl=String(import.meta.env.VITE_SUPABASE_URL||'').replace(/\/$/,'');
-const supabasePublicKey=String(import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY||'');
+// Authentication belongs to the same-origin BarberNow API; no external SDK or URL.
 const storageKey='barberos_auth_session_v1';
 const authSetupKey='barbernow_password_setup_v1';
 export function isPasswordSetupPending(){return isLiveBackend && !!sessionStorage.getItem(authSetupKey);}
 export function cancelPasswordSetup(){sessionStorage.removeItem(authSetupKey);clearSession();}
-export function consumeAuthRedirect(){
+export async function consumeAuthRedirect(){
   if(!isLiveBackend)return;
   const fragment=new URLSearchParams(window.location.hash.replace(/^#/,''));
   const flow=fragment.get('type');
-  if(flow!=='invite'&&flow!=='recovery')return;
-  const access_token=fragment.get('access_token'),refresh_token=fragment.get('refresh_token');
+  const key=fragment.get('token');
+  if(!flow||!key||!['signup','invite','recovery'].includes(flow))return;
   history.replaceState(null,'',window.location.pathname+window.location.search+'#/login');
-  if(!access_token||!refresh_token)return;
-  const expires_in=Number(fragment.get('expires_in')||3600);
-  receiveToken({access_token,refresh_token,expires_in});
-  sessionStorage.setItem(authSetupKey,flow);
+  const session=await authCall('verify',{type:flow,token:key});
+  receiveToken(session);
+  if(flow!=='signup')sessionStorage.setItem(authSetupKey,flow);
 }
 export async function savePasswordFromLink(password:string){
   if(!isPasswordSetupPending())throw Error('Abre un enlace válido de invitación o recuperación.');
   if(password.length<12)throw Error('La contraseña debe tener al menos 12 caracteres.');
   const jwt=await token();
-  const response=await fetch(supabaseUrl+'/auth/v1/user',{
-    method:'PUT',headers:{apikey:supabasePublicKey,Authorization:'Bearer '+jwt,'Content-Type':'application/json'},
+  const response=await fetch(apiOrigin+'/auth/user',{
+    method:'PUT',headers:{Authorization:'Bearer '+jwt,'Content-Type':'application/json'},
     body:JSON.stringify({password})
   });
   const data=await response.json().catch(()=>({}));
@@ -69,36 +67,73 @@ export function clearSession(){
 }
 export function hasSession(){return !isPasswordSetupPending() && (!!session||!!sessionStorage.getItem(storageKey));}
 async function authCall(path:string,payload:object){
-  if(!supabaseUrl||!supabasePublicKey)throw Error('Faltan variables públicas de Supabase para conectar BarberOS.');
-  const result=await fetch(supabaseUrl+'/auth/v1/'+path,{
-    method:'POST',headers:{apikey:supabasePublicKey,'Content-Type':'application/json'},
+  const result=await fetch(apiOrigin+'/auth/'+path,{
+    method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify(payload)
   });
   const data=await result.json().catch(()=>({}));
   if(!result.ok){
-    if(result.status===429)throw Error(data?.code==='over_email_send_rate_limit'?'Se alcanzó el límite de correos de confirmación. Intenta más tarde o contacta al administrador.':'Demasiados intentos de autenticación. Espera unos minutos antes de reintentar.');
+    if(result.status===429)throw Error(data?.code==='over_email_send_rate_limit'?'Se alcanzó el límite de códigos. Intenta más tarde.':'Demasiados intentos de autenticación. Espera unos minutos antes de reintentar.');
     throw Error(data.msg||data.error_description||data.message||data.error||'No se pudo iniciar sesión.');
   }
   return data;
 }
 function receiveToken(data:any){
-  if(!data.access_token||!data.refresh_token)throw Error('Supabase no entregó una sesión válida.');
+  if(!data.access_token||!data.refresh_token)throw Error('La autenticación de BarberNow no entregó una sesión válida.');
   storeSession({access_token:data.access_token,refresh_token:data.refresh_token,
     expires_at:Date.now()+Number(data.expires_in||3600)*1000});
 }
 export async function signIn(email:string,password:string){
   receiveToken(await authCall('token?grant_type=password',{email,password}));
 }
-// Login-only actions: never expose privileged Supabase credentials to the browser.
-export async function registerWithEmail(email:string,password:string,profile?:{fullName:string;phone:string}){
-  await authCall('signup',{email,password,...(profile?{data:{full_name:profile.fullName,phone:profile.phone}}:{})});
+// User credentials go only to BarberNow's same-origin authentication API.
+type WhatsAppChallenge={challengeId?:string;expiresInSeconds?:number;message?:string};
+export async function registerWithEmail(email:string,password:string,profile?:{fullName:string;phone:string}):Promise<WhatsAppChallenge>{
+  if(!profile?.phone)throw Error('Ingresa tu celular colombiano para recibir el código por WhatsApp.');
+  return authCall('signup',{email,password,data:{full_name:profile.fullName||'Cliente',phone:profile.phone}});
 }
-// El profesional conserva sus datos de contacto en Supabase Auth, no en la barbería.
+export async function verifyWhatsAppAuthCode(challengeId:string,code:string,purpose:'signup'|'recovery'|'link'){
+  return authCall('whatsapp/verify',{challengeId,code,purpose}) as Promise<{userId?:string;purpose:string;recoveryToken?:string}>;
+}
+export async function resendWhatsAppAuthCode(email:string,password:string):Promise<WhatsAppChallenge>{
+  return authCall('whatsapp/resend',{email,password});
+}
+export async function recoverPasswordByWhatsApp(email:string):Promise<WhatsAppChallenge>{
+  return authCall('recover',{email});
+}
+export async function resetPasswordByWhatsApp(recoveryToken:string,password:string){
+  await authCall('whatsapp/reset',{recoveryToken,password});
+}
+export async function requestPhoneVerification(phone:string):Promise<WhatsAppChallenge>{
+  const jwt=await token();
+  const res=await fetch(apiOrigin+'/auth/whatsapp/link',{
+    method:'POST',headers:{Authorization:'Bearer '+jwt,'Content-Type':'application/json'},
+    body:JSON.stringify({phone})
+  });
+  const body=await res.json().catch(()=>({}));
+  if(!res.ok)throw Error(body.error||'No se pudo enviar el código de WhatsApp');
+  return body;
+}
+export async function activateWhatsAppInvitation(challengeId:string,code:string,password:string){
+  const result=await authCall('whatsapp/invite-accept',{challengeId,code,password});
+  receiveToken(result);
+}
+export async function confirmPhoneVerification(challengeId:string,code:string){
+  const jwt=await token();
+  const res=await fetch(apiOrigin+'/auth/whatsapp/verify',{
+    method:'POST',headers:{Authorization:'Bearer '+jwt,'Content-Type':'application/json'},
+    body:JSON.stringify({challengeId,code,purpose:'link'})
+  });
+  const body=await res.json().catch(()=>({}));
+  if(!res.ok)throw Error(body.error||'Código inválido');
+  return body;
+}
+// El profesional conserva sus datos de contacto en la identidad propia de BarberNow.
 export async function updateAuthProfile(profile:{fullName:string;phone:string}){
   const jwt=await token();
-  const response=await fetch(supabaseUrl+'/auth/v1/user',{
+  const response=await fetch(apiOrigin+'/auth/user',{
     method:'PUT',
-    headers:{apikey:supabasePublicKey,Authorization:'Bearer '+jwt,'Content-Type':'application/json'},
+    headers:{Authorization:'Bearer '+jwt,'Content-Type':'application/json'},
     body:JSON.stringify({data:{full_name:profile.fullName,phone:profile.phone}})
   });
   const data=await response.json().catch(()=>({}));
@@ -109,7 +144,7 @@ export type ClientCutPreferences={style:string;topLength:string;beard:string;not
 export type ClientAuthProfile={name:string;email:string;phone:string;avatar:string;preferences:ClientCutPreferences};
 export async function getClientAuthProfile():Promise<ClientAuthProfile>{
  const jwt=await token();
- const res=await fetch(supabaseUrl+'/auth/v1/user',{headers:{apikey:supabasePublicKey,Authorization:'Bearer '+jwt}});
+ const res=await fetch(apiOrigin+'/auth/user',{headers:{Authorization:'Bearer '+jwt}});
  const json=await res.json().catch(()=>({}));
  if(!res.ok)throw Error(json.msg||json.message||'No se pudo cargar tu perfil.');
  const md=json.user_metadata||{};
@@ -124,20 +159,20 @@ export async function saveClientAuthProfile(input:ClientAuthProfile,originalEmai
  const body:{email?:string;data:{full_name:string;phone:string;cut_preferences:ClientCutPreferences}}={
   data:{full_name:input.name.trim(),phone:input.phone.trim(),cut_preferences:input.preferences}
  };
- // Avoid asking Supabase to reconfirm an unchanged email on every profile save.
+ // Avoid revalidating an unchanged address on every profile save.
  if(input.email.trim().toLowerCase()!==originalEmail.trim().toLowerCase()){
   body.email=input.email.trim().toLowerCase();
  }
- const response=await fetch(supabaseUrl+'/auth/v1/user',{method:'PUT',headers:{
-  apikey:supabasePublicKey,Authorization:'Bearer '+jwt,'Content-Type':'application/json'
+ const response=await fetch(apiOrigin+'/auth/user',{method:'PUT',headers:{
+  Authorization:'Bearer '+jwt,'Content-Type':'application/json'
  },body:JSON.stringify(body)});
  const json=await response.json().catch(()=>({}));
  if(!response.ok)throw Error(json.msg||json.error_description||json.message||'No se pudo guardar tu perfil.');
 }
 export async function updateAccountAvatar(url:string):Promise<void>{
  const jwt=await token();
- const response=await fetch(supabaseUrl+'/auth/v1/user',{
-  method:'PUT',headers:{apikey:supabasePublicKey,Authorization:'Bearer '+jwt,'Content-Type':'application/json'},
+ const response=await fetch(apiOrigin+'/auth/user',{
+  method:'PUT',headers:{Authorization:'Bearer '+jwt,'Content-Type':'application/json'},
   body:JSON.stringify({data:{avatar_url:url}})
  });
  const result=await response.json().catch(()=>({}));
@@ -150,8 +185,8 @@ export async function updateAccountContact(input:{name:string;phone:string;email
  };
  if(input.originalEmail.toLowerCase()!==input.email.trim().toLowerCase())
   body.email=input.email.trim().toLowerCase();
- const response=await fetch(supabaseUrl+'/auth/v1/user',{
-  method:'PUT',headers:{apikey:supabasePublicKey,Authorization:'Bearer '+jwt,'Content-Type':'application/json'},
+ const response=await fetch(apiOrigin+'/auth/user',{
+  method:'PUT',headers:{Authorization:'Bearer '+jwt,'Content-Type':'application/json'},
   body:JSON.stringify(body)
  });
  const result=await response.json().catch(()=>({}));
@@ -164,15 +199,15 @@ export async function saveProfessionalProfile(tenantId:string,barberId:string,in
   method:'PATCH',body:JSON.stringify(input)
  });
 }
-export async function requestPasswordReset(email:string){
-  await authCall('recover',{email});
+export async function requestPasswordReset(email:string):Promise<WhatsAppChallenge>{
+  return recoverPasswordByWhatsApp(email);
 }
 async function token(){
   if(!session){
     try{session=JSON.parse(sessionStorage.getItem(storageKey)||'null') as Session|null;}
     catch{clearSession();}
   }
-  if(!session)throw Error('Inicia sesión con tu correo y contraseña de Supabase.');
+  if(!session)throw Error('Inicia sesión con tu correo y contraseña de BarberNow.');
   if(Date.now()>=session.expires_at-60_000){
     try{receiveToken(await authCall('token?grant_type=refresh_token',{refresh_token:session.refresh_token}));}
     catch{clearSession();throw Error('Tu sesión expiró. Inicia sesión de nuevo.');}
@@ -183,8 +218,8 @@ export async function signOut(){
   if(!session)return;
   try{
     const jwt=await token();
-    await fetch(supabaseUrl+'/auth/v1/logout',{method:'POST',
-      headers:{apikey:supabasePublicKey,Authorization:'Bearer '+jwt}});
+    await fetch(apiOrigin+'/auth/logout',{method:'POST',
+      headers:{Authorization:'Bearer '+jwt}});
   }finally{clearSession();}
 }
 export async function backendRequest<T>(path:string,options:RequestInit={},key?:string):Promise<T>{
@@ -326,7 +361,7 @@ export async function loadAccount():Promise<{
    backendRequest<Db[]>('/tenants')
  ]);
  const user=tokenUser(me.id,me.email,tenants,me.platformRole);
- // Supabase Auth is the authoritative source of user-editable identity fields.
+ // La identidad de BarberNow es la fuente de los datos privados del usuario.
  // Failed profile lookups do not block other account data.
  const identity=await getClientAuthProfile().catch(()=>null);
  if(identity){

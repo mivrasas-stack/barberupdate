@@ -105,6 +105,39 @@ export async function sendWhatsAppTemplate({accessToken,phoneNumberId,graphVersi
   return {messageId};
 }
 
+/**
+ * Authentication templates have a special Meta copy-code URL button.
+ * Only the preapproved, centrally-managed OTP template can be used here.
+ * Never send raw account codes through a marketing or appointment template.
+ */
+export function createWhatsAppAuthMessage({to,code}){
+  if(typeof code!=='string'||!/^\d{8}$/.test(code))throw new TypeError('Invalid eight-digit OTP');
+  const normalized=normalizeBookingPhone(to);
+  if(!/^\+573[0-9]{9}$/.test(normalized))throw new TypeError('OTP requires Colombian mobile');
+  return {messaging_product:'whatsapp',recipient_type:'individual',to:normalized.slice(1),
+    type:'template',template:{name:'barbernow_codigo_acceso',language:{code:'es'},components:[
+      {type:'body',parameters:[{type:'text',text:code}]},
+      {type:'button',sub_type:'url',index:'0',parameters:[{type:'text',text:code}]}
+    ]}
+  };
+}
+export async function sendWhatsAppAuthCode({accessToken,phoneNumberId,graphVersion='v23.0',to,code,fetcher=fetch}){
+  if(typeof accessToken!=='string'||!accessToken||/[\r\n]/.test(accessToken))
+    throw new TypeError('Missing WhatsApp access token');
+  if(!phoneIdPattern.test(String(phoneNumberId))||!graphVersionPattern.test(graphVersion))
+    throw new TypeError('Invalid Graph API configuration');
+  const msg=createWhatsAppAuthMessage({to,code});
+  const response=await fetcher('https://graph.facebook.com/'+graphVersion+'/'+phoneNumberId+'/messages',{
+    method:'POST',headers:{authorization:'Bearer '+accessToken,'content-type':'application/json'},
+    body:JSON.stringify(msg),signal:AbortSignal.timeout(12000)
+  });
+  if(!response.ok)throw Object.assign(new Error('WhatsApp authentication message rejected by Meta'),{status:response.status});
+  const payload=await response.json();
+  const messageId=payload.messages?.[0]?.id;
+  if(typeof messageId!=='string'||!messageId.startsWith('wamid.'))throw new Error('Meta did not return a message ID');
+  return {messageId};
+}
+
 export function isWhatsAppDeliveryAllowed({tenantEnabled,consentAt,revokedAt,templateName,appointmentStatus}){
   return tenantEnabled===true&&Boolean(consentAt)&&!revokedAt&&
     typeof templateName==='string'&&namePattern.test(templateName)&&

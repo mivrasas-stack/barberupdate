@@ -2,7 +2,7 @@ import {z} from 'zod';
 import {failure,parseOrThrow} from './security.js';
 
 // A QR grants discovery, never access to a business's private data.
-// Permanent enrollment is always tied to a verified Supabase Auth user.
+// Permanent enrollment is always tied to a verified BarberNow account.
 const code=z.string().trim().toUpperCase().regex(/^[A-F0-9]{24}$/,'Código de vinculación inválido');
 const uuid=z.uuid();
 const profile=z.object({
@@ -104,7 +104,7 @@ export async function registerCustomerLinkRoutes(app,{db,security}){
        ORDER BY c.linked_by_qr DESC,c.linked_at DESC NULLS LAST,c.user_id
        LIMIT 200
      `,[tenant]);
-     // Supabase Auth is the source of the avatar/email after profile updates.
+     // La cuenta BarberNow es la fuente del nombre, avatar y correo.
      // Bounded concurrency avoids triggering one large burst of admin API calls.
      const rows=results.rows;
      const enriched=new Array(rows.length);

@@ -17,6 +17,13 @@ import { registerMediaProfileRoutes } from './media-profile.js';
 import {registerWhatsAppRoutes} from './whatsapp-routes.js';
 import {registerPlatformIntegrationRoutes} from './platform-integrations.js';
 import {registerPlatformAdminRoutes} from './platform-admin.js';
+import {createLocalAuth} from './local-auth.js';
+import {createLocalWhatsAppOtp} from './local-whatsapp-otp.js';
+import {resolveWhatsAppIntegration} from './integration-secrets.js';
+import {sendWhatsAppAuthCode} from './whatsapp-cloud.js';
+import {registerLocalAuthRoutes} from './local-auth-routes.js';
+import {createLocalMedia,registerLocalMediaRoutes} from './local-media.js';
+import {registerOwnerOnboardingRoutes} from './owner-onboarding.js';
 
 /**
  * Translate database rules without exposing raw PostgreSQL messages to clients.
@@ -41,6 +48,27 @@ export async function buildApp(env = process.env) {
   const app = Fastify({ logger: { level: env.LOG_LEVEL || 'info', redact: ['req.headers.authorization', 'req.headers.cookie', 'res.headers.set-cookie'] }, bodyLimit: 1024 * 1024, trustProxy: (_address, hop) => hop === 0 });
   const db = createDb(config);
   const security = createSecurity(config);
+  const otp=config.authBackend==='local'
+    ?createLocalWhatsAppOtp({db,redis:security.redis,secret:config.authOtpSecret,
+      send:async({to,code})=>{
+        const meta=await resolveWhatsAppIntegration(db,config);
+        if(!meta.whatsappSendEnabled)throw new Error('WhatsApp is not enabled');
+        return sendWhatsAppAuthCode({
+          accessToken:meta.whatsappAccessToken,
+          phoneNumberId:meta.whatsappPhoneNumberId,
+          graphVersion:meta.whatsappGraphVersion,
+          to,code
+        });
+      }
+    }):null;
+  const localAuth=config.authBackend==='local'?createLocalAuth({db,redis:security.redis,otp}):null;
+  const media=config.authBackend==='local'
+    ?createLocalMedia({root:config.mediaRoot,origin:config.mediaPublicOrigin,signingKey:config.mediaSigningKey})
+    :null;
+  if(localAuth){
+    if(media)localAuth.service.storage=media.storage;
+    security.setLocalAuth(localAuth);
+  }
   if (security.redis) {
     try { await security.redis.connect(); }
     catch (error) { app.log.warn({ message: error.message }, 'redis is not ready'); }
@@ -58,13 +86,16 @@ export async function buildApp(env = process.env) {
   });
   app.get('/api/v1/health/live', async () => ({ status: 'ok', version: '0.1.0' }));
   app.get('/api/v1/health/ready', async (_req, reply) => {
-    if (!db || !security.supabase || !security.redis) return reply.code(503).send({ status: 'not_configured' });
+    if (!db || !(localAuth||security.supabase) || !security.redis) return reply.code(503).send({ status: 'not_configured' });
     try {
       await Promise.all([db.query('SELECT 1'), security.redis.ping()]);
       return { status: 'ready' };
     } catch { return reply.code(503).send({ status: 'unavailable' }); }
   });
+  if(localAuth)await registerLocalAuthRoutes(app,{localAuth,otp,security});
+  if(media)await registerLocalMediaRoutes(app,{media,config});
   await registerRoutes(app, { config, db, security });
+  await registerOwnerOnboardingRoutes(app,{db,security});
   await registerPlatformAdminRoutes(app, { config, db, security });
   await registerBusinessRoutes(app, { config, db, security });
   await registerSchedulingRoutes(app, { config, db, security });
@@ -80,6 +111,7 @@ export async function buildApp(env = process.env) {
   app.addHook('onClose', async () => {
     await db?.close();
     security.redis?.disconnect();
+
   });
   return app;
 }

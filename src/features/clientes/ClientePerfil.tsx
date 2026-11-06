@@ -2,6 +2,7 @@ import React,{useEffect,useState} from 'react';
 import {backendRequest,getClientAuthProfile,isLiveBackend,saveClientAuthProfile,updateAccountAvatar,type ClientCutPreferences} from '../../services/liveBackend';
 import {useApp} from '../../context/AppContext';
 import {ProfilePhotoUploader} from '../../components/common/ProfilePhotoUploader';
+import {WhatsAppAccountSecurity} from '../../components/common/WhatsAppAccountSecurity';
 import {User,Phone,Mail,Award,Scissors,Save,ShieldCheck,Loader2} from 'lucide-react';
 
 type WhatsappConsent={tenant_id:string;phone_e164:string;consented_at:string;revoked_at:string|null};
@@ -68,8 +69,8 @@ export const ClientePerfil:React.FC=()=>{
    }
    updateCurrentUserProfile({name:fullName,email:originalEmail!==mail?originalEmail:mail,phone:contact});
    if(originalEmail!==mail){
-    addToast('Datos guardados. Confirma el nuevo correo desde el enlace que te envíe Supabase antes de iniciar sesión con él.','info');
-   }else addToast(isLiveBackend?'Perfil y preferencias guardados en Supabase.':'Preferencias actualizadas en esta sesión de demostración.','success');
+    addToast('Datos guardados. Los cambios de correo requieren verificación y no se aplican automáticamente.','info');
+   }else addToast(isLiveBackend?'Perfil y preferencias guardados en BarberNow.':'Preferencias actualizadas en esta sesión de demostración.','success');
   }catch(err){addToast(err instanceof Error?err.message:'No fue posible guardar el perfil','error');}
   finally{setBusy(false);}
  };
@@ -120,7 +121,7 @@ export const ClientePerfil:React.FC=()=>{
       <p className="text-[11px] text-neutral-500 mt-1">Cambiar el correo puede requerir confirmación.</p>
      </div>
      <div><label htmlFor="cp-phone" className={labelClass}>Teléfono de contacto</label>
-      <input id="cp-phone" className={fieldClass} type="tel" required minLength={7} maxLength={32} autoComplete="tel" placeholder="+57 300 123 4567" value={phone} onChange={e=>setPhone(e.target.value)}/>
+      <input id="cp-phone" className={fieldClass} type="tel" required minLength={7} maxLength={32} autoComplete="tel" placeholder="3001234567" value={phone} onChange={e=>setPhone(e.target.value)}/>
      </div>
     </div>
    </section>
@@ -141,6 +142,7 @@ export const ClientePerfil:React.FC=()=>{
     {busy?<Loader2 className="w-4 h-4 animate-spin"/>:<Save className="w-4 h-4"/>}{busy?'Guardando...':'Guardar mi perfil'}
    </button>
   </form>
+  <WhatsAppAccountSecurity phone={phone} notify={addToast}/>
   {isLiveBackend&&<section className="rounded-2xl border border-[#262626] bg-[#141414] p-5 sm:p-6 space-y-3">
    <h2 className="flex items-center gap-2 text-sm font-bold text-white"><ShieldCheck className="w-4 h-4 text-[var(--gold-primary)]"/>Mis autorizaciones de WhatsApp</h2>
    <p className="text-xs text-neutral-400">Puedes revocar los recordatorios sin cancelar tus citas.</p>
