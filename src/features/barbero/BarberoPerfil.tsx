@@ -4,6 +4,7 @@ import {useApp} from '../../context/AppContext';
 import {barberStore} from '../../services/store';
 import {ImageUploader} from '../barberia/ImageUploader';
 import {ProfilePhotoUploader} from '../../components/common/ProfilePhotoUploader';
+import {WhatsAppAccountSecurity} from '../../components/common/WhatsAppAccountSecurity';
 import {backendRequest,getClientAuthProfile,updateAccountAvatar,updateAccountContact,saveProfessionalProfile,isLiveBackend,refreshLiveData} from '../../services/liveBackend';
 import {Scissors,Star,Trash2,UserRound,Save,Camera,Loader2} from 'lucide-react';
 
@@ -82,7 +83,7 @@ export const BarberoPerfil:React.FC<{barberOverride?:Barber}>=({barberOverride})
    }
    updateCurrentUserProfile({name:fullName.trim(),phone:phone.trim()});
    addToast(email.toLowerCase()!==originalEmail.toLowerCase()?
-    'Datos guardados. Confirma el cambio de correo desde el mensaje enviado por Supabase.':
+    'Datos guardados. El cambio de correo requiere verificación separada.':
     'Tus datos personales fueron guardados.','success');
   }catch(err){addToast(err instanceof Error?err.message:'Error al guardar tus datos','error');}
   finally{setSavingPersonal(false);}
@@ -220,6 +221,8 @@ export const BarberoPerfil:React.FC<{barberOverride?:Barber}>=({barberOverride})
    <p className="text-[11px] text-neutral-500">La modalidad contractual, los pagos y la agenda se siguen gestionando en sus módulos correspondientes.</p>
   </form>
 
+      <WhatsAppAccountSecurity phone={phone} notify={addToast}/>
+
       {/* Portfolio with strict 10 photo limit */}
       <div className="bg-[#141414] border border-[#262626] rounded-2xl p-6 shadow-xl space-y-4">
         <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
@@ -279,3 +282,5 @@ export const BarberoPerfil:React.FC<{barberOverride?:Barber}>=({barberOverride})
     </div>
   );
 };
+
+[executed on device: vmi3669516 (22a9c8cd-8866-4186-9071-dab9301dff16)]

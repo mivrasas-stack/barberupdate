@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ArrowRight, LockKeyhole, Mail } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import type { UserRole } from '../../types';
-import { isLiveBackend, requestPasswordReset, registerWithEmail, isPasswordSetupPending, savePasswordFromLink, cancelPasswordSetup } from '../../services/liveBackend';
+import { isLiveBackend, requestPasswordReset, registerWithEmail, verifyWhatsAppAuthCode, resetPasswordByWhatsApp, resendWhatsAppAuthCode, isPasswordSetupPending, savePasswordFromLink, cancelPasswordSetup } from '../../services/liveBackend';
 
 /**
  * Login only. Reproduces the BarberNow visual supplied by the owner.
@@ -12,6 +12,13 @@ export const LoginView: React.FC = () => {
   const { state, loginAs, loginWithCredentials, addToast } = useApp();
   const [email, setEmail] = useState(isLiveBackend ? '' : 'contacto@barberclub.co');
   const [password, setPassword] = useState(isLiveBackend ? '' : '••••••••••••');
+  const [phone,setPhone]=useState('');
+  const [fullName,setFullName]=useState('');
+  const [otpMode,setOtpMode]=useState<'signup'|'recovery'|null>(null);
+  const [otpChallenge,setOtpChallenge]=useState('');
+  const [otpCode,setOtpCode]=useState('');
+  const [resetPassword,setResetPassword]=useState('');
+  const [confirmReset,setConfirmReset]=useState('');
   const selectedRole: UserRole = 'owner';
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [busy, setBusy] = useState(false);
@@ -43,9 +50,12 @@ export const LoginView: React.FC = () => {
           addToast('El registro requiere el backend real.', 'info');
           return;
         }
-        await registerWithEmail(email, password);
-        addToast('Revisa tu correo si se requiere confirmar la cuenta; después inicia sesión.', 'success');
-        setMode('login');
+        const result=await registerWithEmail(email,password,{fullName:fullName.trim(),phone});
+        if(!result.challengeId)throw Error('No fue posible crear el código de verificación.');
+        setOtpChallenge(result.challengeId);
+        setOtpCode('');
+        setOtpMode('signup');
+        addToast('Enviamos un código a tu WhatsApp. No necesitas escribir +57.','success');
         return;
       }
       if (isLiveBackend) {
@@ -73,12 +83,85 @@ export const LoginView: React.FC = () => {
       return;
     }
     try {
-      await requestPasswordReset(email.trim());
-      addToast('Si existe la cuenta, recibirás instrucciones para recuperar tu contraseña.', 'success');
+      const response=await requestPasswordReset(email.trim());
+      if(response.challengeId){
+        setOtpChallenge(response.challengeId);setOtpCode('');setOtpMode('recovery');
+        addToast('Solicitamos el código por WhatsApp al celular verificado de tu cuenta.','success');
+      }else addToast('Si la cuenta tiene un celular verificado, recibirá un código. Si no, inicia sesión con tu contraseña actual para verificarlo.','info');
     } catch (error) {
       addToast(error instanceof Error ? error.message : 'No fue posible solicitar la recuperación', 'error');
     }
   };
+
+  const confirmWhatsApp=async(event:React.FormEvent)=>{
+    event.preventDefault();
+    if(busy)return;
+    if(!/^\d{8}$/.test(otpCode)){addToast('Introduce los 8 dígitos recibidos en WhatsApp.','error');return;}
+    if(otpMode==='recovery'&&(resetPassword!==confirmReset||resetPassword.length<12)){
+      addToast('La contraseña debe tener 12 caracteres o más y coincidir.','error');return;
+    }
+    setBusy(true);
+    try{
+      const result=await verifyWhatsAppAuthCode(otpChallenge,otpCode,otpMode!);
+      if(otpMode==='recovery'){
+        if(!result.recoveryToken)throw Error('No se pudo validar el código para recuperar la contraseña.');
+        await resetPasswordByWhatsApp(result.recoveryToken,resetPassword);
+        setPassword(resetPassword);
+        setOtpMode(null);setMode('login');
+        addToast('Contraseña actualizada. Ya puedes iniciar sesión con BarberNow.','success');
+      }else{
+        setOtpMode(null);
+        await loginWithCredentials(email,password,selectedRole);
+        addToast('WhatsApp verificado. Tu cuenta está activada.','success');
+      }
+      setOtpCode('');
+    }catch(error){addToast(error instanceof Error?error.message:'No fue posible validar WhatsApp','error');}
+    finally{setBusy(false);}
+  };
+
+  if(otpMode)return <main className="min-h-screen bg-[#090909] text-white flex items-center justify-center px-4">
+    <form onSubmit={e=>void confirmWhatsApp(e)}
+      className="w-full max-w-md space-y-5 rounded-2xl border border-[#303030] bg-[#181818] p-7">
+      <img src="/branding/barbernow-logo.png" alt="BarberNow" className="h-16 w-auto mx-auto"/>
+      <h1 className="text-center text-xl font-bold">Código de seguridad de WhatsApp</h1>
+      <p className="text-center text-sm text-neutral-400">Escribe los 8 dígitos recibidos. El código vence en 5 minutos y solo se usa una vez.</p>
+      <label className="block text-sm">Código de verificación
+        <input required autoFocus type="text" inputMode="numeric" autoComplete="one-time-code"
+          maxLength={8} pattern="[0-9]{8}" value={otpCode} onChange={e=>setOtpCode(e.target.value.replace(/\D/g,''))}
+          className="mt-2 block w-full rounded-xl border border-neutral-600 bg-[#101010] px-4 py-3 text-center font-mono text-2xl tracking-widest"/>
+      </label>
+      {otpMode==='recovery'&&<>
+        <label className="block text-sm">Nueva contraseña
+          <input required type="password" minLength={12} value={resetPassword} onChange={e=>setResetPassword(e.target.value)}
+            className="mt-2 block w-full rounded-xl border border-neutral-600 bg-[#101010] px-4 py-3"/>
+        </label>
+        <label className="block text-sm">Confirma tu contraseña
+          <input required type="password" minLength={12} value={confirmReset} onChange={e=>setConfirmReset(e.target.value)}
+            className="mt-2 block w-full rounded-xl border border-neutral-600 bg-[#101010] px-4 py-3"/>
+        </label>
+      </>}
+      <button type="submit" disabled={busy} className="w-full rounded-xl bg-[var(--gold-primary)] px-4 py-3 font-bold text-black disabled:opacity-50">
+        {busy?'Validando...':otpMode==='recovery'?'Verificar y cambiar contraseña':'Verificar y entrar'}
+      </button>
+      <button type="button" disabled={busy} onClick={async()=>{
+        setBusy(true);
+        try{
+          const next=otpMode==='signup'
+            ?await resendWhatsAppAuthCode(email,password)
+            :await requestPasswordReset(email);
+          if(next.challengeId){
+            setOtpChallenge(next.challengeId);setOtpCode('');
+            addToast('Solicitamos otro código por WhatsApp.','success');
+          }else addToast('Si existe un celular verificado, recibirá un código.','info');
+        }catch(e){addToast(e instanceof Error?e.message:'No se pudo reenviar el código','error');}
+        finally{setBusy(false);}
+      }} className="block w-full text-center text-xs text-[var(--gold-primary)] disabled:opacity-40">
+        Reenviar código
+      </button>
+      <button type="button" onClick={()=>{setOtpMode(null);setOtpCode('');}}
+        className="block w-full text-center text-xs text-neutral-400">Volver al inicio</button>
+    </form>
+  </main>;
 
   if(passwordSetup)return (
     <main className="min-h-screen flex items-center justify-center bg-[#090909] text-white px-4">
@@ -175,6 +258,23 @@ export const LoginView: React.FC = () => {
                 />
               </div>
             </div>
+            {mode==='register'&&<div>
+              <label htmlFor="barber-full-name" className="mb-[12px] block text-[10px] font-extrabold uppercase tracking-[1.8px] text-[#878787]">
+                Nombre completo
+              </label>
+              <input id="barber-full-name" required autoComplete="name" minLength={2}
+                value={fullName} onChange={e=>setFullName(e.target.value)}
+                className="h-[60px] w-full rounded-xl border border-[#252525] bg-[#111] px-4 text-white"/>
+            </div>}
+            {mode==='register'&&<div>
+              <label htmlFor="barber-phone" className="mb-[12px] block text-[10px] font-extrabold uppercase tracking-[1.8px] text-[#878787]">
+                Tu celular de WhatsApp
+              </label>
+              <input id="barber-phone" required type="tel" inputMode="numeric" autoComplete="tel"
+                value={phone} onChange={e=>setPhone(e.target.value)} placeholder="3001234567"
+                className="h-[60px] w-full rounded-xl border border-[#252525] bg-[#111] px-4 text-white"/>
+              <p className="mt-2 text-xs text-neutral-500">10 dígitos colombianos. No escribas +57.</p>
+            </div>}
             <div>
               <div className="mb-[12px] flex items-center justify-between gap-2">
                 <label
@@ -202,7 +302,7 @@ export const LoginView: React.FC = () => {
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   required
-                  minLength={mode === 'register' ? 8 : undefined}
+                  minLength={mode === 'register' ? 12 : undefined}
                   placeholder="••••••••"
                   className="h-[70px] w-full rounded-[12px] border border-[#252525] bg-[#111111] pl-[47px] pr-4 text-[13px] font-semibold text-[#f4f4f4] outline-none placeholder:text-[#696969] focus:border-[#b77d0a]"
                 />
@@ -245,3 +345,5 @@ export const LoginView: React.FC = () => {
     </main>
   );
 };
+
+[executed on device: vmi3669516 (22a9c8cd-8866-4186-9071-dab9301dff16)]

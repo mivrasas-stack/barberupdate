@@ -9,22 +9,30 @@ export class HttpProblem extends Error {
 }
 export const failure = (status, message) => { throw new HttpProblem(status, message); };
 export function createSecurity(config) {
-  const supabase = config.supabaseUrl && config.supabasePublishableKey
+  const supabase = config.authBackend==='local'?null:config.supabaseUrl && config.supabasePublishableKey
     ? createClient(config.supabaseUrl, config.supabasePublishableKey, { auth: { persistSession: false, autoRefreshToken: false } })
     : null;
-  const service = config.supabaseUrl && config.supabaseServiceRoleKey
+  let service = config.authBackend==='local'?null:config.supabaseUrl && config.supabaseServiceRoleKey
     ? createClient(config.supabaseUrl, config.supabaseServiceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } })
     : null;
   const redis = config.redisUrl ? new Redis(config.redisUrl, { lazyConnect: true, maxRetriesPerRequest: 1, enableOfflineQueue: false, connectTimeout: 3000 }) : null;
   if (redis) redis.on('error', () => {}); // Health endpoint reports connectivity instead of crashing process.
+  let localAuth=null;
   async function authenticated(request) {
-    if (!supabase) failure(503, 'Supabase Auth no configurado');
-    const header = request.headers.authorization || '';
-    const token = /^Bearer (.+)$/i.exec(header)?.[1];
-    if (!token) failure(401, 'Se requiere Bearer token');
-    const { data, error } = await supabase.auth.getUser(token);
-    if (error || !data?.user?.id) failure(401, 'Sesion invalida');
-    request.actor = { id: data.user.id, email: data.user.email || '' };
+    if(config.authBackend==='local'){
+      if(!localAuth)failure(503,'Autenticación local no disponible');
+      const token=/^Bearer (.+)$/i.exec(request.headers.authorization||'')?.[1];
+      if(!token)failure(401,'Se requiere Bearer token');
+      const user=await localAuth.authenticate(token);
+      request.actor={id:user.id,email:user.email||''};
+      return;
+    }
+    if(!supabase)failure(503,'Autenticación no configurada');
+    const token=/^Bearer (.+)$/i.exec(request.headers.authorization||'')?.[1];
+    if(!token)failure(401,'Se requiere Bearer token');
+    const {data,error}=await supabase.auth.getUser(token);
+    if(error||!data?.user?.id)failure(401,'Sesión inválida');
+    request.actor={id:data.user.id,email:data.user.email||''};
   }
   async function limited(request) {
     if (!redis) failure(503, 'Redis no configurado');
@@ -47,7 +55,12 @@ export function createSecurity(config) {
     if (roles && !roles.includes(result.rows[0].role)) failure(403, 'Permisos insuficientes');
     return result.rows[0].role;
   }
-  return { supabase, service, redis, authenticated, limited, requireTenant };
+  return { supabase, get service(){return service;},redis,authenticated,limited,requireTenant,
+    setLocalAuth(value){
+      if(config.authBackend!=='local')throw Error('No se puede sustituir el proveedor activo');
+      localAuth=value;service=value.service;
+    }
+  };
 }
 export function parseOrThrow(schema, value) {
   const result = schema.safeParse(value);
@@ -55,3 +68,5 @@ export function parseOrThrow(schema, value) {
   return result.data;
 }
 export const uuid = () => randomUUID();
+
+[executed on device: vmi3669516 (22a9c8cd-8866-4186-9071-dab9301dff16)]
