@@ -65,6 +65,10 @@ export async function registerLocalAuthRoutes(app,{localAuth,otp,security}){
    const x=parseOrThrow(linkInput,req.body);
    return otp.start({userId:req.actor.id,phone:x.phone,purpose:'link',ip:req.ip});
   });
+  auth.post('/api/v1/auth/whatsapp/invite-accept',async req=>{
+   const x=parseOrThrow(z.object({challengeId,code,password:z.string().min(12).max(128)}).strict(),req.body);
+   return localAuth.acceptWhatsAppInvite(x);
+  });
   auth.post('/api/v1/auth/whatsapp/reset',async req=>{
    const x=parseOrThrow(resetInput,req.body);
    return localAuth.resetWithRecoveryToken(x.recoveryToken,x.password);

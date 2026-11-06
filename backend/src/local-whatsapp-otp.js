@@ -50,7 +50,7 @@ export function createLocalWhatsAppOtp({db,redis,secret,send}){
   }
   return {challengeId:id,expiresInSeconds:300,channel:'whatsapp'};
  }
- async function verify({challengeId,code,purpose,expectedUserId=null}){
+ async function verify({challengeId,code,purpose,expectedUserId=null,setupPasswordHash=null}){
   if(!uuid.test(String(challengeId))||!codeMatcher.test(String(code||''))||
      !['signup','recovery','link'].includes(purpose))
     throw fail(400,'Código de verificación inválido');
@@ -65,6 +65,13 @@ export function createLocalWhatsAppOtp({db,redis,secret,send}){
    if(expected.length!==actual.length||!timingSafeEqual(expected,actual)){
     await tx.query('UPDATE auth.whatsapp_challenges SET attempts=attempts+1 WHERE id=$1',[challengeId]);
     return {invalid:true};
+   }
+   if(setupPasswordHash!==null){
+    if(purpose!=='signup'||typeof setupPasswordHash!=='string'||!/^\$2[aby]\$/.test(setupPasswordHash))
+      throw fail(400,'El código no corresponde a una invitación');
+    const updated=await tx.query('UPDATE auth.users SET encrypted_password=$2,updated_at=now() WHERE id=$1 AND encrypted_password IS NULL RETURNING id',
+      [row.user_id,setupPasswordHash]);
+    if(!updated.rowCount)throw fail(409,'La contraseña de esta cuenta ya está configurada');
    }
    await tx.query('UPDATE auth.whatsapp_challenges SET consumed_at=now() WHERE id=$1',[challengeId]);
    if(purpose==='signup'||purpose==='link'){

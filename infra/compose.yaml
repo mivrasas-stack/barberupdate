@@ -21,11 +21,13 @@ services:
     environment: &env
       NODE_ENV: production
       PORT: 8080
-      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL for Supabase pooler}
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL for local PostgreSQL}
       DATABASE_POOL_MAX: ${DATABASE_POOL_MAX:-8}
-      SUPABASE_URL: ${SUPABASE_URL:?Set SUPABASE_URL}
-      SUPABASE_PUBLISHABLE_KEY: ${SUPABASE_PUBLISHABLE_KEY:?Set SUPABASE_PUBLISHABLE_KEY}
-      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+      AUTH_BACKEND: local
+      AUTH_OTP_SECRET: ${AUTH_OTP_SECRET:?Set 32 byte secret for WhatsApp OTP}
+      MEDIA_ROOT: /var/lib/barbernow/media
+      MEDIA_PUBLIC_ORIGIN: ${MEDIA_PUBLIC_ORIGIN:?Set public HTTPS origin}
+      MEDIA_SIGNING_KEY: ${MEDIA_SIGNING_KEY:?Set 32 byte media signature key}
       REDIS_URL: redis://:${REDIS_PASSWORD:?Set REDIS_PASSWORD}@redis:6379
       CORS_ORIGINS: ${CORS_ORIGINS:?Set CORS_ORIGINS}
       RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-90}
@@ -40,10 +42,11 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-    networks: [backend]
+    networks: [backend, barbernow_pg_private]
     security_opt: [no-new-privileges:true]
     read_only: true
     tmpfs: [/tmp]
+    volumes: [barbernow_media_data:/var/lib/barbernow/media]
     cap_drop: [ALL]
   api2:
     <<: *api
@@ -60,5 +63,13 @@ services:
     networks: [backend]
 networks:
   backend: {}
+  barbernow_pg_private:
+    external: true
+    name: barbernow-production_private
 volumes:
   redis_data: {}
+  barbernow_media_data:
+    external: true
+    name: barbernow_media_data
+
+[executed on device: vmi3669516 (22a9c8cd-8866-4186-9071-dab9301dff16)]

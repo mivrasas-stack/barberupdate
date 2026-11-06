@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ArrowRight, LockKeyhole, Mail } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import type { UserRole } from '../../types';
-import { isLiveBackend, requestPasswordReset, registerWithEmail, verifyWhatsAppAuthCode, resetPasswordByWhatsApp, resendWhatsAppAuthCode, isPasswordSetupPending, savePasswordFromLink, cancelPasswordSetup } from '../../services/liveBackend';
+import { isLiveBackend, requestPasswordReset, registerWithEmail, verifyWhatsAppAuthCode, resetPasswordByWhatsApp, resendWhatsAppAuthCode, activateWhatsAppInvitation, isPasswordSetupPending, savePasswordFromLink, cancelPasswordSetup } from '../../services/liveBackend';
 
 /**
  * Login only. Reproduces the BarberNow visual supplied by the owner.
@@ -15,6 +15,10 @@ export const LoginView: React.FC = () => {
   const [phone,setPhone]=useState('');
   const [fullName,setFullName]=useState('');
   const [otpMode,setOtpMode]=useState<'signup'|'recovery'|null>(null);
+  const [invitationChallenge]=useState(()=>new URLSearchParams(window.location.search).get('invite')||'');
+  const [inviteCode,setInviteCode]=useState('');
+  const [invitePassword,setInvitePassword]=useState('');
+  const [inviteConfirm,setInviteConfirm]=useState('');
   const [otpChallenge,setOtpChallenge]=useState('');
   const [otpCode,setOtpCode]=useState('');
   const [resetPassword,setResetPassword]=useState('');
@@ -118,6 +122,48 @@ export const LoginView: React.FC = () => {
     }catch(error){addToast(error instanceof Error?error.message:'No fue posible validar WhatsApp','error');}
     finally{setBusy(false);}
   };
+
+  const acceptInvitation=async(event:React.FormEvent)=>{
+    event.preventDefault();
+    if(!/^\d{8}$/.test(inviteCode)||invitePassword.length<12||invitePassword!==inviteConfirm){
+      addToast('Revisa el código y confirma una contraseña de 12 o más caracteres.','error');
+      return;
+    }
+    setBusy(true);
+    try{
+      await activateWhatsAppInvitation(invitationChallenge,inviteCode,invitePassword);
+      window.location.assign('/login');
+    }catch(e){addToast(e instanceof Error?e.message:'No se pudo activar la invitación.','error');}
+    finally{setBusy(false);}
+  };
+  if(invitationChallenge)return <main className="min-h-screen flex items-center justify-center bg-[#090909] px-4 text-white">
+    <form onSubmit={e=>void acceptInvitation(e)}
+      className="w-full max-w-md space-y-4 rounded-2xl border border-[#303030] bg-[#151515] p-7">
+      <img src="/branding/barbernow-logo.png" alt="BarberNow" className="mx-auto h-16 w-auto"/>
+      <h1 className="text-center text-2xl font-bold">Activa tu cuenta BarberNow</h1>
+      <p className="text-center text-sm text-neutral-400">Ingresa los 8 dígitos recibidos por WhatsApp y elige tu contraseña. El código vence en 5 minutos.</p>
+      <label className="block text-sm">Código de WhatsApp
+        <input required type="text" inputMode="numeric" autoComplete="one-time-code" maxLength={8} pattern="[0-9]{8}"
+          value={inviteCode} onChange={e=>setInviteCode(e.target.value.replace(/\D/g,''))}
+          className="mt-2 w-full rounded-xl border border-neutral-700 bg-[#101010] px-4 py-3 text-center font-mono text-xl tracking-widest"/>
+      </label>
+      <label className="block text-sm">Crea una contraseña segura
+        <input required type="password" autoComplete="new-password" minLength={12}
+          value={invitePassword} onChange={e=>setInvitePassword(e.target.value)}
+          className="mt-2 w-full rounded-xl border border-neutral-700 bg-[#101010] px-4 py-3"/>
+      </label>
+      <label className="block text-sm">Confirmar contraseña
+        <input required type="password" autoComplete="new-password" minLength={12}
+          value={inviteConfirm} onChange={e=>setInviteConfirm(e.target.value)}
+          className="mt-2 w-full rounded-xl border border-neutral-700 bg-[#101010] px-4 py-3"/>
+      </label>
+      <button disabled={busy} type="submit"
+        className="w-full rounded-xl bg-[var(--gold-primary)] px-4 py-3 font-bold text-black disabled:opacity-50">
+        {busy?'Verificando...':'Activar mi cuenta'}
+      </button>
+      <p className="text-xs text-neutral-500">Si el código venció, solicita al administrador que genere una invitación nueva.</p>
+    </form>
+  </main>;
 
   if(otpMode)return <main className="min-h-screen bg-[#090909] text-white flex items-center justify-center px-4">
     <form onSubmit={e=>void confirmWhatsApp(e)}

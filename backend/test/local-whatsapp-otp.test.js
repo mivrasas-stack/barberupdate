@@ -47,6 +47,7 @@ function setup(){
     return {rowCount:r&&r.purpose===args[1]?1:0,rows:r?[r]:[]};
    }
    if(sql.includes('attempts=attempts+1')){rows.get(args[0]).attempts++;return {rowCount:1,rows:[]};}
+   if(sql.includes('UPDATE auth.users SET encrypted_password='))return {rowCount:1,rows:[{id:userId}]};
    if(sql.includes('UPDATE auth.users SET phone_e164='))return {rowCount:1,rows:[]};
    if(sql.startsWith('INSERT INTO auth.action_tokens'))return {rowCount:1,rows:[]};
    throw new Error('Unexpected SQL '+sql.slice(0,80));
@@ -98,6 +99,18 @@ test('WhatsApp OTP send is rate-limited and fails closed when Meta rejects',asyn
  });
  await assert.rejects(failing.start({userId:y.userId,phone:'3001234567',purpose:'signup'}),e=>
   e.statusCode===503&&!e.message.includes('Sensitive'));
+});
+
+test('invitation sets a bcrypt password atomically only after the correct WhatsApp code',async()=>{
+ const x=setup();
+ const request=await x.otp.start({userId:x.userId,phone:'3001234567',purpose:'signup',ip:'owner-admin'});
+ await assert.rejects(x.otp.verify({challengeId:request.challengeId,code:'11111111',purpose:'signup',
+  setupPasswordHash:'$2a$12$mockBcryptHash'}),e=>e.statusCode===401);
+ const outcome=await x.otp.verify({challengeId:request.challengeId,code:x.sent[0].code,purpose:'signup',
+  setupPasswordHash:'$2a$12$mockBcryptHash'});
+ assert.equal(outcome.userId,x.userId);
+ await assert.rejects(x.otp.verify({challengeId:request.challengeId,code:x.sent[0].code,purpose:'signup',
+  setupPasswordHash:'$2a$12$mockBcryptHash'}),e=>e.statusCode===401);
 });
 
 [executed on device: vmi3669516 (22a9c8cd-8866-4186-9071-dab9301dff16)]

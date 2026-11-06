@@ -22,6 +22,8 @@ import {createLocalWhatsAppOtp} from './local-whatsapp-otp.js';
 import {resolveWhatsAppIntegration} from './integration-secrets.js';
 import {sendWhatsAppAuthCode} from './whatsapp-cloud.js';
 import {registerLocalAuthRoutes} from './local-auth-routes.js';
+import {createLocalMedia,registerLocalMediaRoutes} from './local-media.js';
+import {registerOwnerOnboardingRoutes} from './owner-onboarding.js';
 
 /**
  * Translate database rules without exposing raw PostgreSQL messages to clients.
@@ -60,7 +62,13 @@ export async function buildApp(env = process.env) {
       }
     }):null;
   const localAuth=config.authBackend==='local'?createLocalAuth({db,redis:security.redis,otp}):null;
-  if(localAuth)security.setLocalAuth(localAuth);
+  const media=config.authBackend==='local'
+    ?createLocalMedia({root:config.mediaRoot,origin:config.mediaPublicOrigin,signingKey:config.mediaSigningKey})
+    :null;
+  if(localAuth){
+    if(media)localAuth.service.storage=media.storage;
+    security.setLocalAuth(localAuth);
+  }
   if (security.redis) {
     try { await security.redis.connect(); }
     catch (error) { app.log.warn({ message: error.message }, 'redis is not ready'); }
@@ -85,7 +93,9 @@ export async function buildApp(env = process.env) {
     } catch { return reply.code(503).send({ status: 'unavailable' }); }
   });
   if(localAuth)await registerLocalAuthRoutes(app,{localAuth,otp,security});
+  if(media)await registerLocalMediaRoutes(app,{media,config});
   await registerRoutes(app, { config, db, security });
+  await registerOwnerOnboardingRoutes(app,{db,security});
   await registerPlatformAdminRoutes(app, { config, db, security });
   await registerBusinessRoutes(app, { config, db, security });
   await registerSchedulingRoutes(app, { config, db, security });

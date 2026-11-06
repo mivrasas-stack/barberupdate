@@ -68,7 +68,7 @@ export async function registerRoutes(app,{config,db,security}) {
       const x=parseOrThrow(z.object({userId:id,role:z.enum(['manager','barber'])}).strict(),req.body);
       if(!service) failure(503,'Administracion de usuarios no configurada');
       const target=await service.auth.admin.getUserById(x.userId);
-      if(target.error||!target.data?.user) failure(404,'Usuario no registrado en Supabase Auth');
+      if(target.error||!target.data?.user) failure(404,'Usuario no registrado en BarberNow');
       const row=await db.query("INSERT INTO public.tenant_members(tenant_id,user_id,role) VALUES($1,$2,$3) ON CONFLICT(tenant_id,user_id) DO UPDATE SET role=EXCLUDED.role WHERE tenant_members.role <> 'owner' RETURNING tenant_id,user_id,role",[tenant,x.userId,x.role]);
       if(!row.rowCount) failure(409,'El propietario no puede perder su rol');
       return reply.code(201).send(row.rows[0]);
@@ -436,3 +436,5 @@ export async function registerRoutes(app,{config,db,security}) {
     return {tenant,barbers:barbers.rows,services:services.rows};
   });
 }
+
+[executed on device: vmi3669516 (22a9c8cd-8866-4186-9071-dab9301dff16)]

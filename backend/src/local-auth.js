@@ -179,6 +179,14 @@ export function createLocalAuth({db,redis,otp}){
   if(input.password!==undefined)await db.query('UPDATE auth.sessions SET revoked_at=now() WHERE user_id=$1',[userId]);
   return publicUser(q.rows[0]);
  }
+ async function acceptWhatsAppInvite({challengeId,code,password}){
+  if(!otp)throw problem(503,'WhatsApp no disponible');
+  const hashed=await bcrypt.hash(passwordSchema.parse(password),12);
+  const confirmed=await otp.verify({challengeId,code,purpose:'signup',setupPasswordHash:hashed});
+  const row=await db.query(selectUser+' WHERE id=$1',[confirmed.userId]);
+  if(!row.rowCount)throw problem(401,'Invitación inválida');
+  return db.transaction(tx=>createSession(tx,row.rows[0]));
+ }
  async function phoneStatus(userId){
   const q=await db.query('SELECT phone_e164,phone_verified_at FROM auth.users WHERE id=$1 LIMIT 1',[userId]);
   const row=q.rows[0];
@@ -200,20 +208,24 @@ export function createLocalAuth({db,redis,otp}){
   let phone;
   try{phone=normalizeBookingPhone(data.phone);}
   catch{return {data:null,error:{message:'Se necesita el celular del usuario para invitarlo por WhatsApp'}};}
+  let createdUser=null;
   try{
-   const user=await db.transaction(async tx=>{
+   createdUser=await db.transaction(async tx=>{
     const q=await tx.query("INSERT INTO auth.users(email,phone_e164,raw_user_meta_data,raw_app_meta_data) VALUES($1,$2,$3::jsonb,'{}'::jsonb) RETURNING "+userFields,
      [parsed.data,phone,JSON.stringify(data)]);
     return q.rows[0];
    });
-   const challenge=await otp.start({userId:user.id,phone,purpose:'signup',ip:'platform-invite'});
-   return {data:{user:publicUser(user),challenge},error:null};
+   const challenge=await otp.start({userId:createdUser.id,phone,purpose:'signup',ip:'platform-invite'});
+   return {data:{user:publicUser(createdUser),challenge},error:null};
   }catch{
+   // An unavailable Meta API must not leave an unusable invited identity.
+   if(createdUser)await db.query("DELETE FROM auth.users WHERE id=$1 AND encrypted_password IS NULL AND phone_verified_at IS NULL",
+     [createdUser.id]).catch(()=>{});
    return {data:null,error:{message:'No se pudo enviar la invitación por WhatsApp'}};
   }
  }
  return {
-  authenticate,login,refresh,logout,signup,resendSignup,verifyOtp,recover,resetWithRecoveryToken,phoneStatus,update,
+  authenticate,login,refresh,logout,signup,resendSignup,verifyOtp,recover,resetWithRecoveryToken,acceptWhatsAppInvite,phoneStatus,update,
   service:{auth:{admin:{
    listUsers:adminListUsers,getUserById:adminGetUserById,inviteUserByEmail:adminInviteUserByEmail
   }}}

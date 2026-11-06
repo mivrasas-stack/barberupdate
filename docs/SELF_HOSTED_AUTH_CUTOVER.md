@@ -36,4 +36,20 @@
 - No se requiere SMTP. La activación y recuperación dependen de Meta WhatsApp y de un número que el usuario controle; mantener procedimiento manual seguro para usuarios sin teléfono verificado.
 - El cambio de `DATABASE_URL` por sí solo rompe login, administración de usuarios y medios. Nunca hacerlo antes de los pasos anteriores.
 
+
+## Progreso adicional del 5 de noviembre de 2026
+- La plantilla de autenticación `barbernow_codigo_acceso` está aprobada en Meta. **No se ha confirmado la entrega real de un OTP**, por tanto no se debe activar producción.
+- Se copiaron y verificaron **9 imágenes** desde el origen al volumen privado `barbernow_media_data` en el VPS. El inventario y SHA-256 están en `/opt/barbernow/migration-backups/source-20261105/media-migration-manifest.json`.
+- Las referencias de imágenes en la base aislada `barbernow_stage` apuntan al servidor local. La base pública sigue intacta.
+- Se incluyeron el registro de propietarios, el ingreso por QR, la invitación administrativa y la subida/lectura de fotos sin servidor SMTP.
+- Las cuentas originales NO están activas en el PostgreSQL propio: la copia `barbernow_stage` aún no tiene los 34 hashes de contraseña importados. El archivo de exportación privada permanece en el VPS, fuera de Git.
+- La prueba del contenedor API aislado no se pudo completar por una configuración de clave de firma inválida. No se conectó a la web pública.
+- El corte final sigue BLOQUEADO hasta validar credenciales migradas, seguridad real por roles, WhatsApp OTP entregado, sincronización de citas y copia de recuperación.
+
+## Permisos del almacenamiento local
+- El proceso Node se ejecuta con UID 1000; el volumen de medios compartido debe permitir lectura/escritura a ese UID.
+- Los dos contenedores API deben montar el mismo volumen `barbernow_media_data` en `/var/lib/barbernow/media`.
+- Resguardar ese volumen periódicamente junto con el PostgreSQL; probar al menos una restauración.
+- No exponer el PostgreSQL ni el volumen de archivos al público; solo la API entrega los archivos verificados.
+
 [executed on device: vmi3669516 (22a9c8cd-8866-4186-9071-dab9301dff16)]

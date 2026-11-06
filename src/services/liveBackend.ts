@@ -114,6 +114,10 @@ export async function requestPhoneVerification(phone:string):Promise<WhatsAppCha
   if(!res.ok)throw Error(body.error||'No se pudo enviar el código de WhatsApp');
   return body;
 }
+export async function activateWhatsAppInvitation(challengeId:string,code:string,password:string){
+  const result=await authCall('whatsapp/invite-accept',{challengeId,code,password});
+  receiveToken(result);
+}
 export async function confirmPhoneVerification(challengeId:string,code:string){
   const jwt=await token();
   const res=await fetch(apiOrigin+'/auth/whatsapp/verify',{
@@ -357,7 +361,7 @@ export async function loadAccount():Promise<{
    backendRequest<Db[]>('/tenants')
  ]);
  const user=tokenUser(me.id,me.email,tenants,me.platformRole);
- // Supabase Auth is the authoritative source of user-editable identity fields.
+ // La identidad de BarberNow es la fuente de los datos privados del usuario.
  // Failed profile lookups do not block other account data.
  const identity=await getClientAuthProfile().catch(()=>null);
  if(identity){

@@ -25,6 +25,10 @@ export function configFromEnv(env = process.env) {
     origins,
     rateLimit: Math.max(10, Number(env.RATE_LIMIT_PER_MINUTE || 90)),
     mediaBucket: env.MEDIA_BUCKET || 'barberos-images',
+    mediaRoot:env.MEDIA_ROOT||'',
+    mediaPublicOrigin:env.MEDIA_PUBLIC_ORIGIN||origins[0]||'',
+    mediaSigningKey:env.MEDIA_SIGNING_KEY||'',
+
     platformSecretsKey: env.PLATFORM_SECRETS_KEY || '',
     whatsappSendEnabled: env.WHATSAPP_SEND_ENABLED === 'true',
     whatsappAccessToken: env.WHATSAPP_ACCESS_TOKEN || '',
