@@ -51,3 +51,15 @@
 - Los dos contenedores API deben montar el mismo volumen `barbernow_media_data` en `/var/lib/barbernow/media`.
 - Resguardar ese volumen periódicamente junto con el PostgreSQL; probar al menos una restauración.
 - No exponer el PostgreSQL ni el volumen de archivos al público; solo la API entrega los archivos verificados.
+
+
+## Cierre de preproducción: 6 de noviembre de 2026
+- PostgreSQL 17 del VPS en `barbernow-db-postgres`, base candidata `barbernow_candidate` con **37 usuarios reales y sus 37 hashes bcrypt**, además de un registro de referencia heredada (sin correo, sin contraseña y bloqueado) asociado a la barbería histórica `admin`.
+- Snapshot comercial actualizado y restaurado: **6 negocios, 18 perfiles de clientes, 18 vinculaciones por QR, 35 citas y 16 mensajes de WhatsApp**. No reemplazar estos datos sin un snapshot nuevo durante el corte.
+- **11 archivos de imagen diferentes** presentes en el volumen `barbernow_media_data`; se copiaron también los avatares desde los metadatos de autenticación. La base candidata ya no contiene referencias de foto a `supabase.co` en perfiles, barberías o portafolios.
+- API local aislada, PostgreSQL y Redis de pruebas en red interna Docker; **HTTP 200** en readiness. No se configuró ningún servicio Supabase en las variables del contenedor candidato.
+- Prueba HTTP real de autenticación con usuario ficticio y contraseña bcrypt: login, token de acceso, rotación, revocación y logout aprobados. Prueba de media: upload firmado, lectura, integridad binaria y rechazo de firma falsa.
+- Pruebas automáticas: backend 107 aprobadas, 0 fallidas, 5 omitidas; seis pruebas de registro de propietario aprobadas. TypeScript y compilación Vite correctos. GitHub Actions debe terminar de validar el PR #37.
+- **PENDIENTE DE VERIFICACIÓN REAL:** envío y entrega del código OTP al WhatsApp del propietario, con consentimiento. La plantilla `barbernow_codigo_acceso` está aprobada por Meta, pero su diagnóstico de salud sigue en `LIMITED` por código 141010 de verificación empresarial. No confundir aprobación de plantilla con entrega de mensaje.
+- **NO REALIZAR CORTE AUTOMÁTICO**: el servidor de origen sigue recibiendo cuentas, citas y mensajes. Para cortar se debe detener temporalmente la escritura, tomar un snapshot final coherente, reexportar hashes y datos de los usuarios creados después de este documento, restaurar/verificar, desplegar de forma coordinada API/worker/web y realizar pruebas de login por rol, cita y caja. Tener scripts de reversión y respaldos probados.
+- El PostgreSQL interno de Dokploy no debe alterarse: se usa el contenedor propio `barbernow-db-postgres`.
