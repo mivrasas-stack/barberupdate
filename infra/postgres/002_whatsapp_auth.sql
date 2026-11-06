@@ -21,5 +21,3 @@ CREATE TABLE IF NOT EXISTS auth.whatsapp_challenges (
 CREATE INDEX IF NOT EXISTS barbernow_auth_whatsapp_pending ON auth.whatsapp_challenges(user_id,created_at DESC) WHERE consumed_at IS NULL;
 REVOKE ALL ON auth.whatsapp_challenges FROM PUBLIC;
 COMMIT;
-
-[executed on device: vmi3669516 (22a9c8cd-8866-4186-9071-dab9301dff16)]

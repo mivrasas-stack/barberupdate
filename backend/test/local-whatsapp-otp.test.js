@@ -112,5 +112,3 @@ test('invitation sets a bcrypt password atomically only after the correct WhatsA
  await assert.rejects(x.otp.verify({challengeId:request.challengeId,code:x.sent[0].code,purpose:'signup',
   setupPasswordHash:'$2a$12$mockBcryptHash'}),e=>e.statusCode===401);
 });
-
-[executed on device: vmi3669516 (22a9c8cd-8866-4186-9071-dab9301dff16)]

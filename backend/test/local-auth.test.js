@@ -79,5 +79,3 @@ test('self-hosted authentication fails closed without SMTP for signups and recov
  await assert.rejects(auth.authenticate('malformed'),e=>e.statusCode===401);
  await assert.rejects(auth.login(user.email,'ValidNewPass123!','127.0.0.1'),e=>e.statusCode===401);
 });
-
-[executed on device: vmi3669516 (22a9c8cd-8866-4186-9071-dab9301dff16)]

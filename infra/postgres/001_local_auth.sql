@@ -44,5 +44,3 @@ CREATE INDEX IF NOT EXISTS barbernow_auth_action_pending ON auth.action_tokens(u
 REVOKE ALL ON ALL TABLES IN SCHEMA auth FROM PUBLIC;
 REVOKE ALL ON ALL SEQUENCES IN SCHEMA auth FROM PUBLIC;
 COMMIT;
-
-[executed on device: vmi3669516 (22a9c8cd-8866-4186-9071-dab9301dff16)]

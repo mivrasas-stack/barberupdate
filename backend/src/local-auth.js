@@ -231,5 +231,3 @@ export function createLocalAuth({db,redis,otp}){
   }}}
  };
 }
-
-[executed on device: vmi3669516 (22a9c8cd-8866-4186-9071-dab9301dff16)]

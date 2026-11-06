@@ -51,5 +51,3 @@
 - Los dos contenedores API deben montar el mismo volumen `barbernow_media_data` en `/var/lib/barbernow/media`.
 - Resguardar ese volumen periódicamente junto con el PostgreSQL; probar al menos una restauración.
 - No exponer el PostgreSQL ni el volumen de archivos al público; solo la API entrega los archivos verificados.
-
-[executed on device: vmi3669516 (22a9c8cd-8866-4186-9071-dab9301dff16)]

@@ -70,5 +70,3 @@ manifest=Path('/opt/barbernow/migration-backups/source-20261105/media-migration-
 manifest.write_text(json.dumps({'origin':d['origin'],'files':results},indent=2))
 os.chmod(manifest,0o600)
 print('MEDIA_REFERENCED',len(paths),'COPIED',copied,'TOTAL_VALID',sum(x['category']=='ok' for x in results),'FAILED',sum(x['category']!='ok' for x in results))
-
-[executed on device: vmi3669516 (22a9c8cd-8866-4186-9071-dab9301dff16)]

@@ -666,5 +666,3 @@ export async function linkCustomer(code:string,fullName:string,phone:string,barb
  window.dispatchEvent(new Event('barberos-links-updated'));
  return result;
 }
-
-[executed on device: vmi3669516 (22a9c8cd-8866-4186-9071-dab9301dff16)]

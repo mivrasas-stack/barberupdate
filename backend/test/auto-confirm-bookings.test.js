@@ -48,8 +48,13 @@ test('a new customer booking is automatically confirmed and idempotent without s
  await registerRoutes(app,{db,security,config:{}});
  await app.ready();
  try{
+  // Keep the test inside the mocked shop's 00:00–23:59 Bogotá hours
+  // regardless of when CI runs (including late at night).
+  const bogotaNow=new Date(Date.now()-5*60*60*1000);
+  bogotaNow.setUTCDate(bogotaNow.getUTCDate()+3);
+  const safeBookedAt=bogotaNow.toISOString().slice(0,10)+'T20:00:00.000Z';
   const payload={barberId:barber,serviceId:service,
-   startsAt:new Date(Date.now()+60*60*1000).toISOString(),
+   startsAt:safeBookedAt,
    customerName:'Cliente QR',customerPhone:'3001112233',whatsappOptIn:true};
   const options={method:'POST',url:'/api/v1/tenants/'+tenant+'/bookings',
    headers:{'Idempotency-Key':'auto-confirm-test-2026'},payload};

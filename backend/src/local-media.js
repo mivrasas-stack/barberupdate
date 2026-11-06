@@ -16,7 +16,7 @@ export function validateLocalMediaPath(path){
 export function createLocalMedia({root,origin,signingKey}){
  if(!root||!origin||!signingKey)throw Error('MEDIA_ROOT, MEDIA_PUBLIC_ORIGIN and MEDIA_SIGNING_KEY are required');
  const secret=Buffer.from(signingKey,'base64');
- if(secret.length!==32)throw Error('MEDIA_SIGNING_KEY must be 32 random base64 bytes');
+ if(secret.length<32)throw Error('MEDIA_SIGNING_KEY must contain at least 32 random bytes in base64');
  const base=resolve(root);
  const urlOrigin=new URL(origin);
  if(urlOrigin.protocol!=='https:')throw Error('Image URL must use HTTPS');
@@ -101,5 +101,3 @@ export async function registerLocalMediaRoutes(app,{media,config}){
   return reply.code(201).send(result);
  });
 }
-
-[executed on device: vmi3669516 (22a9c8cd-8866-4186-9071-dab9301dff16)]
