@@ -1,4 +1,5 @@
 import './styles.css';
+import {attachPasswordVisibility} from './password-visibility.js';
 
 const app=document.getElementById('app');
 const SYSTEM_LOGIN=window.location.port==='9102'?'http://localhost:3000/login':'/login';
@@ -97,6 +98,7 @@ ${selected?`<div class="directory-alert">Plan seleccionado: ${selected.name}. El
 <p style="text-align:center;margin-top:70px;font-size:13px">© 2026 BarberNow. Todos los derechos reservados.</p></section></main>`}
 function toast(text){const n=document.createElement('div');n.className='toast';n.textContent=text;document.body.appendChild(n);setTimeout(()=>n.remove(),4000)}
 app.innerHTML=route==='/profesionales'?professionals():route==='/directorio'?directory():route==='/login'?login():route.startsWith('/register')?registration():home();
+attachPasswordVisibility(document.querySelector('#signup-form')||document);
 const menu=document.querySelector('#mobile-menu'),toggle=document.querySelector('#menu-btn');
 toggle?.addEventListener('click',()=>{const open=menu.classList.toggle('open');toggle.setAttribute('aria-expanded',String(open));toggle.textContent=open?'✕':'☰'});
 const theme=()=>{document.body.classList.toggle('light-mode');sessionStorage.setItem('landing-light',String(document.body.classList.contains('light-mode')))};

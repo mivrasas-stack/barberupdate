@@ -10,7 +10,7 @@ test('Login coincide con el diseño dividido BarberNow en escritorio', async ({p
   await expect(page.getByRole('heading',{name:/bienvenido\s+de vuelta/i})).toBeVisible();
   await expect(page.getByRole('button',{name:/iniciar sesión/i})).toBeVisible();
   await expect(page.getByLabel('Correo electrónico')).toBeVisible();
-  await expect(page.getByLabel('Contraseña')).toBeVisible();
+  await expect(page.getByLabel('Contraseña',{exact:true})).toBeVisible();
   const hero=login.locator('section').first();
   const photo=hero.locator('img').first();
   const brand=hero.locator('img[src="/branding/barbernow-logo.png"]');
