@@ -4,6 +4,7 @@ import { CreateUserModal } from './CreateUserModal';
 import { useApp } from '../../context/AppContext';
 import { User, UserRole } from '../../types';
 import {PasswordInput} from '../../components/common/PasswordInput';
+import {AdminPhoneRecoveryVerification} from './AdminPhoneRecoveryVerification';
 import {
   Search,
   Filter,
@@ -423,6 +424,8 @@ export const AdminUsers: React.FC = () => {
                       <p className="text-xs text-neutral-400">No está vinculado a ninguna barbería.</p>)}
                   </section>
 
+                  {isLiveBackend&&<AdminPhoneRecoveryVerification
+                    key={selectedUser.id} userId={selectedUser.id} notify={addToast}/>}
                   {selectedUser.planId && (
                     <div className="sm:col-span-2 p-3 rounded-xl bg-[#181818] border border-[#262626]">
                       <span className="text-[10px] font-semibold uppercase text-neutral-500 block mb-1">Suscripción SaaS</span>
