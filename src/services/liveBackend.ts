@@ -560,12 +560,21 @@ export function refreshLiveData():Promise<void>{
   if(activeRefresh)return activeRefresh;
   activeRefresh=(async()=>{
     const result=await loadAccount();
-    barberStore.hydrateFromBackend({
+    const incoming={
       users:[result.user],barbershops:result.shops,barbers:result.barbers,
       services:result.services,products:result.products,appointments:result.appointments,
       transactions:result.transactions,orders:result.orders,plans:result.plans,cashClosings:result.cashClosings,reviews:result.reviews,loyalty:result.loyalty,
       loyaltyBalances:result.loyaltyBalances,rewards:result.rewards,redemptions:result.redemptions
-    });
+    };
+    // A quiet poll must never overwrite form state or reset an appointment
+    // selection just because tokenUser() creates a new lastLogin timestamp.
+    const current=barberStore.getState();
+    const keys=(Object.keys(incoming) as Array<keyof typeof incoming>).filter(k=>k!=='users');
+    const changed=keys.some(k=>JSON.stringify(current[k])!==JSON.stringify(incoming[k]));
+    const before=current.users[0],after=result.user;
+    const identityChanged=!before||['id','name','email','phone','avatar','role','businessId','barberId','status']
+      .some(key=>String(before[key as keyof typeof before]||'')!==String(after[key as keyof typeof after]||''));
+    if(changed||identityChanged)barberStore.hydrateFromBackend(incoming);
   })().finally(()=>{activeRefresh=null;});
   return activeRefresh;
 }
