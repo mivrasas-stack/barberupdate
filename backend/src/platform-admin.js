@@ -13,6 +13,11 @@ const userPayload = z.object({
 }).strict().refine(x => x.role !== 'barber_employee' || Boolean(x.tenantId), {
   message: 'Selecciona una barbería para el barbero', path: ['tenantId'],
 });
+// Admin mutations require explicit authorization and never expose stored passwords.
+const manualPassword=z.object({password:z.string().min(6).max(128)}).strict();
+const confirmDeletion=z.object({confirmation:z.literal('ELIMINAR')}).strict();
+const isArchived=user=>Boolean(user?.app_metadata?.barbernow_deleted_at);
+
 const shopPayload = z.object({
   name: text(120), slug, ownerUserId: id,
   city: text(120), address: text(300),
@@ -58,34 +63,99 @@ export async function registerPlatformAdminRoutes(app,{db,security,config}) {
 
     api.get('/api/v1/platform/users', async () => {
       const authUsers=[];
-      for (let page=1; page<=5; page++) {
+      for(let page=1;page<=10;page++){
         const {data,error}=await service.auth.admin.listUsers({page,perPage:200});
-        if (error) failure(503,'No se pudo consultar el directorio de usuarios');
-        authUsers.push(...(data?.users||[]));
-        if ((data?.users||[]).length<200) break;
+        if(error)failure(503,'No se pudo consultar el directorio de usuarios');
+        authUsers.push(...(data?.users||[]).filter(u=>!isArchived(u)));
+        if((data?.users||[]).length<200)break;
       }
-      if (!authUsers.length) return [];
+      if(!authUsers.length)return [];
       const ids=authUsers.map(u=>u.id);
-      const [members,admins]=await Promise.all([
-        db.query('SELECT user_id,tenant_id,role FROM public.tenant_members WHERE user_id=ANY($1::uuid[]) ORDER BY created_at ASC',[ids]),
+      const [members,links,owned,admins]=await Promise.all([
+        db.query('SELECT m.user_id,m.tenant_id,m.role,m.created_at,t.name AS shop_name FROM public.tenant_members m JOIN public.tenants t ON t.id=m.tenant_id WHERE m.user_id=ANY($1::uuid[]) ORDER BY m.created_at ASC',[ids]),
+        db.query('SELECT l.user_id,l.tenant_id,l.linked_at,t.name AS shop_name FROM public.customer_links l JOIN public.tenants t ON t.id=l.tenant_id WHERE l.user_id=ANY($1::uuid[]) ORDER BY l.linked_at ASC',[ids]),
+        db.query('SELECT owner_user_id AS user_id,id AS tenant_id,name AS shop_name,created_at FROM public.tenants WHERE owner_user_id=ANY($1::uuid[])',[ids]),
         db.query('SELECT user_id FROM public.platform_admins WHERE user_id=ANY($1::uuid[])',[ids]),
       ]);
-      const memberships=new Map();
-      for(const m of members.rows) if (!memberships.has(m.user_id)) memberships.set(m.user_id,m);
-      const platformAdmins=new Set(admins.rows.map(a=>a.user_id));
+      const memberByUser=new Map();
+      const associated=new Map();
+      function append(row,kind,date){
+        if(!associated.has(row.user_id))associated.set(row.user_id,new Map());
+        const list=associated.get(row.user_id),existing=list.get(row.tenant_id);
+        const added=date?new Date(date).getTime():Number.POSITIVE_INFINITY;
+        if(!existing||added<new Date(existing.linkedAt||'9999-12-31').getTime())
+          list.set(row.tenant_id,{id:row.tenant_id,name:row.shop_name,linkedAt:date||'',relation:kind});
+      }
+      for(const row of members.rows){
+        if(!memberByUser.has(row.user_id))memberByUser.set(row.user_id,row);
+        append(row,row.role,row.created_at);
+      }
+      for(const row of links.rows)append(row,'client',row.linked_at);
+      for(const row of owned.rows)append(row,'owner',row.created_at);
+      const globalAdmins=new Set(admins.rows.map(a=>a.user_id));
       return authUsers.map(u=>{
-        const membership=memberships.get(u.id);
+        const membership=memberByUser.get(u.id);
+        const shops=[...(associated.get(u.id)?.values()||[])].sort((a,b)=>a.name.localeCompare(b.name,'es'));
         const metadata=u.user_metadata||{};
-        const role=platformAdmins.has(u.id)?'superadmin':membership?.role==='owner'||membership?.role==='manager'?'owner':membership?.role==='barber'?'barber_employee':'client';
-        const banned=Boolean(u.banned_until && new Date(u.banned_until).getTime()>Date.now());
+        const role=globalAdmins.has(u.id)?'superadmin':
+          (owned.rows.some(t=>t.user_id===u.id)||membership?.role==='owner'||membership?.role==='manager')?'owner':
+          membership?.role==='barber'?'barber_employee':'client';
+        const banned=Boolean(u.banned_until&&new Date(u.banned_until).getTime()>Date.now());
         return {
-          id:u.id, name:String(metadata.name||metadata.full_name||u.email?.split('@')[0]||'Usuario'),
-          email:u.email||'', phone:String(metadata.phone||''), avatar:String(metadata.avatar_url||''),
-          role, businessId:membership?.tenant_id||null,
+          id:u.id,name:String(metadata.name||metadata.full_name||u.email?.split('@')[0]||'Usuario'),
+          email:u.email||'',phone:String(metadata.phone||u.phone||''),avatar:String(metadata.avatar_url||''),
+          role,businessId:membership?.tenant_id||shops[0]?.id||null,barbershops:shops,
           status:banned?'suspended':u.email_confirmed_at?'active':'pending',
-          createdAt:u.created_at||'', lastLogin:u.last_sign_in_at||'',
+          createdAt:u.created_at||'',lastLogin:u.last_sign_in_at||'',
         };
       });
+    });
+
+    async function targetForMutation(targetId,actorId,{passwordOnly=false}={}){
+      if(targetId===actorId)failure(403,'No puedes modificar tu propia cuenta desde esta pantalla');
+      const {data,error}=await service.auth.admin.getUserById(targetId);
+      if(error||!data?.user||isArchived(data.user))failure(404,'El usuario no existe o fue retirado');
+      const protectedUser=await db.query(
+        passwordOnly
+          ? 'SELECT 1 FROM public.platform_admins WHERE user_id=$1 LIMIT 1'
+          : 'SELECT 1 FROM public.platform_admins WHERE user_id=$1 UNION ALL SELECT 1 FROM public.tenants WHERE owner_user_id=$1 UNION ALL SELECT 1 FROM public.tenant_members WHERE user_id=$1 AND role IN (\'owner\',\'manager\') LIMIT 1',
+        [targetId]);
+      if(protectedUser.rowCount)failure(409,passwordOnly
+        ? 'Por seguridad no se puede cambiar la contraseña de otro superadministrador desde esta pantalla.'
+        : 'Esta cuenta administra barberías o la plataforma. Debes transferir esas responsabilidades antes de eliminarla.');
+      return data.user;
+    }
+
+    api.post('/api/v1/platform/users/:userId/password',async(req)=>{
+      const userId=parseOrThrow(id,req.params.userId);
+      const payload=parseOrThrow(manualPassword,req.body);
+      await targetForMutation(userId,req.actor.id,{passwordOnly:true});
+      const {error}=await service.auth.admin.updateUserById(userId,{password:payload.password});
+      if(error)failure(503,'No se pudo restablecer la contraseña. Inténtalo de nuevo.');
+      req.log.info({action:'admin_password_reset',admin:req.actor.id,target:userId},'Administrator reset a user password');
+      return {ok:true};
+    });
+
+    api.delete('/api/v1/platform/users/:userId',async(req)=>{
+      const userId=parseOrThrow(id,req.params.userId);
+      parseOrThrow(confirmDeletion,req.body);
+      const user=await targetForMutation(userId,req.actor.id,{passwordOnly:true});
+      // Business history (appointments, invoices, rewards) keeps references to user IDs.
+      // Disable access and remove the identity from the live directory instead of
+      // cascading away business-critical data. This is explicitly a logical removal.
+      const metadata={...(user.app_metadata||{}),barbernow_deleted_at:new Date().toISOString()};
+      const {error}=await service.auth.admin.updateUserById(userId,{
+        ban_duration:'876000h',app_metadata:metadata,
+      });
+      if(error)failure(503,'No se pudo retirar la cuenta. Inténtalo de nuevo.');
+      // Disabling the identity must also stop future business-initiated WhatsApp
+      // notices. Historical messages and appointment records are preserved.
+      await db.transaction(async tx=>{
+        await tx.query("UPDATE public.whatsapp_consents SET revoked_at=COALESCE(revoked_at,now()) WHERE user_id=$1 AND revoked_at IS NULL",[userId]);
+        await tx.query("UPDATE public.whatsapp_messages SET status='suppressed',failure_code='account_removed',updated_at=now() WHERE user_id=$1 AND status='queued'",[userId]);
+      });
+      req.log.info({action:'admin_user_archived',admin:req.actor.id,target:userId},'Administrator archived account and blocked login');
+      return {ok:true,removed:true,historyPreserved:true};
     });
 
     api.post('/api/v1/platform/users', async (req,reply) => {

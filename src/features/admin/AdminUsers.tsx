@@ -3,6 +3,7 @@ import { backendRequest, isLiveBackend } from '../../services/liveBackend';
 import { CreateUserModal } from './CreateUserModal';
 import { useApp } from '../../context/AppContext';
 import { User, UserRole } from '../../types';
+import {PasswordInput} from '../../components/common/PasswordInput';
 import {
   Search,
   Filter,
@@ -20,8 +21,22 @@ import {
   Mail,
   Phone,
   Building,
+  KeyRound,
+  Trash2,
 } from 'lucide-react';
 
+const since=(date:string)=>{
+ const n=new Date(date).getTime();if(!Number.isFinite(n))return 'Sin fecha disponible';
+ const days=Math.max(0,Math.floor((Date.now()-n)/86400000));
+ if(days<30)return days===0?'Desde hoy':days===1?'Hace 1 día':`Hace ${days} días`;
+ const months=Math.floor(days/30);
+ if(months<12)return months===1?'Hace 1 mes':`Hace ${months} meses`;
+ const years=Math.floor(months/12);return years===1?'Hace 1 año':`Hace ${years} años`;
+};
+const dateText=(date:string)=>{
+ const n=new Date(date);
+ return Number.isFinite(n.getTime())?new Intl.DateTimeFormat('es-CO',{day:'numeric',month:'short',year:'numeric'}).format(n):'Fecha no disponible';
+};
 export const AdminUsers: React.FC = () => {
   const { state, addToast } = useApp();
   const [search, setSearch] = useState('');
@@ -38,6 +53,13 @@ export const AdminUsers: React.FC = () => {
   const users=isLiveBackend?directoryUsers:state.users;
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [shopFilter,setShopFilter]=useState('all');
+  const [showReset,setShowReset]=useState(false);
+  const [newPassword,setNewPassword]=useState('');
+  const [confirmPassword,setConfirmPassword]=useState('');
+  const [showDelete,setShowDelete]=useState(false);
+  const [confirmation,setConfirmation]=useState('');
+  const [busy,setBusy]=useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState<Partial<User>>({});
@@ -50,13 +72,22 @@ export const AdminUsers: React.FC = () => {
       u.phone.includes(search);
     const matchesRole = roleFilter === 'all' || u.role === roleFilter;
     const matchesStatus = statusFilter === 'all' || u.status === statusFilter;
-    return matchesSearch && matchesRole && matchesStatus;
+    const matchesShop=shopFilter==='all'||u.barbershops?.some(shop=>shop.id===shopFilter)||
+      (!isLiveBackend&&u.businessId===shopFilter);
+    return matchesSearch && matchesRole && matchesStatus && Boolean(matchesShop);
   });
+
+  const availableShops=Array.from(new Map([
+    ...state.barbershops.map(shop=>[shop.id,{id:shop.id,name:shop.name}] as const),
+    ...users.flatMap(user=>(user.barbershops||[]).map(shop=>[shop.id,{id:shop.id,name:shop.name}] as const)),
+  ]).values()).sort((a,b)=>a.name.localeCompare(b.name,'es'));
 
   const handleOpenDetail = (user: User) => {
     setSelectedUser(user);
     setEditForm(user);
     setIsEditing(false);
+    setShowReset(false);setNewPassword('');setConfirmPassword('');
+    setShowDelete(false);setConfirmation('');
   };
 
   const handleSaveEdit = () => {
@@ -81,6 +112,37 @@ export const AdminUsers: React.FC = () => {
       setSelectedUser({ ...state.users[idx] });
       addToast(`Estado del usuario cambiado a: ${newStatus}`, 'info');
     }
+  };
+
+  const resetPassword=async()=>{
+    if(!selectedUser||busy||!isLiveBackend)return;
+    if(newPassword.length<6||newPassword.length>128||newPassword!==confirmPassword){
+      addToast('La nueva contraseña debe tener entre 6 y 128 caracteres y coincidir.','error');return;
+    }
+    setBusy(true);
+    try{
+      await backendRequest('/platform/users/'+encodeURIComponent(selectedUser.id)+'/password',{
+        method:'POST',body:JSON.stringify({password:newPassword}),
+      });
+      setNewPassword('');setConfirmPassword('');setShowReset(false);
+      addToast('Contraseña actualizada. Comunícala al usuario solo de forma privada.','success');
+    }catch(err){addToast(err instanceof Error?err.message:'No se pudo restablecer la contraseña','error');}
+    finally{setBusy(false);}
+  };
+  const removeUser=async()=>{
+    if(!selectedUser||busy||confirmation!=='ELIMINAR'||!isLiveBackend)return;
+    setBusy(true);
+    try{
+      await backendRequest('/platform/users/'+encodeURIComponent(selectedUser.id),{
+        method:'DELETE',body:JSON.stringify({confirmation:'ELIMINAR'}),
+      });
+      const removedId=selectedUser.id;
+      setDirectoryUsers(current=>current.filter(u=>u.id!==removedId));
+      setSelectedUser(null);setShowDelete(false);setConfirmation('');
+      addToast('Acceso del usuario desactivado y retirado del directorio. El historial comercial se conserva.','success');
+      void reloadDirectory();
+    }catch(err){addToast(err instanceof Error?err.message:'No se pudo retirar el usuario','error');}
+    finally{setBusy(false);}
   };
 
   const getRoleBadge = (role: UserRole) => {
@@ -125,7 +187,13 @@ export const AdminUsers: React.FC = () => {
           />
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <select aria-label="Filtrar clientes por barbería" value={shopFilter}
+            onChange={e=>setShopFilter(e.target.value)}
+            className="bg-[#181818] border border-[#2a2a2a] rounded-xl px-3 py-2 text-xs text-neutral-300 focus:outline-none focus:border-[var(--gold-primary)]">
+            <option value="all">Todas las barberías</option>
+            {availableShops.map(shop=><option key={shop.id} value={shop.id}>{shop.name}</option>)}
+          </select>
           <select
             value={roleFilter}
             onChange={e => setRoleFilter(e.target.value)}
@@ -171,6 +239,7 @@ export const AdminUsers: React.FC = () => {
             <tbody className="divide-y divide-[#1e1e1e]">
               {filteredUsers.map(user => {
                 const shop = state.barbershops.find(s => s.id === user.businessId);
+                const affiliations=user.barbershops||[];
                 const plan = state.plans.find(p => p.id === user.planId);
 
                 return (
@@ -191,11 +260,10 @@ export const AdminUsers: React.FC = () => {
                     </td>
                     <td className="py-3 px-4">{getRoleBadge(user.role)}</td>
                     <td className="py-3 px-4 text-neutral-300">
-                      {shop ? (
-                        <span className="font-medium text-white">{shop.name}</span>
-                      ) : (
-                        <span className="text-neutral-500">—</span>
-                      )}
+                      {affiliations.length ? <span className="font-medium text-white">
+                        {affiliations.map(s=>s.name).join(', ')}
+                      </span> : shop ? <span className="font-medium text-white">{shop.name}</span> :
+                        <span className="text-neutral-500">Sin vinculación</span>}
                     </td>
                     <td className="py-3 px-4">
                       {plan ? (
@@ -262,7 +330,7 @@ export const AdminUsers: React.FC = () => {
             </div>
 
             {/* Modal Body */}
-            <div className="py-4 space-y-4 overflow-y-auto pr-1">
+            <div className="py-4 space-y-4 min-h-0 flex-1 overflow-y-auto pr-1">
               {isEditing ? (
                 /* Edit Mode */
                 <div className="space-y-3">
@@ -320,17 +388,23 @@ export const AdminUsers: React.FC = () => {
                     </div>
                   </div>
 
-                  {selectedUser.businessId && (
-                    <div className="sm:col-span-2 p-3 rounded-xl bg-[#181818] border border-[#262626]">
-                      <span className="text-[10px] font-semibold uppercase text-neutral-500 block mb-1">Entidad Vinculada</span>
-                      <div className="flex items-center gap-2 text-xs text-white font-medium">
-                        <Building className="w-4 h-4 text-[var(--gold-primary)]" />
-                        <span>
-                          {state.barbershops.find(s => s.id === selectedUser.businessId)?.name || 'Barbería Registrada'}
-                        </span>
+                  <section className="sm:col-span-2 p-4 rounded-xl bg-[#181818] border border-[#262626] space-y-3">
+                    <h4 className="text-[10px] font-semibold uppercase text-neutral-400">Barberías vinculadas</h4>
+                    {(selectedUser.barbershops||[]).length ? selectedUser.barbershops!.map(shop=>(
+                      <div key={shop.id} className="rounded-lg border border-[#303030] p-3 flex flex-wrap justify-between gap-3">
+                        <div className="flex items-start gap-2">
+                          <Building className="w-4 h-4 mt-0.5 text-[var(--gold-primary)]"/>
+                          <div>
+                            <p className="text-white text-sm font-semibold">{shop.name}</p>
+                            <p className="text-neutral-400 text-xs">Vinculado desde: {dateText(shop.linkedAt)}</p>
+                            <p className="text-neutral-500 text-xs">Tipo: {shop.relation==='client'?'Cliente':shop.relation==='barber'?'Barbero':shop.relation==='owner'?'Propietario':shop.relation}</p>
+                          </div>
+                        </div>
+                        <span className="text-xs text-[var(--gold-primary)]">{since(shop.linkedAt)}</span>
                       </div>
-                    </div>
-                  )}
+                    )) : (selectedUser.businessId ? <p className="text-sm text-white">{state.barbershops.find(x=>x.id===selectedUser.businessId)?.name||'Barbería registrada'}</p>:
+                      <p className="text-xs text-neutral-400">No está vinculado a ninguna barbería.</p>)}
+                  </section>
 
                   {selectedUser.planId && (
                     <div className="sm:col-span-2 p-3 rounded-xl bg-[#181818] border border-[#262626]">
@@ -347,10 +421,45 @@ export const AdminUsers: React.FC = () => {
                   )}
                 </div>
               )}
+            {isLiveBackend&&showReset&&<form onSubmit={e=>{e.preventDefault();void resetPassword();}}
+              className="mb-4 rounded-xl border border-amber-500/40 bg-[#211b10] p-4 space-y-3">
+              <h4 className="text-sm font-semibold text-amber-300">Restablecer contraseña manualmente</h4>
+              <p className="text-xs text-neutral-400">No puedes consultar la contraseña anterior. La nueva sustituirá la actual.</p>
+              <label htmlFor="admin-new-password" className="block text-xs text-white">Nueva contraseña (mínimo 6 caracteres)</label>
+              <PasswordInput id="admin-new-password" fieldLabel="nueva contraseña" required minLength={6} maxLength={128}
+                value={newPassword} onChange={e=>setNewPassword(e.target.value)} autoComplete="new-password"
+                className="w-full rounded-lg border border-neutral-600 bg-[#101010] px-3 py-3 text-white text-sm"/>
+              <label htmlFor="admin-password-confirmation" className="block text-xs text-white">Confirma la contraseña</label>
+              <PasswordInput id="admin-password-confirmation" fieldLabel="confirmación de contraseña" required minLength={6} maxLength={128}
+                value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} autoComplete="new-password"
+                className="w-full rounded-lg border border-neutral-600 bg-[#101010] px-3 py-3 text-white text-sm"/>
+              {confirmPassword&&newPassword!==confirmPassword&&<p role="alert" className="text-xs text-red-300">Las contraseñas no coinciden.</p>}
+              <div className="flex flex-wrap gap-2">
+                <button type="submit" disabled={busy||newPassword.length<6||newPassword!==confirmPassword}
+                  className="rounded-lg bg-[var(--gold-primary)] px-4 py-2 text-xs font-bold text-black disabled:opacity-50">Guardar nueva contraseña</button>
+                <button type="button" onClick={()=>{setShowReset(false);setNewPassword('');setConfirmPassword('');}}
+                  className="px-3 py-2 text-xs text-neutral-300">Cancelar</button>
+              </div>
+            </form>}
+            {isLiveBackend&&showDelete&&<section role="alertdialog" aria-label="Confirmación para eliminar usuario"
+              className="mb-4 rounded-xl border border-red-600/50 bg-red-950/20 p-4 space-y-3">
+              <h4 className="text-sm font-semibold text-red-300">¿Seguro que deseas eliminar a {selectedUser.name}?</h4>
+              <p className="text-xs text-neutral-300">La cuenta dejará de tener acceso y desaparecerá del directorio. Los registros históricos de citas, pagos y recompensas se conservarán para proteger la información comercial. No es un borrado físico del historial.</p>
+              <label htmlFor="confirm-user-removal" className="block text-xs text-neutral-300">Escribe <strong>ELIMINAR</strong> para continuar</label>
+              <input id="confirm-user-removal" autoComplete="off" value={confirmation} onChange={e=>setConfirmation(e.target.value)}
+                placeholder="ELIMINAR" className="w-full rounded-lg border border-red-500/40 bg-[#101010] px-3 py-3 text-sm text-white"/>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" disabled={busy||confirmation!=='ELIMINAR'} onClick={()=>void removeUser()}
+                  className="rounded-lg bg-red-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">Sí, eliminar usuario</button>
+                <button type="button" onClick={()=>{setShowDelete(false);setConfirmation('');}}
+                  className="px-3 py-2 text-xs text-neutral-300">Cancelar</button>
+              </div>
+            </section>}
+
             </div>
 
             {/* Modal Actions */}
-            <div className="pt-4 border-t border-[#262626] flex items-center justify-between">
+            <div className="pt-4 border-t border-[#262626] flex flex-wrap items-center justify-between gap-3">
               {!isLiveBackend&&<button
                 onClick={handleToggleStatus}
                 className={`px-3.5 py-2 text-xs font-semibold rounded-xl border transition-colors flex items-center gap-1.5 ${
@@ -372,8 +481,21 @@ export const AdminUsers: React.FC = () => {
                 )}
               </button>}
 
-              <div className="flex items-center gap-2">
-                {isLiveBackend ? <span className="text-xs text-neutral-500">Edición y suspensión pendientes de integración</span> : isEditing ? (
+              <div className="flex flex-wrap items-center gap-2">
+                {isLiveBackend ? (
+                  <>
+                    <button type="button" disabled={busy||selectedUser.role==='superadmin'}
+                      onClick={()=>{setShowReset(!showReset);setShowDelete(false);setConfirmation('');}}
+                      className="inline-flex items-center gap-1 rounded-lg border border-amber-500/40 px-3 py-2 text-xs font-semibold text-amber-300 disabled:opacity-40">
+                      <KeyRound className="w-4 h-4"/> Restablecer contraseña
+                    </button>
+                    <button type="button" disabled={busy||selectedUser.role==='superadmin'||selectedUser.role==='owner'}
+                      onClick={()=>{setShowDelete(!showDelete);setShowReset(false);setNewPassword('');setConfirmPassword('');}}
+                      className="inline-flex items-center gap-1 rounded-lg border border-red-500/40 px-3 py-2 text-xs font-semibold text-red-300 disabled:opacity-40">
+                      <Trash2 className="w-4 h-4"/> Eliminar usuario
+                    </button>
+                  </>
+                ) : isEditing ? (
                   <>
                     <button
                       onClick={() => setIsEditing(false)}
