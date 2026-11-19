@@ -85,16 +85,16 @@ export const LoginView: React.FC = () => {
     <main className="min-h-screen flex items-center justify-center bg-[#090909] text-white px-4">
       <form onSubmit={finishSetup} className="w-full max-w-md rounded-2xl border border-[#303030] bg-[#181818] p-7 space-y-5">
         <h1 className="text-2xl font-bold">Activa tu cuenta BarberNow</h1>
-        <p className="text-sm text-neutral-400">Define una contraseña para ingresar de manera segura. Debe contener al menos 12 caracteres.</p>
+        <p className="text-sm text-neutral-400">Define una contraseña para ingresar de manera segura. Debe contener al menos 6 caracteres.</p>
         <div className="space-y-2">
           <label htmlFor="setup-new-password" className="block text-sm">Nueva contraseña</label>
-          <PasswordInput id="setup-new-password" fieldLabel="nueva contraseña" autoComplete="new-password" required minLength={12}
+          <PasswordInput id="setup-new-password" fieldLabel="nueva contraseña" autoComplete="new-password" required minLength={6}
             value={newPassword} onChange={e=>setNewPassword(e.target.value)}
             className="block w-full rounded-xl bg-[#111] border border-[#333] px-4 py-3"/>
         </div>
         <div className="space-y-2">
           <label htmlFor="setup-confirm-password" className="block text-sm">Confirmar contraseña</label>
-          <PasswordInput id="setup-confirm-password" fieldLabel="confirmación de contraseña" autoComplete="new-password" required minLength={12}
+          <PasswordInput id="setup-confirm-password" fieldLabel="confirmación de contraseña" autoComplete="new-password" required minLength={6}
             value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)}
             className="block w-full rounded-xl bg-[#111] border border-[#333] px-4 py-3"/>
         </div>
