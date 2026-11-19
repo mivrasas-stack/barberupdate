@@ -8,6 +8,8 @@ export function configFromEnv(env = process.env) {
     production,
     port: Number(env.PORT || 8080),
     databaseUrl: env.DATABASE_URL || '',
+    recoveryDatabaseUrl: env.RECOVERY_DATABASE_URL || '',
+    recoveryOtpSecret: env.RECOVERY_OTP_SECRET || '',
     poolMax: Math.max(1, Math.min(20, Number(env.DATABASE_POOL_MAX || 8))),
     supabaseUrl: env.SUPABASE_URL || '',
     supabasePublishableKey: env.SUPABASE_PUBLISHABLE_KEY || '',
