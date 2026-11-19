@@ -1,3 +1,4 @@
+import {PasswordInput} from '../../components/common/PasswordInput';
 import React, { useEffect, useState } from 'react';
 import { ArrowRight, CheckCircle2, LockKeyhole, LogOut } from 'lucide-react';
 import {
@@ -215,14 +216,14 @@ export function BarberJoinPublic() {
                     </div>
                     <div>
                       <label htmlFor="barber-join-password" className={labelClass}>Contraseña {mode === 'register' ? '(mínimo 8 caracteres)' : ''}</label>
-                      <input id="barber-join-password" className={inputClass} type="password" required
+                      <PasswordInput id="barber-join-password" fieldLabel="contraseña" className={inputClass} required
                         autoComplete={mode === 'register' ? 'new-password' : 'current-password'} minLength={mode === 'register' ? 8 : undefined}
                         value={password} onChange={e => setPassword(e.target.value)} />
                     </div>
                     {mode === 'register' && (
                       <div>
                         <label htmlFor="barber-join-confirm" className={labelClass}>Confirmar contraseña</label>
-                        <input id="barber-join-confirm" className={inputClass} type="password" required minLength={8} autoComplete="new-password"
+                        <PasswordInput id="barber-join-confirm" fieldLabel="confirmación de contraseña" className={inputClass} required minLength={8} autoComplete="new-password"
                           value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} />
                       </div>
                     )}
@@ -250,3 +251,5 @@ export function BarberJoinPublic() {
     </main>
   );
 }
+
+[executed on device: vmi3669516 (22a9c8cd-8866-4186-9071-dab9301dff16)]

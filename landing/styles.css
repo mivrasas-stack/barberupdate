@@ -82,3 +82,15 @@ html.bn-motion .discover span {
  html.bn-motion .hero-bg,
  html.bn-motion .discover span {animation:none}
 }
+
+
+/* Accessible eye button for account passwords. */
+.bn-password-field{display:block;position:relative;width:100%;min-width:0}
+.fields .bn-password-field>input{padding-right:54px!important}
+.bn-password-toggle{position:absolute;right:7px;top:50%;transform:translateY(-50%);width:40px;height:40px;display:grid;place-items:center;border:0;border-radius:8px;background:transparent;color:#bcbcbc;cursor:pointer;z-index:1}
+.bn-password-toggle svg{display:block;width:20px;height:20px}
+.bn-password-toggle:hover,.bn-password-toggle:focus-visible{color:#ffb515;background:#ffffff13}
+.bn-password-toggle:focus-visible{outline:2px solid #ffb515;outline-offset:1px}
+.bn-password-toggle:disabled{opacity:.4;cursor:not-allowed}
+
+[executed on device: vmi3669516 (22a9c8cd-8866-4186-9071-dab9301dff16)]

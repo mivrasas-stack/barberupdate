@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ArrowRight, LockKeyhole, Mail } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import {PasswordInput} from '../../components/common/PasswordInput';
 import type { UserRole } from '../../types';
 import { isLiveBackend, requestPasswordReset, registerWithEmail, isPasswordSetupPending, savePasswordFromLink, cancelPasswordSetup } from '../../services/liveBackend';
 
@@ -85,12 +86,18 @@ export const LoginView: React.FC = () => {
       <form onSubmit={finishSetup} className="w-full max-w-md rounded-2xl border border-[#303030] bg-[#181818] p-7 space-y-5">
         <h1 className="text-2xl font-bold">Activa tu cuenta BarberNow</h1>
         <p className="text-sm text-neutral-400">Define una contraseña para ingresar de manera segura. Debe contener al menos 12 caracteres.</p>
-        <label className="block text-sm space-y-2">Nueva contraseña
-          <input type="password" autoComplete="new-password" required minLength={12} value={newPassword} onChange={e=>setNewPassword(e.target.value)} className="block w-full rounded-xl bg-[#111] border border-[#333] px-4 py-3"/>
-        </label>
-        <label className="block text-sm space-y-2">Confirmar contraseña
-          <input type="password" autoComplete="new-password" required minLength={12} value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} className="block w-full rounded-xl bg-[#111] border border-[#333] px-4 py-3"/>
-        </label>
+        <div className="space-y-2">
+          <label htmlFor="setup-new-password" className="block text-sm">Nueva contraseña</label>
+          <PasswordInput id="setup-new-password" fieldLabel="nueva contraseña" autoComplete="new-password" required minLength={12}
+            value={newPassword} onChange={e=>setNewPassword(e.target.value)}
+            className="block w-full rounded-xl bg-[#111] border border-[#333] px-4 py-3"/>
+        </div>
+        <div className="space-y-2">
+          <label htmlFor="setup-confirm-password" className="block text-sm">Confirmar contraseña</label>
+          <PasswordInput id="setup-confirm-password" fieldLabel="confirmación de contraseña" autoComplete="new-password" required minLength={12}
+            value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)}
+            className="block w-full rounded-xl bg-[#111] border border-[#333] px-4 py-3"/>
+        </div>
         <button type="submit" disabled={busy} className="w-full rounded-xl py-3 bg-[var(--gold-primary,#e5a700)] text-black font-bold disabled:opacity-50">{busy?'Guardando...':'Establecer contraseña'}</button>
         <button type="button" onClick={()=>{cancelPasswordSetup();setPasswordSetup(false);}} className="w-full text-xs text-neutral-400 hover:text-white">Cancelar y volver al inicio de sesión</button>
       </form>
@@ -195,9 +202,9 @@ export const LoginView: React.FC = () => {
               </div>
               <div className="relative">
                 <LockKeyhole aria-hidden="true" className="absolute left-[16px] top-1/2 h-[19px] w-[19px] -translate-y-1/2 text-[#666666]" strokeWidth={1.7} />
-                <input
+                <PasswordInput
                   id="barber-password"
-                  type="password"
+                  fieldLabel="contraseña"
                   autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
                   value={password}
                   onChange={e => setPassword(e.target.value)}
@@ -245,3 +252,5 @@ export const LoginView: React.FC = () => {
     </main>
   );
 };
+
+[executed on device: vmi3669516 (22a9c8cd-8866-4186-9071-dab9301dff16)]
