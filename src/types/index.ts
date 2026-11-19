@@ -6,6 +6,9 @@ export type UserRole =
 
 export type CurrencyType = 'COP' | 'USD' | 'EUR';
 
+export interface UserBarbershopLink {
+ id:string; name:string; linkedAt:string; relation:string;
+}
 export interface User {
   id: string;
   name: string;
@@ -14,6 +17,7 @@ export interface User {
   role: UserRole;
   avatar: string;
   businessId?: string; // If owner, barber_employee, or linked client
+  barbershops?:UserBarbershopLink[];
   barberId?: string;   // If barber_employee
   createdAt: string;
   lastLogin: string;

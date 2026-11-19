@@ -24,6 +24,9 @@ export function createSecurity(config) {
     if (!token) failure(401, 'Se requiere Bearer token');
     const { data, error } = await supabase.auth.getUser(token);
     if (error || !data?.user?.id) failure(401, 'Sesion invalida');
+    if(data.user.app_metadata?.barbernow_deleted_at ||
+      (data.user.banned_until && new Date(data.user.banned_until).getTime()>Date.now()))
+      failure(401,'Cuenta desactivada');
     request.actor = { id: data.user.id, email: data.user.email || '' };
   }
   async function limited(request) {
