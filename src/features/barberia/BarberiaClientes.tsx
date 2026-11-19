@@ -41,8 +41,16 @@ export const BarberiaClientes:React.FC=()=>{
  useEffect(()=>{
   if(!isLiveBackend)return;
   const refresh=()=>setRevision(n=>n+1);
+  const interval=window.setInterval(()=>{
+   if(document.visibilityState==='visible')refresh();
+  },20000);
+  window.addEventListener('barbernow:live-update',refresh);
   window.addEventListener('focus',refresh);
-  return()=>window.removeEventListener('focus',refresh);
+  return()=>{
+   window.clearInterval(interval);
+   window.removeEventListener('barbernow:live-update',refresh);
+   window.removeEventListener('focus',refresh);
+  };
  },[]);
 
  const customers=useMemo(()=>{

@@ -1,4 +1,4 @@
-import React,{useEffect,useState} from 'react';
+import React,{useEffect,useState,useRef} from 'react';
 import {Bot,Mail,MessageCircle,KeyRound,Save,ShieldCheck,TestTube2,Eye,EyeOff} from 'lucide-react';
 import {backendRequest,isLiveBackend} from '../../services/liveBackend';
 
@@ -23,37 +23,51 @@ export const AdminIntegrations:React.FC=()=>{
  const [busy,setBusy]=useState(false);
  const [loading,setLoading]=useState(isLiveBackend);
  const [notice,setNotice]=useState<{kind:'ok'|'error'|'info';message:string}|null>(null);
+ const dirty=useRef(false);
+ const editing=useRef(false);
  useEffect(()=>{
    if(!isLiveBackend)return;
    let alive=true;
-   backendRequest<Record<Provider,Integration>>('/platform/integrations')
-     .then(res=>{if(alive)setSaved(res);})
-     .catch(e=>{if(alive)setNotice({kind:'error',message:String(e.message)});})
-     .finally(()=>{if(alive)setLoading(false);});
-   return ()=>{alive=false;};
+   const reload=()=>{
+     if(document.visibilityState==='hidden'||dirty.current||editing.current)return;
+     backendRequest<Record<Provider,Integration>>('/platform/integrations')
+       .then(res=>{if(alive)setSaved(res);})
+       .catch(e=>{if(alive&&loading)setNotice({kind:'error',message:String(e.message)});})
+       .finally(()=>{if(alive)setLoading(false);});
+   };
+   reload();
+   const interval=window.setInterval(reload,30000);
+   window.addEventListener('barbernow:live-update',reload);
+   window.addEventListener('focus',reload);
+   return()=>{
+     alive=false;window.clearInterval(interval);
+     window.removeEventListener('barbernow:live-update',reload);
+     window.removeEventListener('focus',reload);
+   };
  },[]);
- const update=(key:string,value:string)=>setSaved(old=>({...old,[tab]:{...old[tab],settings:{...old[tab].settings,[key]:value}}}));
- const updateSecret=(key:string,value:string)=>setInputs(old=>({...old,[tab]:{...old[tab],[key]:value}}));
+ const update=(key:string,value:string)=>{dirty.current=true;setSaved(old=>({...old,[tab]:{...old[tab],settings:{...old[tab].settings,[key]:value}}}));};
+ const updateSecret=(key:string,value:string)=>{dirty.current=true;setInputs(old=>({...old,[tab]:{...old[tab],[key]:value}}));};
  const save=async()=>{
-   setNotice(null);setBusy(true);
+   setNotice(null);editing.current=true;setBusy(true);
    try{
      const secrets=Object.fromEntries(Object.entries(inputs[tab]).filter(([,value])=>value.length>0));
      const updated=await backendRequest<Integration>('/platform/integrations/'+tab,{method:'PUT',
        body:JSON.stringify({enabled:saved[tab].enabled,settings:saved[tab].settings,secrets})});
      setSaved(old=>({...old,[tab]:updated}));
      setInputs(old=>({...old,[tab]:{}}));
+     dirty.current=false;
      setNotice({kind:'ok',message:'Guardado con éxito. Las claves no se mostrarán de nuevo.'});
    }catch(e){setNotice({kind:'error',message:String((e as Error).message)});}
-   finally{setBusy(false);}
+   finally{editing.current=false;setBusy(false);}
  };
  const check=async()=>{
    if(Object.values(inputs[tab]).some(Boolean)){setNotice({kind:'info',message:'Guarda primero las claves nuevas.'});return;}
-   setNotice(null);setBusy(true);
+   setNotice(null);editing.current=true;setBusy(true);
    try{
      const result=await backendRequest<{ok:boolean;detail:string;deliveryReady?:boolean}>('/platform/integrations/'+tab+'/test',{method:'POST'});
      setNotice({kind:tab==='whatsapp'&&!result.deliveryReady?'info':'ok',message:result.detail});
    }catch(e){setNotice({kind:'error',message:String((e as Error).message)});}
-   finally{setBusy(false);}
+   finally{editing.current=false;setBusy(false);}
  };
  const option=OPTIONS[tab],config=saved[tab];
  return <div className="max-w-6xl space-y-6 pb-10">
