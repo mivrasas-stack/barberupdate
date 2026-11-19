@@ -1,4 +1,5 @@
 import React,{useEffect,useState} from 'react';
+import {PasswordInput} from '../../components/common/PasswordInput';
 import {ArrowRight,CheckCircle2,LockKeyhole} from 'lucide-react';
 import {hasSession,signIn,registerWithEmail,verifyWhatsAppAuthCode,resendWhatsAppAuthCode,linkCustomer,resolveBusinessLink,
  type PublicBusinessLink} from '../../services/liveBackend';
@@ -86,9 +87,9 @@ export const PublicJoinView:React.FC=()=>{
        <div><label htmlFor="join-email" className="block text-xs text-neutral-300 mb-2">Correo electrónico</label>
         <input id="join-email" required type="email" autoComplete="email" value={email} onChange={e=>setEmail(e.target.value)} className="w-full rounded-xl border border-neutral-700 bg-[#101010] px-4 py-3 text-sm" placeholder="tu@correo.com"/></div>
        <div><label htmlFor="join-password" className="block text-xs text-neutral-300 mb-2">Contraseña {mode==='register'?'(mínimo 12 caracteres)':''}</label>
-        <input id="join-password" required type="password" autoComplete={mode==='register'?'new-password':'current-password'} minLength={mode==='register'?12:undefined} value={password} onChange={e=>setPassword(e.target.value)} className="w-full rounded-xl border border-neutral-700 bg-[#101010] px-4 py-3 text-sm"/></div>
+        <PasswordInput id="join-password" fieldLabel="contraseña" required autoComplete={mode==='register'?'new-password':'current-password'} minLength={mode==='register'?12:undefined} value={password} onChange={e=>setPassword(e.target.value)} className="w-full rounded-xl border border-neutral-700 bg-[#101010] px-4 py-3 text-sm"/></div>
        {mode==='register'&&<div><label htmlFor="join-confirm" className="block text-xs text-neutral-300 mb-2">Confirmar contraseña</label>
-        <input id="join-confirm" required type="password" autoComplete="new-password" minLength={12} value={confirm} onChange={e=>setConfirm(e.target.value)} className="w-full rounded-xl border border-neutral-700 bg-[#101010] px-4 py-3 text-sm"/></div>}
+        <PasswordInput id="join-confirm" fieldLabel="confirmación de contraseña" required autoComplete="new-password" minLength={12} value={confirm} onChange={e=>setConfirm(e.target.value)} className="w-full rounded-xl border border-neutral-700 bg-[#101010] px-4 py-3 text-sm"/></div>}
       </>}
       {mode==='register'&&!otpChallenge&&<label className="flex items-start gap-3 text-xs text-neutral-400"><input type="checkbox" required checked={consent} onChange={e=>setConsent(e.target.checked)} className="mt-1 accent-amber-400"/><span>Acepto vincular mi cuenta con {target.name} y compartir con ese negocio los datos necesarios para gestionar mis citas.</span></label>}
       {otpChallenge&&<label className="block text-sm text-neutral-300">
