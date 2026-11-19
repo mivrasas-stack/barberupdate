@@ -34,6 +34,8 @@ function fixture({globalAdmin=true,protectedTarget=false}={}){
     return {rowCount:1,rows:[{user_id:other,tenant_id:shop,role:'barber',created_at:date,shop_name:'Barbería Central'}]};
    if(sql.includes('FROM public.customer_links l JOIN public.tenants t'))
     return {rowCount:1,rows:[{user_id:client,tenant_id:shop,linked_at:date,shop_name:'Barbería Central'}]};
+   if(sql.includes("FROM public.tenants WHERE owner_user_id=$1 AND status='active' LIMIT 1"))
+     return {rowCount:protectedTarget?1:0,rows:protectedTarget?[{name:'Barbería de prueba'}]:[]};
    if(sql.includes('FROM public.tenants WHERE owner_user_id=ANY'))return {rowCount:0,rows:[]};
    if(sql.includes('FROM public.platform_admins WHERE user_id=ANY'))return {rowCount:0,rows:[]};
    if(sql.includes('UPDATE public.whatsapp_consents SET revoked_at='))return {rowCount:1,rows:[]};
@@ -106,6 +108,15 @@ test('delete requires explicit ELIMINAR, deactivates login, and user disappears 
   assert.ok(!dir.json().some(x=>x.id===client),'Removed client must not reappear');
   const again=await app.inject({method:'DELETE',url:'/api/v1/platform/users/'+client,payload:{confirmation:'ELIMINAR'}});
   assert.equal(again.statusCode,404);
+ });
+});
+test('a superadmin can retire other test superadmins without removing their own account',async()=>{
+ await withApp({},async(app,{updates})=>{
+  const removed=await app.inject({method:'DELETE',url:'/api/v1/platform/users/'+other,
+    payload:{confirmation:'ELIMINAR'}});
+  assert.equal(removed.statusCode,200,removed.body);
+  assert.equal(updates.length,1);
+  assert.equal(updates[0].userId,other);
  });
 });
 test('the administrator cannot remove themselves or protected business owners',async()=>{

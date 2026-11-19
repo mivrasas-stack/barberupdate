@@ -54,6 +54,21 @@ export const BoutiqueCobros:React.FC<{tenantId:string}>=({tenantId})=>{
     }
     return record;
   };
+  useEffect(()=>{
+    if(!isLiveBackend||!order?.pickupCode)return;
+    let active=true;
+    const refresh=()=>{
+      if(active&&!busy&&document.visibilityState==='visible')
+        void fetchOrder(order.pickupCode).catch(()=>{});
+    };
+    const interval=window.setInterval(refresh,20000);
+    window.addEventListener('barbernow:live-update',refresh);
+    return()=>{
+      active=false;window.clearInterval(interval);
+      window.removeEventListener('barbernow:live-update',refresh);
+    };
+  },[tenantId,order?.pickupCode,busy]);
+
   const searchOrder=async(e:React.FormEvent)=>{
     e.preventDefault();
     if(!isLiveBackend){addToast('El cobro requiere la conexión real al servidor','error');return;}

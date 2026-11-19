@@ -30,8 +30,22 @@ export const AdminBarbershops: React.FC = () => {
   const [directoryUsers,setDirectoryUsers] = useState<User[]>([]);
   useEffect(()=>{
     if(!isLiveBackend)return;
-    backendRequest<User[]>('/platform/users').then(setDirectoryUsers)
-      .catch(e=>addToast(e instanceof Error?e.message:'No se pudo cargar el directorio','error'));
+    let alive=true;
+    const reload=()=>{
+      if(document.visibilityState==='hidden')return;
+      backendRequest<User[]>('/platform/users').then(users=>{if(alive)setDirectoryUsers(users);})
+        .catch(()=>{/* Retry on next event without interrupting editing. */});
+    };
+    reload();
+    const timer=window.setInterval(reload,20000);
+    window.addEventListener('barbernow:live-update',reload);
+    window.addEventListener('focus',reload);
+    return()=>{
+      alive=false;
+      window.clearInterval(timer);
+      window.removeEventListener('barbernow:live-update',reload);
+      window.removeEventListener('focus',reload);
+    };
   },[]);
   const [search, setSearch] = useState('');
   const [cityFilter, setCityFilter] = useState('all');

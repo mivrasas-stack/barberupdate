@@ -120,9 +120,14 @@ export async function registerPlatformAdminRoutes(app,{db,security,config}) {
           ? 'SELECT 1 FROM public.platform_admins WHERE user_id=$1 LIMIT 1'
           : 'SELECT 1 FROM public.platform_admins WHERE user_id=$1 UNION ALL SELECT 1 FROM public.tenants WHERE owner_user_id=$1 UNION ALL SELECT 1 FROM public.tenant_members WHERE user_id=$1 AND role IN (\'owner\',\'manager\') LIMIT 1',
         [targetId]);
-      if(protectedUser.rowCount)failure(409,passwordOnly
-        ? 'Por seguridad no se puede cambiar la contraseña de otro superadministrador desde esta pantalla.'
-        : 'Esta cuenta administra barberías o la plataforma. Debes transferir esas responsabilidades antes de eliminarla.');
+      if(protectedUser.rowCount&&passwordOnly)
+        failure(409,'Por seguridad no se puede cambiar la contraseña de otro superadministrador desde esta pantalla.');
+      if(!passwordOnly){
+        // Only the caller's own admin account and a live shop's owner are protected.
+        // Other invited/test accounts, including expired ownership roles, can be retired.
+        const owned=await db.query("SELECT name FROM public.tenants WHERE owner_user_id=$1 AND status='active' LIMIT 1",[targetId]);
+        if(owned.rowCount)failure(409,'Esta cuenta es propietaria de una barbería activa ('+owned.rows[0].name+'). Transfiere primero el negocio para conservar sus reservas y permisos.');
+      }
       return data.user;
     }
 
@@ -139,7 +144,7 @@ export async function registerPlatformAdminRoutes(app,{db,security,config}) {
     api.delete('/api/v1/platform/users/:userId',async(req)=>{
       const userId=parseOrThrow(id,req.params.userId);
       parseOrThrow(confirmDeletion,req.body);
-      const user=await targetForMutation(userId,req.actor.id,{passwordOnly:true});
+      const user=await targetForMutation(userId,req.actor.id);
       // Business history (appointments, invoices, rewards) keeps references to user IDs.
       // Disable access and remove the identity from the live directory instead of
       // cascading away business-critical data. This is explicitly a logical removal.

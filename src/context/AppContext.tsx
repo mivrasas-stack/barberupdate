@@ -16,7 +16,7 @@ import {
   CommercialPageConfig,
 } from '../types';
 import { barberStore, BarberOSState } from '../services/store';
-import {isLiveBackend, signIn, signOut, clearSession, hasSession, loadAccount, backendRequest, registerOwnedShop, getCachedUser, setCachedUser} from '../services/liveBackend';
+import {isLiveBackend, signIn, signOut, clearSession, hasSession, loadAccount, backendRequest, registerOwnedShop, getCachedUser, setCachedUser, refreshLiveData, subscribeToLiveChanges} from '../services/liveBackend';
 
 export interface ToastItem {
   id: string;
@@ -277,8 +277,50 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addToast('Datos de demostración reiniciados al estado original', 'info');
   };
 
-  // Durable REST catch-up: WebSocket delivery from the provider is not guaranteed.
-  // This changes data behavior only; no visual layout or CSS changes.
+  // Cross-tab and cross-device updates: Redis Pub/Sub => authenticated event
+  // stream => permission-checked REST reload. A 20s polling fallback recovers
+  // from network gaps or changes not originated through our API.
+  useEffect(()=>{
+    if(!isLiveBackend||!currentUser?.id)return;
+    let mounted=true,working=false,pending=false,delayed:number|undefined;
+    const controller=new AbortController();
+    const notifyViews=()=>window.dispatchEvent(new Event('barbernow:live-update'));
+    const synchronize=async()=>{
+      if(!mounted||document.visibilityState==='hidden')return;
+      if(working){pending=true;return;}
+      working=true;
+      try{
+        await refreshLiveData();
+        if(mounted)notifyViews();
+      }catch{
+        // Leave current data on screen; the next stream event or poll retries.
+      }finally{
+        working=false;
+        if(pending){pending=false;queue();}
+      }
+    };
+    const queue=()=>{
+      if(delayed!==undefined)window.clearTimeout(delayed);
+      delayed=window.setTimeout(()=>{delayed=undefined;void synchronize();},650);
+    };
+    subscribeToLiveChanges(queue,controller.signal);
+    const fallback=window.setInterval(queue,20000);
+    const visible=()=>{if(document.visibilityState==='visible')queue();};
+    window.addEventListener('online',queue);
+    document.addEventListener('visibilitychange',visible);
+    window.addEventListener('focus',queue);
+    return ()=>{
+      mounted=false;controller.abort();
+      window.clearInterval(fallback);
+      if(delayed!==undefined)window.clearTimeout(delayed);
+      window.removeEventListener('online',queue);
+      document.removeEventListener('visibilitychange',visible);
+      window.removeEventListener('focus',queue);
+    };
+  },[currentUser?.id]);
+
+  // Durable notifications cursor: separately synchronizes user notification
+  // messages. Normal data above gets its own realtime invalidation channel.
   useEffect(()=>{
     if(!isLiveBackend||!currentUser)return;
     let mounted=true,working=false;
@@ -310,7 +352,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const timer=window.setInterval(()=>void sync(),30000);
     const online=()=>void sync();
     window.addEventListener('online',online);
-    return ()=>{mounted=false;window.clearInterval(timer);window.removeEventListener('online',online);};
+    window.addEventListener('barbernow:live-update',online);
+    return ()=>{
+      mounted=false;window.clearInterval(timer);
+      window.removeEventListener('online',online);
+      window.removeEventListener('barbernow:live-update',online);
+    };
   },[currentUser?.id]);
 
   const activeRole: UserRole = currentUser?.role || 'client';

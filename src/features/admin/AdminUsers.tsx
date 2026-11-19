@@ -38,18 +38,35 @@ const dateText=(date:string)=>{
  return Number.isFinite(n.getTime())?new Intl.DateTimeFormat('es-CO',{day:'numeric',month:'short',year:'numeric'}).format(n):'Fecha no disponible';
 };
 export const AdminUsers: React.FC = () => {
-  const { state, addToast } = useApp();
+  const { state, addToast, currentUser } = useApp();
   const [search, setSearch] = useState('');
   const [showCreate,setShowCreate] = useState(false);
   const [directoryUsers,setDirectoryUsers] = useState<User[]>([]);
   const [loadingDirectory,setLoadingDirectory] = useState(isLiveBackend);
   const reloadDirectory=async()=>{
     if(!isLiveBackend)return;
-    try{setDirectoryUsers(await backendRequest<User[]>('/platform/users'));}
-    catch(e){addToast(e instanceof Error?e.message:'No se cargaron los usuarios','error');}
-    finally{setLoadingDirectory(false);}
+    try{
+      const updated=await backendRequest<User[]>('/platform/users');
+      setDirectoryUsers(updated);
+      setSelectedUser(previous=>previous?(updated.find(u=>u.id===previous.id)||null):null);
+    }catch(e){
+      // Keep the current directory visible if this background refresh fails.
+      if(loadingDirectory)addToast(e instanceof Error?e.message:'No se cargaron los usuarios','error');
+    }finally{setLoadingDirectory(false);}
   };
-  useEffect(()=>{void reloadDirectory();},[]);
+  useEffect(()=>{
+    if(!isLiveBackend)return;
+    void reloadDirectory();
+    const onChanged=()=>{if(document.visibilityState==='visible')void reloadDirectory();};
+    const interval=window.setInterval(onChanged,20000);
+    window.addEventListener('barbernow:live-update',onChanged);
+    window.addEventListener('focus',onChanged);
+    return ()=>{
+      window.clearInterval(interval);
+      window.removeEventListener('barbernow:live-update',onChanged);
+      window.removeEventListener('focus',onChanged);
+    };
+  },[]);
   const users=isLiveBackend?directoryUsers:state.users;
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -489,7 +506,7 @@ export const AdminUsers: React.FC = () => {
                       className="inline-flex items-center gap-1 rounded-lg border border-amber-500/40 px-3 py-2 text-xs font-semibold text-amber-300 disabled:opacity-40">
                       <KeyRound className="w-4 h-4"/> Restablecer contraseña
                     </button>
-                    <button type="button" disabled={busy||selectedUser.role==='superadmin'||selectedUser.role==='owner'}
+                    <button type="button" disabled={busy||selectedUser.id===currentUser?.id}
                       onClick={()=>{setShowDelete(!showDelete);setShowReset(false);setNewPassword('');setConfirmPassword('');}}
                       className="inline-flex items-center gap-1 rounded-lg border border-red-500/40 px-3 py-2 text-xs font-semibold text-red-300 disabled:opacity-40">
                       <Trash2 className="w-4 h-4"/> Eliminar usuario

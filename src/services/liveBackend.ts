@@ -552,16 +552,27 @@ export async function addOrder(tenant:string,name:string,items:{productId:string
 export function toSlug(name:string){return slugFor(name);}
 
 import {barberStore} from './store';
+import {followLiveUpdates} from './liveUpdates';
 
-export async function refreshLiveData(){
+let activeRefresh:Promise<void>|null=null;
+export function refreshLiveData():Promise<void>{
+  if(!isLiveBackend)return Promise.resolve();
+  if(activeRefresh)return activeRefresh;
+  activeRefresh=(async()=>{
+    const result=await loadAccount();
+    barberStore.hydrateFromBackend({
+      users:[result.user],barbershops:result.shops,barbers:result.barbers,
+      services:result.services,products:result.products,appointments:result.appointments,
+      transactions:result.transactions,orders:result.orders,plans:result.plans,cashClosings:result.cashClosings,reviews:result.reviews,loyalty:result.loyalty,
+      loyaltyBalances:result.loyaltyBalances,rewards:result.rewards,redemptions:result.redemptions
+    });
+  })().finally(()=>{activeRefresh=null;});
+  return activeRefresh;
+}
+/** Server event stream is authenticated exactly like regular REST requests. */
+export function subscribeToLiveChanges(onInvalidate:()=>void,signal:AbortSignal){
   if(!isLiveBackend)return;
-  const result=await loadAccount();
-  barberStore.hydrateFromBackend({
-    users:[result.user],barbershops:result.shops,barbers:result.barbers,
-    services:result.services,products:result.products,appointments:result.appointments,
-    transactions:result.transactions,orders:result.orders,plans:result.plans,cashClosings:result.cashClosings,reviews:result.reviews,loyalty:result.loyalty,
-    loyaltyBalances:result.loyaltyBalances,rewards:result.rewards,redemptions:result.redemptions
-  });
+  followLiveUpdates(apiOrigin+'/live/events',token,onInvalidate,signal);
 }
 export async function editService(tenant:string,id:string,data:{
   name:string;description:string;price:number;durationMinutes:number;category:string;earnsLoyaltyPoints:boolean
