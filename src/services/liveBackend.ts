@@ -31,7 +31,7 @@ export function consumeAuthRedirect(){
 }
 export async function savePasswordFromLink(password:string){
   if(!isPasswordSetupPending())throw Error('Abre un enlace válido de invitación o recuperación.');
-  if(password.length<12)throw Error('La contraseña debe tener al menos 12 caracteres.');
+  if(password.length<6)throw Error('La contraseña debe tener al menos 6 caracteres.');
   const jwt=await token();
   const response=await fetch(supabaseUrl+'/auth/v1/user',{
     method:'PUT',headers:{apikey:supabasePublicKey,Authorization:'Bearer '+jwt,'Content-Type':'application/json'},
