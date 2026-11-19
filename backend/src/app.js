@@ -17,6 +17,7 @@ import { registerMediaProfileRoutes } from './media-profile.js';
 import {registerWhatsAppRoutes} from './whatsapp-routes.js';
 import {registerPlatformIntegrationRoutes} from './platform-integrations.js';
 import {registerPlatformAdminRoutes} from './platform-admin.js';
+import {registerPasswordRecoveryRoutes} from './whatsapp-password-recovery.js';
 
 /**
  * Translate database rules without exposing raw PostgreSQL messages to clients.
@@ -76,6 +77,7 @@ export async function buildApp(env = process.env) {
   await registerBarberInviteRoutes(app, { config, db, security });
   await registerMediaProfileRoutes(app, { config, db, security });
   await registerWhatsAppRoutes(app,{config,db,security});
+  await registerPasswordRecoveryRoutes(app,{config,db,security});
   await registerPlatformIntegrationRoutes(app,{config,db,security});
   app.addHook('onClose', async () => {
     await db?.close();

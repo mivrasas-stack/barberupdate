@@ -31,7 +31,7 @@ export function consumeAuthRedirect(){
 }
 export async function savePasswordFromLink(password:string){
   if(!isPasswordSetupPending())throw Error('Abre un enlace válido de invitación o recuperación.');
-  if(password.length<12)throw Error('La contraseña debe tener al menos 12 caracteres.');
+  if(password.length<6)throw Error('La contraseña debe tener al menos 6 caracteres.');
   const jwt=await token();
   const response=await fetch(supabaseUrl+'/auth/v1/user',{
     method:'PUT',headers:{apikey:supabasePublicKey,Authorization:'Bearer '+jwt,'Content-Type':'application/json'},
@@ -164,8 +164,24 @@ export async function saveProfessionalProfile(tenantId:string,barberId:string,in
   method:'PATCH',body:JSON.stringify(input)
  });
 }
-export async function requestPasswordReset(email:string){
-  await authCall('recover',{email});
+type WhatsAppPasswordRecoveryStart={challengeId:string;expiresInSeconds:number;message:string};
+async function passwordRecoveryRequest<T>(path:string,payload:object):Promise<T>{
+  const res=await fetch(apiOrigin+'/auth/whatsapp/recovery/'+path,{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(payload),cache:'no-store',credentials:'omit'
+  });
+  const result=await res.json().catch(()=>({}));
+  if(!res.ok)throw Error(result.error||'No se pudo procesar la recuperación por WhatsApp');
+  return result as T;
+}
+export function requestPasswordReset(email:string):Promise<WhatsAppPasswordRecoveryStart>{
+  return passwordRecoveryRequest('start',{email:email.trim().toLowerCase()});
+}
+export function verifyPasswordResetCode(challengeId:string,code:string):Promise<{resetToken:string}>{
+  return passwordRecoveryRequest('verify',{challengeId,code});
+}
+export function setPasswordWithWhatsApp(resetToken:string,newPassword:string):Promise<{ok:boolean}>{
+  return passwordRecoveryRequest('reset',{resetToken,newPassword});
 }
 async function token(){
   if(!session){

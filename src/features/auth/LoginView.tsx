@@ -3,7 +3,7 @@ import { ArrowRight, LockKeyhole, Mail } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import {PasswordInput} from '../../components/common/PasswordInput';
 import type { UserRole } from '../../types';
-import { isLiveBackend, requestPasswordReset, registerWithEmail, isPasswordSetupPending, savePasswordFromLink, cancelPasswordSetup } from '../../services/liveBackend';
+import { isLiveBackend, requestPasswordReset, verifyPasswordResetCode, setPasswordWithWhatsApp, registerWithEmail, isPasswordSetupPending, savePasswordFromLink, cancelPasswordSetup } from '../../services/liveBackend';
 
 /**
  * Login only. Reproduces the BarberNow visual supplied by the owner.
@@ -19,6 +19,12 @@ export const LoginView: React.FC = () => {
   const [passwordSetup,setPasswordSetup] = useState(isPasswordSetupPending);
   const [newPassword,setNewPassword]=useState('');
   const [confirmPassword,setConfirmPassword]=useState('');
+  const [recoveryStep,setRecoveryStep]=useState<'code'|'password'|null>(null);
+  const [recoveryChallenge,setRecoveryChallenge]=useState('');
+  const [recoveryCode,setRecoveryCode]=useState('');
+  const [recoveryToken,setRecoveryToken]=useState('');
+  const [recoveryPassword,setRecoveryPassword]=useState('');
+  const [recoveryConfirm,setRecoveryConfirm]=useState('');
   const finishSetup=async(event:React.FormEvent)=>{
     event.preventDefault();
     if(busy)return;
@@ -73,28 +79,110 @@ export const LoginView: React.FC = () => {
       addToast('Escribe primero tu correo electrónico para recuperar la contraseña.', 'info');
       return;
     }
+    setBusy(true);
     try {
-      await requestPasswordReset(email.trim());
-      addToast('Si existe la cuenta, recibirás instrucciones para recuperar tu contraseña.', 'success');
+      const result=await requestPasswordReset(email.trim());
+      setRecoveryChallenge(result.challengeId);
+      setRecoveryCode('');
+      setRecoveryStep('code');
+      addToast('Si tienes un WhatsApp registrado, recibirás un código de 8 dígitos.', 'info');
     } catch (error) {
       addToast(error instanceof Error ? error.message : 'No fue posible solicitar la recuperación', 'error');
-    }
+    } finally {setBusy(false);}
   };
+  const confirmRecoveryCode=async(e:React.FormEvent)=>{
+    e.preventDefault();
+    if(busy)return;
+    setBusy(true);
+    try{
+      const result=await verifyPasswordResetCode(recoveryChallenge,recoveryCode);
+      setRecoveryToken(result.resetToken);
+      setRecoveryStep('password');
+      setRecoveryCode('');
+      addToast('Código correcto. Ahora crea tu nueva contraseña.','success');
+    }catch(error){addToast(error instanceof Error?error.message:'Código incorrecto o vencido','error');}
+    finally{setBusy(false);}
+  };
+  const finishRecovery=async(e:React.FormEvent)=>{
+    e.preventDefault();
+    if(busy)return;
+    if(recoveryPassword.length<6||recoveryPassword!==recoveryConfirm){
+      addToast('Escribe al menos 6 caracteres y verifica que ambas contraseñas coincidan.','error');return;
+    }
+    setBusy(true);
+    try{
+      await setPasswordWithWhatsApp(recoveryToken,recoveryPassword);
+      setRecoveryStep(null);setRecoveryToken('');setRecoveryChallenge('');
+      setRecoveryPassword('');setRecoveryConfirm('');setPassword('');
+      addToast('¡Contraseña actualizada! Ya puedes iniciar sesión.','success');
+    }catch(error){addToast(error instanceof Error?error.message:'No se pudo cambiar la contraseña','error');}
+    finally{setBusy(false);}
+  };
+
+  if(recoveryStep)return (
+    <main className="min-h-screen flex items-center justify-center bg-[#090909] px-4 py-10 text-white">
+      <form onSubmit={recoveryStep==='code'?confirmRecoveryCode:finishRecovery}
+        className="w-full max-w-md space-y-5 rounded-2xl border border-[#303030] bg-[#181818] p-6 sm:p-8">
+        <div className="flex justify-center"><LockKeyhole className="h-8 w-8 text-[var(--gold-primary)]"/></div>
+        <h1 className="text-center text-2xl font-bold">
+          {recoveryStep==='code'?'Verifica tu WhatsApp':'Restablece tu contraseña'}
+        </h1>
+        <p className="text-center text-sm leading-relaxed text-neutral-400">
+          {recoveryStep==='code'
+            ?'Si tienes un celular registrado, recibirás allí un código de 8 dígitos. Expira en 5 minutos. No necesitas escribir +57.'
+            :'Elige una nueva contraseña de mínimo 6 caracteres.'}
+        </p>
+        {recoveryStep==='code'?(
+          <div className="space-y-2">
+            <label htmlFor="recovery-whatsapp-code" className="text-sm">Código de WhatsApp</label>
+            <input id="recovery-whatsapp-code" required autoFocus type="text" inputMode="numeric" autoComplete="one-time-code"
+              pattern="[0-9]{8}" maxLength={8} value={recoveryCode}
+              onChange={e=>setRecoveryCode(e.target.value.replace(/\D/g,''))}
+              placeholder="00000000"
+              className="w-full rounded-xl border border-neutral-600 bg-[#101010] px-4 py-3 text-center font-mono text-xl tracking-widest"/>
+          </div>
+        ):(
+          <>
+            <div className="space-y-2">
+              <label htmlFor="recovery-new-password" className="text-sm">Nueva contraseña</label>
+              <PasswordInput id="recovery-new-password" fieldLabel="nueva contraseña" required minLength={6}
+                autoComplete="new-password" value={recoveryPassword} onChange={e=>setRecoveryPassword(e.target.value)}
+                className="w-full rounded-xl border border-neutral-600 bg-[#101010] px-4 py-3 text-white"/>
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="recovery-confirm-password" className="text-sm">Confirma tu nueva contraseña</label>
+              <PasswordInput id="recovery-confirm-password" fieldLabel="confirmación de contraseña" required minLength={6}
+                autoComplete="new-password" value={recoveryConfirm} onChange={e=>setRecoveryConfirm(e.target.value)}
+                className="w-full rounded-xl border border-neutral-600 bg-[#101010] px-4 py-3 text-white"/>
+            </div>
+            {recoveryPassword&&recoveryConfirm&&recoveryPassword!==recoveryConfirm&&
+              <p role="alert" className="text-xs text-rose-300">Las contraseñas no coinciden.</p>}
+          </>
+        )}
+        <button disabled={busy} type="submit"
+          className="w-full rounded-xl bg-[var(--gold-primary)] px-4 py-3 font-bold text-black disabled:opacity-50">
+          {busy?'Verificando…':recoveryStep==='code'?'Validar código':'Guardar nueva contraseña'}
+        </button>
+        <button type="button" onClick={()=>{setRecoveryStep(null);setRecoveryCode('');setRecoveryToken('');}}
+          className="w-full text-center text-xs text-neutral-400 hover:text-white">Volver al inicio de sesión</button>
+      </form>
+    </main>
+  );
 
   if(passwordSetup)return (
     <main className="min-h-screen flex items-center justify-center bg-[#090909] text-white px-4">
       <form onSubmit={finishSetup} className="w-full max-w-md rounded-2xl border border-[#303030] bg-[#181818] p-7 space-y-5">
         <h1 className="text-2xl font-bold">Activa tu cuenta BarberNow</h1>
-        <p className="text-sm text-neutral-400">Define una contraseña para ingresar de manera segura. Debe contener al menos 12 caracteres.</p>
+        <p className="text-sm text-neutral-400">Define una contraseña para ingresar de manera segura. Debe contener al menos 6 caracteres.</p>
         <div className="space-y-2">
           <label htmlFor="setup-new-password" className="block text-sm">Nueva contraseña</label>
-          <PasswordInput id="setup-new-password" fieldLabel="nueva contraseña" autoComplete="new-password" required minLength={12}
+          <PasswordInput id="setup-new-password" fieldLabel="nueva contraseña" autoComplete="new-password" required minLength={6}
             value={newPassword} onChange={e=>setNewPassword(e.target.value)}
             className="block w-full rounded-xl bg-[#111] border border-[#333] px-4 py-3"/>
         </div>
         <div className="space-y-2">
           <label htmlFor="setup-confirm-password" className="block text-sm">Confirmar contraseña</label>
-          <PasswordInput id="setup-confirm-password" fieldLabel="confirmación de contraseña" autoComplete="new-password" required minLength={12}
+          <PasswordInput id="setup-confirm-password" fieldLabel="confirmación de contraseña" autoComplete="new-password" required minLength={6}
             value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)}
             className="block w-full rounded-xl bg-[#111] border border-[#333] px-4 py-3"/>
         </div>
