@@ -4,6 +4,7 @@ import {normalizeBookingPhone} from './whatsapp-cloud.js';
 import {resolveWhatsAppIntegration} from './integration-secrets.js';
 import {createDb} from './db.js';
 import {failure,parseOrThrow} from './security.js';
+import {createRecoveryPhoneVerification} from './recovery-phone-verification.js';
 
 const EMAIL=z.email().max(254);
 const PIN=z.string().regex(/^[0-9]{8}$/);
@@ -72,8 +73,20 @@ export function createPasswordRecovery({recoveryDb,redis,secret,identityProvider
   if(!account)return null;
   const phone=safeMobile(account.phone||account.user_metadata?.phone);
   if(!phone)return null;
-  // A shared phone cannot authorize takeover of two separate identities.
-  const owners=all.filter(u=>safeMobile(u.phone||u.user_metadata?.phone)===phone);
+  if(account.app_metadata?.barbernow_deleted_at||
+     (account.banned_until&&new Date(account.banned_until).getTime()>Date.now()))return null;
+  // Explicit code verification in the superadmin portal can safely bind a
+  // shared legacy number to ONE identity on our own PostgreSQL server.
+  const verified=await recoveryDb.query('SELECT user_id,phone_e164 FROM public.barbernow_verified_auth_phones WHERE user_id=$1 OR phone_e164=$2',[account.id,phone]);
+  const own=verified.rows.find(x=>x.user_id===account.id);
+  if(own)return own.phone_e164===phone?{userId:account.id,phone}:null;
+  if(verified.rows.some(x=>x.phone_e164===phone))return null;
+  // Archived/disabled test accounts are not active possible recovery owners.
+  // For remaining duplicates, require a one-time administrator+WhatsApp
+  // verification before issuing any password reset code.
+  const owners=all.filter(u=>!u.app_metadata?.barbernow_deleted_at&&
+    !(u.banned_until&&new Date(u.banned_until).getTime()>Date.now())&&
+    safeMobile(u.phone||u.user_metadata?.phone)===phone);
   if(owners.length!==1)return null;
   return {userId:account.id,phone};
  }
@@ -136,11 +149,21 @@ export async function registerPasswordRecoveryRoutes(app,{config,db,security,fet
  if(!config.recoveryDatabaseUrl||!config.recoveryOtpSecret)return;
  const recoveryDb=createDb({...config,databaseUrl:config.recoveryDatabaseUrl,poolMax:3});
  if(!security.service)throw Error('Missing existing identity provider');
+ const sendCode=createPasswordRecoverySender({config,db,fetcher});
  const recover=createPasswordRecovery({
   recoveryDb,redis:security.redis,secret:config.recoveryOtpSecret,
-  identityProvider:security.service,
-  sendCode:createPasswordRecoverySender({config,db,fetcher})
+  identityProvider:security.service,sendCode
  });
+ const phoneVerify=createRecoveryPhoneVerification({
+  recoveryDb,redis:security.redis,secret:config.recoveryOtpSecret,
+  identityProvider:security.service,sendCode
+ });
+ const authorizedAdmin=async(req)=>{
+  await security.authenticated(req);
+  await security.limited(req);
+  const result=await db.query('SELECT 1 FROM public.platform_admins WHERE user_id=$1',[req.actor.id]);
+  if(!result.rowCount)failure(403,'Solo superadministradores');
+ };
  const emailInput=z.object({email:EMAIL}).strict();
  const verifyInput=z.object({challengeId:ID,code:PIN}).strict();
  const resetInput=z.object({resetToken:RESET,newPassword:PASSWORD}).strict();
@@ -155,6 +178,21 @@ export async function registerPasswordRecoveryRoutes(app,{config,db,security,fet
  app.post('/api/v1/auth/whatsapp/recovery/reset',async req=>{
   await security.limited(req);
   return recover.reset({...parseOrThrow(resetInput,req.body),ip:req.ip});
+ });
+ const userId=z.uuid(),adminCode=z.object({challengeId:ID,code:PIN}).strict();
+ app.get('/api/v1/platform/users/:userId/whatsapp/recovery-status',async req=>{
+  await authorizedAdmin(req);
+  return phoneVerify.status({userId:parseOrThrow(userId,req.params.userId)});
+ });
+ app.post('/api/v1/platform/users/:userId/whatsapp/verify/start',async req=>{
+  await authorizedAdmin(req);
+  return phoneVerify.start({userId:parseOrThrow(userId,req.params.userId),
+   adminId:req.actor.id,ip:req.ip});
+ });
+ app.post('/api/v1/platform/users/:userId/whatsapp/verify/confirm',async req=>{
+  await authorizedAdmin(req);
+  return phoneVerify.confirm({userId:parseOrThrow(userId,req.params.userId),
+   adminId:req.actor.id,ip:req.ip,...parseOrThrow(adminCode,req.body)});
  });
  app.addHook('onClose',async()=>{await recoveryDb.close();});
 }

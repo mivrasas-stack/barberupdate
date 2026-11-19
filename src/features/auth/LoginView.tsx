@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ArrowRight, LockKeyhole, Mail } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import {PasswordInput} from '../../components/common/PasswordInput';
@@ -25,6 +25,15 @@ export const LoginView: React.FC = () => {
   const [recoveryToken,setRecoveryToken]=useState('');
   const [recoveryPassword,setRecoveryPassword]=useState('');
   const [recoveryConfirm,setRecoveryConfirm]=useState('');
+  const [recoveryResendUntil,setRecoveryResendUntil]=useState(0);
+  const [recoveryResendCountdown,setRecoveryResendCountdown]=useState(0);
+  useEffect(()=>{
+    if(recoveryStep!=='code')return;
+    const update=()=>setRecoveryResendCountdown(Math.max(0,Math.ceil((recoveryResendUntil-Date.now())/1000)));
+    update();
+    const timer=window.setInterval(update,1000);
+    return()=>window.clearInterval(timer);
+  },[recoveryStep,recoveryResendUntil]);
   const finishSetup=async(event:React.FormEvent)=>{
     event.preventDefault();
     if(busy)return;
@@ -85,10 +94,24 @@ export const LoginView: React.FC = () => {
       setRecoveryChallenge(result.challengeId);
       setRecoveryCode('');
       setRecoveryStep('code');
-      addToast('Si tienes un WhatsApp registrado, recibirás un código de 8 dígitos.', 'info');
+      setRecoveryResendUntil(Date.now()+60000);
+      addToast('Solicitamos el código de seguridad a tu WhatsApp registrado.', 'info');
     } catch (error) {
       addToast(error instanceof Error ? error.message : 'No fue posible solicitar la recuperación', 'error');
     } finally {setBusy(false);}
+  };
+  const resendRecoveryCode=async()=>{
+    if(busy||recoveryResendCountdown>0||!email.trim())return;
+    setBusy(true);
+    try{
+      const next=await requestPasswordReset(email.trim());
+      setRecoveryChallenge(next.challengeId);
+      setRecoveryCode('');
+      setRecoveryResendUntil(Date.now()+60000);
+      addToast('Se solicitó otro código al WhatsApp registrado. El anterior deja de ser válido.', 'info');
+    }catch(error){
+      addToast(error instanceof Error?error.message:'No se pudo solicitar otro código','error');
+    }finally{setBusy(false);}
   };
   const confirmRecoveryCode=async(e:React.FormEvent)=>{
     e.preventDefault();
@@ -140,6 +163,15 @@ export const LoginView: React.FC = () => {
               onChange={e=>setRecoveryCode(e.target.value.replace(/\D/g,''))}
               placeholder="00000000"
               className="w-full rounded-xl border border-neutral-600 bg-[#101010] px-4 py-3 text-center font-mono text-xl tracking-widest"/>
+            <button type="button" disabled={busy||recoveryResendCountdown>0}
+              onClick={()=>void resendRecoveryCode()}
+              className="w-full rounded-lg border border-[var(--gold-primary)]/40 px-4 py-3 text-sm font-semibold text-[var(--gold-primary)] disabled:cursor-not-allowed disabled:opacity-50">
+              {recoveryResendCountdown>0?'Reenviar código por WhatsApp ('+recoveryResendCountdown+' s)':'Reenviar código por WhatsApp'}
+            </button>
+            <p className="text-xs leading-relaxed text-neutral-400">
+              ¿No llega el código? Pide al superadmin comprobar si tu celular aparece en otras cuentas.
+              Un número compartido debe verificarse antes de permitir recuperar la contraseña.
+            </p>
           </div>
         ):(
           <>

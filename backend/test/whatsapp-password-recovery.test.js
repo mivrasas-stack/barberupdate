@@ -10,6 +10,11 @@ function fixture(users=[user],options={}){
  const rows=new Map(),sent=[],updates=[],redisCounts=new Map();
  const db={
   query:async(sql,args=[])=>{
+   if(sql.includes('SELECT user_id,phone_e164 FROM public.barbernow_verified_auth_phones WHERE user_id=$1 OR phone_e164=$2')){
+    const owner=options.verifiedOwner;
+    const rows=owner?[{user_id:owner,phone_e164:options.verifiedPhone||'+573001234567'}]:[];
+    return {rows,rowCount:rows.length};
+   }
    if(sql.includes('UPDATE public.barbernow_password_recovery SET consumed_at=now() WHERE user_id=')){
     for(const row of rows.values())if(row.user_id===args[0])row.consumed_at=new Date();
     return {rows:[],rowCount:0};
@@ -90,6 +95,23 @@ test('Unknown emails, invalid stored phones and shared numbers do not send or re
   assert.equal(x.sent.length,0);
   await assert.rejects(x.service.verify({challengeId:result.challengeId,code:'12345678',ip:'unknown'}),e=>e.statusCode===401);
  }
+});
+test('archived duplicate accounts do not block recovery; active duplicates still require verification',async()=>{
+ const archived={...user,id:'22222222-2222-4222-8222-222222222222',
+  email:'old-test@example.test',app_metadata:{barbernow_deleted_at:'2026-11-15T12:00:00Z'}};
+ const x=fixture([user,archived]);
+ await x.service.start({email:user.email,ip:'127.0.0.1'});
+ assert.equal(x.sent.length,1);
+ const active={...archived,app_metadata:{}};
+ const y=fixture([user,active]);
+ await y.service.start({email:user.email,ip:'127.0.0.1'});
+ assert.equal(y.sent.length,0);
+ const z=fixture([user,active],{verifiedOwner:user.id});
+ await z.service.start({email:user.email,ip:'127.0.0.1'});
+ assert.equal(z.sent.length,1,'Explicitly verified owner can recover even with other legacy unverified profiles');
+ const another=fixture([user,active],{verifiedOwner:active.id});
+ await another.service.start({email:user.email,ip:'127.0.0.1'});
+ assert.equal(another.sent.length,0,'The same phone must never recover a different identity');
 });
 test('Recovery code expires and failed sends do not produce valid reset tokens',async()=>{
  const x=fixture();
