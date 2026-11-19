@@ -57,5 +57,3 @@ test('owner registration allows independent password/confirmation inspection',as
   await expect(first).toHaveAttribute('type','password');
   await expect(page.getByRole('button',{name:'Mostrar contraseña',exact:true})).toHaveAttribute('type','button');
 });
-
-[executed on device: vmi3669516 (22a9c8cd-8866-4186-9071-dab9301dff16)]
