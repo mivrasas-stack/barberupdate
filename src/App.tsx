@@ -41,6 +41,7 @@ import { BarberoLayout } from './features/barbero/BarberoLayout';
 import { BarberoInicio } from './features/barbero/BarberoInicio';
 import { BarberoDashboard } from './features/barbero/BarberoDashboard';
 import { BarberoAgenda } from './features/barbero/BarberoAgenda';
+import {StaffContactProvider} from './features/barbero/StaffContact';
 import { BarberoPerfil } from './features/barbero/BarberoPerfil';
 
 // Client Portal Views
@@ -164,7 +165,7 @@ const AppContent: React.FC = () => {
 // The reference login is full-bleed, without the application's global bars.
 // All existing authenticated views still render the same Header/RoleSwitcher as before.
 const AppFrame: React.FC = () => {
-  const { activeRoute, currentUser } = useApp();
+  const { activeRoute, currentUser, currentShop, state, restoringSession } = useApp();
   const deniedRealRoute = Boolean(isLiveBackend && currentUser && (
     (activeRoute.startsWith('/admin') && currentUser.role !== 'superadmin') ||
     (activeRoute.startsWith('/barberia/') && currentUser.role !== 'owner') ||
@@ -173,11 +174,18 @@ const AppFrame: React.FC = () => {
   ));
   const isLogin = window.location.pathname.startsWith('/unirse-barbero/') || window.location.pathname.startsWith('/vincular/') || activeRoute === '/login'
     || (!currentUser && !activeRoute.startsWith('/vincular')) || deniedRealRoute;
+  const ownBarber = currentUser && state.barbers.find(b => b.userId === currentUser.id && b.businessId === currentShop?.id);
+  const canEditContact = isLiveBackend && !isLogin && !restoringSession && currentShop && currentUser && (
+    (activeRoute.startsWith('/barberia/') && currentShop.ownerId === currentUser.id && currentUser.role === 'owner') ||
+    (activeRoute.startsWith('/barbero/') && ownBarber && ['owner','barber_employee'].includes(currentUser.role))
+  );
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] flex flex-col font-sans">
       {!isLogin && <Header />}
       <div className="flex-1">
-        <AppContent />
+        {canEditContact ? <StaffContactProvider key={[currentUser.id,currentShop.id,ownBarber?.id].join('/')} tenantId={currentShop.id}>
+          <AppContent />
+        </StaffContactProvider> : <AppContent />}
       </div>
       {!isLogin && !isLiveBackend && <RoleSwitcherBar />}
       <PaletteValidatorModal />

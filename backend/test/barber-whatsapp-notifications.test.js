@@ -112,3 +112,26 @@ test('unsubscribed staff member or changed phone never receives a booking notifi
   assert.ok(fixture.states.some(x=>x.status==='suppressed'));
  }
 });
+test('unified contact uses the signed-in identity, normalizes the mobile and preserves an omitted alert preference', async () => {
+  const app = Fastify({logger:false});
+  const calls = [];
+  const path = '/api/v1/tenants/'+tenant+'/my-contact';
+  const db = {query: async (sql, args) => {
+    calls.push(args);
+    return {rows:[{phone:args[2] || '', confirmed:!!args[2], barber_id:barber, enabled:false, template_ready:true}]};
+  }};
+  const security = {
+    authenticated: async req => {req.actor={id:staff};}, limited:async()=>{},
+    requireTenant:async (_,shop,user) => {assert.equal(shop,tenant);assert.equal(user,staff);}
+  };
+  app.setErrorHandler((err,req,reply)=>reply.code(err.statusCode||500).send({error:err.message}));
+  await registerBarberWhatsAppRoutes(app,{db,security});
+  try {
+    assert.equal((await app.inject({method:'GET',url:path})).statusCode,200);
+    const saved = await app.inject({method:'PATCH',url:path,payload:{phone:'3001234567'}});
+    assert.equal(saved.statusCode,200,saved.body);
+    assert.equal(saved.json().phone,'+573001234567');
+    assert.equal((await app.inject({method:'PATCH',url:path,payload:{phone:'3001234567',userId:customer}})).statusCode,400);
+    assert.deepEqual(calls,[[staff,tenant,null,null],[staff,tenant,'+573001234567',null]]);
+  } finally {await app.close();}
+});

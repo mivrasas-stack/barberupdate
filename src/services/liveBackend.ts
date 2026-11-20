@@ -143,10 +143,10 @@ export async function updateAccountAvatar(url:string):Promise<void>{
  const result=await response.json().catch(()=>({}));
  if(!response.ok)throw Error(result.msg||result.message||'No se pudo guardar la foto en tu cuenta.');
 }
-export async function updateAccountContact(input:{name:string;phone:string;email:string;originalEmail:string}):Promise<void>{
+export async function updateAccountContact(input:{name:string;phone?:string;email:string;originalEmail:string}):Promise<void>{
  const jwt=await token();
- const body:{email?:string;data:{full_name:string;phone:string}}={
-  data:{full_name:input.name.trim(),phone:input.phone.trim()}
+ const body:{email?:string;data:{full_name:string;phone?:string}}={
+  data:{full_name:input.name.trim(),...(input.phone!==undefined?{phone:input.phone.trim()}:{})}
  };
  if(input.originalEmail.toLowerCase()!==input.email.trim().toLowerCase())
   body.email=input.email.trim().toLowerCase();
@@ -158,7 +158,7 @@ export async function updateAccountContact(input:{name:string;phone:string;email
  if(!response.ok)throw Error(result.msg||result.message||'No se pudieron guardar los datos personales.');
 }
 export async function saveProfessionalProfile(tenantId:string,barberId:string,input:{
- name:string;bio:string;specialties:string[];experienceYears:number;instagramUrl:string;professionalPhone:string
+ name:string;bio:string;specialties:string[];experienceYears:number;instagramUrl:string;professionalPhone?:string
 }){
  return backendRequest<Db>('/tenants/'+encodeURIComponent(tenantId)+'/barbers/'+encodeURIComponent(barberId)+'/professional-profile',{
   method:'PATCH',body:JSON.stringify(input)

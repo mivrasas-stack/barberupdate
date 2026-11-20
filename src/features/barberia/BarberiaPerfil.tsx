@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import {StaffContactSection} from '../barbero/StaffContact';
 import {BarberoPerfil} from '../barbero/BarberoPerfil';
 import { useApp } from '../../context/AppContext';
 import { BarberInvites } from './BarberInvites';
@@ -162,6 +163,7 @@ export const BarberiaPerfil: React.FC = () => {
             <BarberoPerfil barberOverride={ownerBarber}/>
           ) : (
             <div className="max-w-4xl mx-auto rounded-2xl border border-[#343434] bg-[#141414] p-6 space-y-4">
+              <StaffContactSection/>
               <h2 className="flex items-center gap-2 text-lg font-bold text-white">
                 <UserRound className="h-5 w-5 text-[var(--gold-primary)]"/> Atiende citas como dueño y barbero
               </h2>

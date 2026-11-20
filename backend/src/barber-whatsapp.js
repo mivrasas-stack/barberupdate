@@ -15,6 +15,32 @@ export async function registerBarberWhatsAppRoutes(app,{db,security}){
    await authenticated(req);await limited(req);
    if(!db)failure(503,'La base de datos no está disponible');
   });
+  async function accountContact(req, input) {
+    const tenant = parseOrThrow(id, req.params.tenantId);
+    await requireTenant(db, tenant, req.actor.id, ['owner', 'barber']);
+    let phone = null;
+    if (input) {
+      try { phone = normalizeBookingPhone(input.phone); }
+      catch { failure(400, 'Revisa el número de WhatsApp e incluye el indicativo si es internacional.'); }
+    }
+    try {
+      const result = await db.query(
+        'SELECT * FROM public.barbernow_staff_contact($1,$2,$3,$4)',
+        [req.actor.id, tenant, phone, input?.enabled ?? null]);
+      const contact = result.rows[0];
+      return {phone: contact.phone, confirmed: contact.confirmed, barberId: contact.barber_id,
+        enabled: contact.enabled, templateReady: contact.template_ready};
+    } catch (error) {
+      if (error.code === '42501') failure(403, 'Solo puedes actualizar tu propio contacto profesional.');
+      if (error.code === '22023') failure(400, 'Revisa el celular y tu perfil profesional antes de activar los avisos.');
+      throw error;
+    }
+  }
+  const contactPath = '/api/v1/tenants/:tenantId/my-contact';
+  routes.get(contactPath, req => accountContact(req, null));
+  routes.patch(contactPath, req => accountContact(req, parseOrThrow(
+    z.object({phone: z.string().trim().min(7).max(32), enabled: z.boolean().optional()}).strict(), req.body)));
+
   const ownBarber=async(req)=>{
    const tenant=parseOrThrow(id,req.params.tenantId);
    const barber=parseOrThrow(id,req.params.barberId);

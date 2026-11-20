@@ -56,11 +56,11 @@ export async function registerMediaProfileRoutes(app,{db,security,config}){
     specialties:z.array(z.string().trim().min(2).max(65)).max(8),
     experienceYears:z.number().int().min(0).max(70),
     instagramUrl:z.union([z.literal(''),z.string().url().max(160).refine(v=>v.startsWith('https://www.instagram.com/')||v.startsWith('https://instagram.com/'),'Solo se admiten enlaces de Instagram')]),
-    professionalPhone:z.string().trim().max(40)
+    professionalPhone:z.string().trim().max(40).optional()
    }).strict();
    const x=parseOrThrow(payload,req.body);
    const row=await db.query(
-    'UPDATE public.barbers SET name=$4,bio=$5,specialties=$6,experience_years=$7,instagram_url=$8,professional_phone=$9 WHERE tenant_id=$1 AND id=$2 AND user_id=$3 RETURNING *',
+    'UPDATE public.barbers SET name=$4,bio=$5,specialties=$6,experience_years=$7,instagram_url=$8,professional_phone=COALESCE($9,professional_phone) WHERE tenant_id=$1 AND id=$2 AND user_id=$3 RETURNING *',
     [tenant,barber,req.actor.id,x.name,x.bio,x.specialties,x.experienceYears,x.instagramUrl,x.professionalPhone]);
    if(!row.rowCount)failure(403,'No puedes modificar el perfil de otro barbero');
    return row.rows[0];
