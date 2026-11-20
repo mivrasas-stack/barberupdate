@@ -155,11 +155,19 @@ export async function registerRoutes(app,{config,db,security}) {
           if(linked.barber_id&&linked.barber_id!==x.barberId)
             failure(403,'Tu QR permite reservar solamente con el barbero vinculado');
         }
+        // Serialize booking against the temporary close/resume toggle.
+        await tx.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[tenant+':booking-status']);
         // Serialize slot reservation with work-hour and time-off changes.
         await tx.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[tenant+':schedule:'+x.barberId]);
-        const shop=await tx.query("SELECT opening_hours,time_zone FROM public.tenants WHERE id=$1 AND status='active'",[tenant]);
+        const shop=await tx.query("SELECT opening_hours,time_zone,accepting_bookings FROM public.tenants WHERE id=$1 AND status='active'",[tenant]);
         const serviceDuration=await tx.query("SELECT duration_minutes FROM public.services WHERE tenant_id=$1 AND id=$2 AND is_active=true",[tenant,x.serviceId]);
         if(!shop.rowCount||!serviceDuration.rowCount)failure(404,'Servicio o barbería no disponible');
+        if(shop.rows[0].accepting_bookings===false)
+          failure(409,'Esta barbería tiene las reservas temporalmente cerradas');
+        const blackout=await tx.query(`SELECT 1 FROM public.tenant_booking_blackouts
+          WHERE tenant_id=$1 AND ($2::timestamptz AT TIME ZONE $3)::date BETWEEN start_date AND end_date LIMIT 1`,
+          [tenant,startsAt,shop.rows[0].time_zone]);
+        if(blackout.rowCount)failure(409,'Las nuevas reservas están cerradas para esta fecha.');
         const endsAt=new Date(Date.parse(startsAt)+Number(serviceDuration.rows[0].duration_minutes)*60000);
         if(!checkBusinessSlot(shop.rows[0].opening_hours,shop.rows[0].time_zone,startsAt,endsAt))
           failure(409,'La reserva está fuera de los días u horas de atención de la barbería');
@@ -186,7 +194,7 @@ export async function registerRoutes(app,{config,db,security}) {
         // must not require an employee's confirmation.
         // The database exclusion constraint and schedule trigger remain authoritative.
         const inserted=await tx.query(
-          "INSERT INTO public.appointments(tenant_id,barber_id,service_id,customer_user_id,customer_name,customer_phone,created_by,starts_at,ends_at,price_minor,notes,idempotency_key,request_hash,status) SELECT $1,b.id,s.id,$4,$5,$6,$4,$7::timestamptz,$7::timestamptz + s.duration_minutes * interval '1 minute',s.price_minor,$8,$9,$10,'confirmed' FROM public.services s JOIN public.tenants t ON t.id=s.tenant_id AND t.status='active' JOIN public.barbers b ON b.tenant_id=s.tenant_id AND b.id=$2 AND b.status='active' WHERE s.tenant_id=$1 AND s.id=$3 AND s.is_active=true RETURNING *",
+          "INSERT INTO public.appointments(tenant_id,barber_id,service_id,customer_user_id,customer_name,customer_phone,created_by,starts_at,ends_at,price_minor,notes,idempotency_key,request_hash,status) SELECT $1,b.id,s.id,$4,$5,$6,$4,$7::timestamptz,$7::timestamptz + s.duration_minutes * interval '1 minute',s.price_minor,$8,$9,$10,'confirmed' FROM public.services s JOIN public.tenants t ON t.id=s.tenant_id AND t.status='active' AND t.accepting_bookings=true JOIN public.barbers b ON b.tenant_id=s.tenant_id AND b.id=$2 AND b.status='active' WHERE s.tenant_id=$1 AND s.id=$3 AND s.is_active=true RETURNING *",
           [tenant,x.barberId,x.serviceId,req.actor.id,x.customerName,contactPhone,startsAt,x.notes,key,requestHash]);
         if(!inserted.rowCount) failure(404,'Servicio o barbero no disponible');
         return {row:inserted.rows[0],repeated:false};
@@ -416,7 +424,7 @@ export async function registerRoutes(app,{config,db,security}) {
   });
   app.get('/api/v1/public/tenants',async req=>{
     await limited(req);if(!db)failure(503,'Base de datos no configurada');
-    return (await db.query("SELECT id,name,slug,currency,time_zone,business_kind,logo_url,cover_url,tagline,address,city,phone,portfolio FROM public.tenants WHERE status='active' ORDER BY name LIMIT 100")).rows;
+    return (await db.query("SELECT id,name,slug,currency,time_zone,business_kind,logo_url,cover_url,tagline,address,city,phone,portfolio,accepting_bookings FROM public.tenants WHERE status='active' ORDER BY name LIMIT 100")).rows;
   });
   app.get('/api/v1/public/tenants/:tenantId/products',async req=>{
     await limited(req);if(!db)failure(503,'Base de datos no configurada');
@@ -426,7 +434,7 @@ export async function registerRoutes(app,{config,db,security}) {
   app.get('/api/v1/public/tenants/:slug/catalog',async req=>{
     await limited(req); if(!db) failure(503,'Base de datos no configurada');
     const name=parseOrThrow(slug,req.params.slug);
-    const t=await db.query("SELECT id,name,slug,currency,time_zone FROM public.tenants WHERE slug=$1 AND status='active'",[name]);
+    const t=await db.query("SELECT id,name,slug,currency,time_zone,accepting_bookings FROM public.tenants WHERE slug=$1 AND status='active'",[name]);
     if(!t.rowCount) failure(404,'Negocio no encontrado');
     const tenant=t.rows[0];
     const [barbers,services]=await Promise.all([

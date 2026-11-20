@@ -229,7 +229,7 @@ export function mapShop(r:Db,userId:string):Barbershop{
     openingHours:(val(r,'opening_hours') as Barbershop['openingHours'])||{days:'',open:'',close:''},socialLinks:(val(r,'social_links') as Barbershop['socialLinks'])||{},
      coordinates:val(r,'latitude')!=null&&val(r,'longitude')!=null?{lat:num(r,'latitude'),lng:num(r,'longitude')}:undefined,
      portfolio:Array.isArray(r.portfolio)?r.portfolio as string[]:[], 
-    publicCode:txt(r,'slug'),businessKind:txt(r,'business_kind','barbershop') as Barbershop['businessKind'],createdAt:txt(r,'created_at',new Date().toISOString())
+    publicCode:txt(r,'slug'),acceptingBookings:val(r,'accepting_bookings')!==false,businessKind:txt(r,'business_kind','barbershop') as Barbershop['businessKind'],createdAt:txt(r,'created_at',new Date().toISOString())
   };
 }
 export function mapBarber(r:Db,tenant:string):Barber{
@@ -523,6 +523,32 @@ export async function addBooking(tenant:string,data:{barberId:string;serviceId:s
    body:JSON.stringify({barberId:data.barberId,serviceId:data.serviceId,
      startsAt:selected.starts_at,customerName:data.customerName,customerPhone:data.customerPhone,
      notes:data.notes||'',...(data.whatsappOptIn!==undefined?{whatsappOptIn:data.whatsappOptIn}:{})})},idempotencyKey);
+}
+export type GroupBookingEntry={
+  barberId:string;serviceId:string;date:string;startTime:string;customerName:string;notes?:string
+};
+export async function addGroupBooking(tenant:string,entries:GroupBookingEntry[],customerPhone:string,
+  whatsappOptIn:boolean,idempotencyKey:string,zone='America/Bogota'){
+  if(entries.length<2||entries.length>4)throw Error('Puedes reservar para ti y hasta tres acompañantes.');
+  const resolved=await Promise.all(entries.map(async entry=>{
+    const params=new URLSearchParams({barberId:entry.barberId,serviceId:entry.serviceId,date:entry.date});
+    const res=await fetch(apiOrigin+'/public/tenants/'+encodeURIComponent(tenant)+'/availability?'+params,{cache:'no-store'});
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok)throw Error(data.error||'No se pudo consultar disponibilidad');
+    const slot=(Array.isArray(data.slots)?data.slots:[]).find((item:{starts_at:string})=>
+      dayParts(item.starts_at,zone).time===entry.startTime);
+    if(!slot)throw Error('Una de las horas seleccionadas ya no está disponible. Revisa tus acompañantes.');
+    return {barberId:entry.barberId,serviceId:entry.serviceId,startsAt:slot.starts_at,
+      customerName:entry.customerName,notes:entry.notes||''};
+  }));
+  return backendRequest<{groupId:string;appointments:Db[]}>('/tenants/'+encodeURIComponent(tenant)+'/group-bookings',{
+    method:'POST',body:JSON.stringify({appointments:resolved,customerPhone,whatsappOptIn})
+  },idempotencyKey);
+}
+export async function updateBookingStatus(tenant:string,acceptingBookings:boolean){
+  return backendRequest<{acceptingBookings:boolean}>('/tenants/'+encodeURIComponent(tenant)+'/booking-status',{
+    method:'PATCH',body:JSON.stringify({acceptingBookings})
+  });
 }
 export type AppointmentPaymentReceipt={
  appointmentId:string;customerName:string;serviceName:string;startsAt:string;

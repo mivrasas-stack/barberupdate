@@ -5,7 +5,7 @@ import {barberStore} from '../../services/store';
 import {ImageUploader} from '../barberia/ImageUploader';
 import {ProfilePhotoUploader} from '../../components/common/ProfilePhotoUploader';
 import {backendRequest,getClientAuthProfile,updateAccountAvatar,updateAccountContact,saveProfessionalProfile,isLiveBackend,refreshLiveData} from '../../services/liveBackend';
-import {Scissors,Star,Trash2,UserRound,Save,Camera,Loader2} from 'lucide-react';
+import {Scissors,Star,Trash2,UserRound,Save,Camera,Loader2,MessageCircle} from 'lucide-react';
 
 const field='w-full bg-[#101010] border border-[#343434] rounded-xl px-3.5 py-3 text-sm text-white outline-none focus:border-[var(--gold-primary)]';
 const label='block text-xs font-semibold text-neutral-300 mb-1.5';
@@ -29,6 +29,12 @@ export const BarberoPerfil:React.FC<{barberOverride?:Barber}>=({barberOverride})
  const [privateLoaded,setPrivateLoaded]=useState(!isLiveBackend);
  const [savingProfessional,setSavingProfessional]=useState(false);
  const [savingPersonal,setSavingPersonal]=useState(false);
+ const [whatsappEnabled,setWhatsappEnabled]=useState(false);
+ const [whatsappTemplateReady,setWhatsappTemplateReady]=useState(false);
+ const [whatsappPhone,setWhatsappPhone]=useState('');
+ const [whatsappBusy,setWhatsappBusy]=useState(false);
+ const [whatsappLoading,setWhatsappLoading]=useState(isLiveBackend);
+
 
  useEffect(()=>{
   if(!barber)return;
@@ -60,6 +66,38 @@ export const BarberoPerfil:React.FC<{barberOverride?:Barber}>=({barberOverride})
    .finally(()=>{if(alive)setLoading(false);});
   return()=>{alive=false;};
  },[currentUser?.id]);
+
+ useEffect(()=>{
+  if(!barber?.businessId||!isLiveBackend){setWhatsappLoading(false);return;}
+  let active=true;
+  setWhatsappLoading(true);
+  backendRequest<{enabled:boolean;phone:string;templateReady:boolean}>('/tenants/'+barber.businessId+'/barbers/'+barber.id+'/whatsapp-notifications')
+    .then(data=>{
+      if(!active)return;
+      setWhatsappEnabled(data.enabled);
+      setWhatsappTemplateReady(data.templateReady);
+      setWhatsappPhone(data.phone||'');
+    })
+    .catch(error=>{if(active)addToast(error instanceof Error?error.message:'No se pudo consultar el WhatsApp profesional.','error');})
+    .finally(()=>{if(active)setWhatsappLoading(false);});
+  return()=>{active=false;};
+ },[barber?.businessId,barber?.id,currentUser?.id]);
+
+ const toggleWhatsapp=async()=>{
+  if(!barber?.businessId||whatsappBusy||whatsappLoading)return;
+  setWhatsappBusy(true);
+  try{
+    const next=!whatsappEnabled;
+    const result=await backendRequest<{enabled:boolean;phone:string;templateReady:boolean}>(
+      '/tenants/'+barber.businessId+'/barbers/'+barber.id+'/whatsapp-notifications',
+      {method:'PATCH',body:JSON.stringify({enabled:next,phone:whatsappPhone||professionalPhone||phone})});
+    setWhatsappEnabled(result.enabled);
+    setWhatsappTemplateReady(result.templateReady);
+    if(result.phone)setWhatsappPhone(result.phone);
+    addToast(next?(result.templateReady?'Recibirás las próximas citas confirmadas por WhatsApp.':'Preferencia guardada. El envío empezará cuando Meta apruebe la plantilla.'):'Dejaste de recibir avisos de citas nuevas por WhatsApp.','success');
+  }catch(error){addToast(error instanceof Error?error.message:'No se pudo guardar la preferencia de WhatsApp.','error');}
+  finally{setWhatsappBusy(false);}
+ };
 
  const updatePortrait=async(url:string)=>{
   if(!barber?.businessId)throw Error('No se encontró tu barbería vinculada.');
@@ -219,6 +257,37 @@ export const BarberoPerfil:React.FC<{barberOverride?:Barber}>=({barberOverride})
    </button>
    <p className="text-[11px] text-neutral-500">La modalidad contractual, los pagos y la agenda se siguen gestionando en sus módulos correspondientes.</p>
   </form>
+
+  {isLiveBackend&&<section className="rounded-2xl border border-[#262626] bg-[#141414] p-5 sm:p-6 space-y-4">
+    <h3 className="flex items-center gap-2 text-sm font-bold text-white">
+      <MessageCircle className="w-4 h-4 text-[var(--gold-primary)]"/> Nuevas citas por WhatsApp
+    </h3>
+    <p className="text-xs leading-relaxed text-neutral-400">
+      Recibe un aviso cuando se confirme una cita nueva para ti. Incluye nombre del cliente,
+      servicio, fecha, hora y barbería. No recibirás publicidad. Puedes desactivarlo cuando quieras.
+    </p>
+    {!whatsappTemplateReady&&<p className="rounded-xl border border-amber-400/30 bg-amber-400/5 p-3 text-xs text-amber-200">
+      La nueva plantilla para barberos sigue pendiente de aprobación o activación en Meta.
+      Puedes autorizarla ahora; los avisos comenzarán cuando esté disponible.
+      Esto no afecta los mensajes de confirmación para clientes.
+    </p>}
+    <label className="block text-xs font-semibold text-neutral-300" htmlFor="barber-notify-phone">Tu WhatsApp de trabajo
+      <input id="barber-notify-phone" type="tel" inputMode="tel" autoComplete="tel"
+        value={whatsappPhone} onChange={e=>setWhatsappPhone(e.target.value)} disabled={whatsappBusy||whatsappEnabled}
+        placeholder="3001234567" maxLength={32}
+        className="mt-2 block min-h-12 w-full rounded-xl border border-[#3a3a3a] bg-[#202024] px-3 text-sm text-white disabled:opacity-60"/>
+    </label>
+    {whatsappEnabled&&<p className="text-xs text-emerald-400">Notificaciones autorizadas para este celular.</p>}
+    <button type="button" disabled={whatsappBusy||whatsappLoading} onClick={()=>void toggleWhatsapp()}
+      className={'min-h-12 w-full sm:w-auto rounded-xl px-5 text-xs font-bold disabled:opacity-40 '+
+        (whatsappEnabled?'border border-red-400/40 text-red-300':'bg-[var(--gold-primary)] text-black')}>
+      {whatsappBusy?'Guardando...':whatsappLoading?'Consultando preferencia...':
+        whatsappEnabled?'Desactivar avisos por WhatsApp':'Activar avisos de nuevas citas por WhatsApp'}
+    </button>
+    {whatsappEnabled&&<p className="text-[11px] text-neutral-500">
+      Para cambiar el número, desactiva los avisos y activa de nuevo con el celular correcto.
+    </p>}
+  </section>}
 
       {/* Portfolio with strict 10 photo limit */}
       <div className="bg-[#141414] border border-[#262626] rounded-2xl p-6 shadow-xl space-y-4">

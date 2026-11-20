@@ -5,18 +5,22 @@ import { configFromEnv } from './config.js';
 import { createDb } from './db.js';
 import { createSecurity } from './security.js';
 import { registerRoutes } from './routes.js';
+import {registerGroupBookingRoutes} from './group-bookings.js';
 import { registerBusinessRoutes } from './business.js';
 import { registerSchedulingRoutes } from './scheduling.js';
 import { registerNotificationRoutes } from './notifications.js';
 import { registerReportRoutes } from './reports.js';
 import { registerPaymentsRoutes } from './payments.js';
 import { registerClosureRoutes } from './closures.js';
+import {registerBookingBlackoutRoutes} from './booking-blackouts.js';
 import { registerCustomerLinkRoutes } from './customer-links.js';
 import { registerBarberInviteRoutes } from './barber-invites.js';
 import { registerMediaProfileRoutes } from './media-profile.js';
 import {registerWhatsAppRoutes} from './whatsapp-routes.js';
+import {registerBarberWhatsAppRoutes} from './barber-whatsapp.js';
 import {registerPlatformIntegrationRoutes} from './platform-integrations.js';
 import {registerPlatformAdminRoutes} from './platform-admin.js';
+import {registerOwnerOnboardingRoutes} from './owner-onboarding.js';
 import {registerPasswordRecoveryRoutes} from './whatsapp-password-recovery.js';
 import {registerLiveEventRoutes} from './live-events.js';
 
@@ -68,6 +72,8 @@ export async function buildApp(env = process.env) {
   });
   await registerLiveEventRoutes(app,{security});
   await registerRoutes(app, { config, db, security });
+  await registerGroupBookingRoutes(app,{db,security});
+  await registerOwnerOnboardingRoutes(app, { db, security });
   await registerPlatformAdminRoutes(app, { config, db, security });
   await registerBusinessRoutes(app, { config, db, security });
   await registerSchedulingRoutes(app, { config, db, security });
@@ -75,10 +81,12 @@ export async function buildApp(env = process.env) {
   await registerReportRoutes(app, { config, db, security });
   await registerPaymentsRoutes(app, { config, db, security });
   await registerClosureRoutes(app, { config, db, security });
+  await registerBookingBlackoutRoutes(app,{db,security});
   await registerCustomerLinkRoutes(app, { config, db, security });
   await registerBarberInviteRoutes(app, { config, db, security });
   await registerMediaProfileRoutes(app, { config, db, security });
   await registerWhatsAppRoutes(app,{config,db,security});
+  await registerBarberWhatsAppRoutes(app,{db,security});
   await registerPasswordRecoveryRoutes(app,{config,db,security});
   await registerPlatformIntegrationRoutes(app,{config,db,security});
   app.addHook('onClose', async () => {
