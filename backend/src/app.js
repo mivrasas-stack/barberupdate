@@ -18,6 +18,7 @@ import {registerWhatsAppRoutes} from './whatsapp-routes.js';
 import {registerPlatformIntegrationRoutes} from './platform-integrations.js';
 import {registerPlatformAdminRoutes} from './platform-admin.js';
 import {registerPasswordRecoveryRoutes} from './whatsapp-password-recovery.js';
+import {registerBarberWhatsAppRoutes} from './barber-whatsapp.js';
 import {registerLiveEventRoutes} from './live-events.js';
 
 /**
@@ -79,6 +80,7 @@ export async function buildApp(env = process.env) {
   await registerBarberInviteRoutes(app, { config, db, security });
   await registerMediaProfileRoutes(app, { config, db, security });
   await registerWhatsAppRoutes(app,{config,db,security});
+  await registerBarberWhatsAppRoutes(app,{db,security});
   await registerPasswordRecoveryRoutes(app,{config,db,security});
   await registerPlatformIntegrationRoutes(app,{config,db,security});
   app.addHook('onClose', async () => {
