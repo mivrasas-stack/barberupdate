@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {BarberoPerfil} from '../barbero/BarberoPerfil';
 import { useApp } from '../../context/AppContext';
 import { BarberInvites } from './BarberInvites';
 import {formatTime} from '../../utils/formatters';
 
 import { ImageUploader } from './ImageUploader';
-import {backendRequest,isLiveBackend,refreshLiveData} from '../../services/liveBackend';
+import {BookingClosureDialog,bookingToday,type BookingBlackout} from './BookingClosureDialog';
+import {backendRequest,isLiveBackend,refreshLiveData,updateBookingStatus} from '../../services/liveBackend';
 import { barberStore } from '../../services/store';
 import { Store, MapPin, Phone, Mail, Instagram, Clock, Image, Trash2, Plus, Star, Save, Scissors, UserRound } from 'lucide-react';
 
@@ -15,11 +16,23 @@ export const BarberiaPerfil: React.FC = () => {
   const [creatingProfessional,setCreatingProfessional] = useState(false);
   const [photoInput, setPhotoInput] = useState('');
   const [isEditing, setIsEditing] = useState(false);
+  const [togglingBookings,setTogglingBookings]=useState(false);
+  const [closureModalOpen,setClosureModalOpen]=useState(false);
+  const [scheduledClosures,setScheduledClosures]=useState<BookingBlackout[]>([]);
 
   const shop = currentShop || barberStore.getState().barbershops[0];
   // Managers and other barber staff must not gain access to the owner's private profile.
   const isActualOwner = Boolean(isLiveBackend && currentUser && shop.ownerId === currentUser.id && currentUser.role === 'owner');
   const ownerBarber = isActualOwner ? state.barbers.find(b=>b.businessId===shop.id && b.userId===currentUser?.id) : undefined;
+  const today=bookingToday();
+  const activeClosure=scheduledClosures.find(item=>item.from<=today&&item.to>=today);
+  const closedToday=shop.acceptingBookings===false||Boolean(activeClosure);
+  const reloadClosures=async()=>{
+    if(!isLiveBackend||!isActualOwner)return;
+    const rows=await backendRequest<BookingBlackout[]>('/tenants/'+encodeURIComponent(shop.id)+'/booking-blackouts');
+    setScheduledClosures(rows);
+  };
+  useEffect(()=>{void reloadClosures().catch(()=>{});},[shop.id,isActualOwner]);
   const enableProfessionalProfile = async()=>{
     if(!isActualOwner || !currentUser || creatingProfessional)return;
     setCreatingProfessional(true);
@@ -31,6 +44,22 @@ export const BarberiaPerfil: React.FC = () => {
     }catch(error){
       addToast(error instanceof Error?error.message:'No fue posible activar tu perfil de barbero.','error');
     }finally{setCreatingProfessional(false);}
+  };
+  const toggleBookings=async()=>{
+    if(togglingBookings)return;
+    setTogglingBookings(true);
+    try{
+      const desired=shop.acceptingBookings===false;
+      if(isLiveBackend){
+        await updateBookingStatus(shop.id,desired);
+        await refreshLiveData();
+      }else{
+        shop.acceptingBookings=desired;
+      }
+      addToast(desired?'Reservas abiertas de nuevo':'Reservas pausadas temporalmente','success');
+    }catch(error){
+      addToast(error instanceof Error?error.message:'No se pudo actualizar el estado de las reservas','error');
+    }finally{setTogglingBookings(false);}
   };
   const [formName, setFormName] = useState(shop.name);
   const [formTagline, setFormTagline] = useState(shop.tagline);
@@ -212,6 +241,36 @@ export const BarberiaPerfil: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <section className="rounded-2xl border border-[#343434] bg-[#141414] p-4 sm:p-5">
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <h3 className="text-sm font-bold text-white">Disponibilidad para reservar</h3>
+            <p className="mt-1 text-xs text-neutral-400">{closedToday
+              ? 'Hoy están cerradas las nuevas reservas.'
+              : 'Hoy puedes recibir reservas según los horarios habituales.'}</p>
+            <p className="mt-1 text-[11px] text-neutral-500">Programa uno o más períodos. Se reabren automáticamente al día siguiente, sin cambiar tus horarios ni citas existentes.</p>
+          </div>
+          <button type="button" role="switch" aria-label="Programar fechas sin reservas" aria-checked={!closedToday}
+            onClick={()=>setClosureModalOpen(true)} disabled={isLiveBackend&&currentUser?.role!=='owner'}
+            className={'shrink-0 relative h-8 w-14 rounded-full transition-colors disabled:opacity-50 '+
+              (closedToday?'bg-neutral-600':'bg-emerald-500')}>
+            <span className={'absolute top-1 h-6 w-6 rounded-full bg-white shadow-sm transition-all '+
+              (closedToday?'left-1':'left-7')}/>
+          </button>
+        </div>
+        <p className={'mt-3 text-xs font-bold '+(closedToday?'text-amber-300':'text-emerald-400')}>
+          {closedToday?'Hoy: sin nuevas reservas':'Hoy: reservas disponibles'}
+        </p>
+        {activeClosure&&<p className="mt-2 text-xs text-neutral-300">Cierre programado hasta el {activeClosure.to}, inclusive. Se reabre al día siguiente.</p>}
+        {scheduledClosures.filter(p=>p.to>=today).length>0&&<p className="mt-2 text-xs text-neutral-400">{scheduledClosures.filter(p=>p.to>=today).length} período(s) programado(s)</p>}
+        {shop.acceptingBookings===false&&<div className="mt-3 rounded-xl border border-amber-400/20 p-3 text-xs text-amber-200">
+          El cierre manual anterior sigue activo sin fecha de fin.
+          <button type="button" disabled={togglingBookings} onClick={()=>void toggleBookings()} className="ml-2 font-bold underline disabled:opacity-50">Quitar cierre manual</button>
+        </div>}
+        <button type="button" onClick={()=>setClosureModalOpen(true)} className="mt-3 min-h-11 w-full sm:w-auto rounded-xl border border-[var(--gold-primary)]/40 px-4 text-sm font-semibold text-[var(--gold-primary)]">Programar o administrar cierres</button>
+      </section>
+      {closureModalOpen&&<BookingClosureDialog tenantId={shop.id} onClose={()=>setClosureModalOpen(false)} onSaved={()=>{void reloadClosures().catch(()=>{});addToast('Cierres actualizados. Los horarios semanales se mantienen.','success');}}/>}
 
       {isEditing && (
         <form onSubmit={handleSaveProfile} className="p-5 rounded-2xl bg-[#141414] border border-[var(--gold-primary)]/40 space-y-4 text-xs">

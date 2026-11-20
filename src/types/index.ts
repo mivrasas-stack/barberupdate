@@ -55,6 +55,7 @@ export interface Barbershop {
   portfolio: string[];
   publicCode: string;
   businessKind?: 'barbershop' | 'independent';
+  acceptingBookings?: boolean;
   createdAt: string;
 }
 

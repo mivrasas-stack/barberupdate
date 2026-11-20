@@ -21,8 +21,9 @@ test('a new customer booking is automatically confirmed and idempotent without s
    if(sql.includes('pg_advisory_xact_lock'))return {rowCount:1,rows:[{}]};
    if(sql.includes('SELECT tenant_id,barber_id FROM public.customer_links WHERE user_id='))
     return {rowCount:1,rows:[{tenant_id:tenant,barber_id:barber}]};
-   if(sql.includes('SELECT opening_hours,time_zone FROM public.tenants'))
-    return {rowCount:1,rows:[{opening_hours:{days:'Todos los días',open:'00:00',close:'23:59'},time_zone:'America/Bogota'}]};
+   if(sql.includes('SELECT opening_hours,time_zone,accepting_bookings FROM public.tenants'))
+    return {rowCount:1,rows:[{opening_hours:{days:'Todos los días',open:'00:00',close:'23:59'},time_zone:'America/Bogota',accepting_bookings:true}]};
+   if(sql.includes('SELECT 1 FROM public.tenant_booking_blackouts'))return {rowCount:0,rows:[]};
    if(sql.includes('SELECT duration_minutes FROM public.services'))
     return {rowCount:1,rows:[{duration_minutes:30}]};
    if(sql.includes('INSERT INTO public.whatsapp_consents'))

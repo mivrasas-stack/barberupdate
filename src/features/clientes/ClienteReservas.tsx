@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { barberStore } from '../../services/store';
-import {isLiveBackend,addBooking,refreshLiveData,getAvailabilitySlots} from '../../services/liveBackend';
+import {isLiveBackend,addBooking,addGroupBooking,refreshLiveData,getAvailabilitySlots} from '../../services/liveBackend';
 import {useCustomerLinks} from '../../services/useCustomerLinks';
 import {normalizeBookingWhatsAppPhone} from '../../utils/whatsappPhone';
 import { formatCurrency,formatTime } from '../../utils/formatters';
@@ -18,6 +18,8 @@ import {
   Sparkles,
   MapPin,
   AlertCircle,
+  Plus,
+  Trash2,
 } from 'lucide-react';
 import { Barbershop, Barber, Service } from '../../types';
 
@@ -37,6 +39,82 @@ type ConfirmedBooking={
   date:string;
   time:string;
   price:number;
+};
+
+
+type CompanionDraft={id:string;name:string;serviceId:string;barberId:string;time:string};
+type BookingChoice={id:string;barberId:string;time:string;duration:number};
+const timeValue=(value:string)=>{const [hours,minutes]=value.split(':').map(Number);return hours*60+minutes;};
+const conflict=(a:BookingChoice,b:BookingChoice)=>
+  a.barberId===b.barberId&&Boolean(a.time&&b.time)&&
+  timeValue(a.time)<timeValue(b.time)+b.duration&&timeValue(b.time)<timeValue(a.time)+a.duration;
+
+const CompanionCard:React.FC<{
+  item:CompanionDraft;index:number;shopId:string;date:string;
+  barbers:Barber[];services:Service[];choices:BookingChoice[];
+  onChange:(patch:Partial<CompanionDraft>)=>void;onRemove:()=>void;
+}>=({item,index,shopId,date,barbers,services,choices,onChange,onRemove})=>{
+  const [slots,setSlots]=useState<string[]>([]);
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState('');
+  const service=services.find(x=>x.id===item.serviceId);
+  useEffect(()=>{
+    let active=true;
+    setSlots([]);setError('');
+    if(!item.serviceId||!item.barberId)return;
+    if(!isLiveBackend){
+      // The server remains authoritative for live bookings; demo uses displayed daily hours.
+      setSlots(Array.from({length:11},(_,i)=>String(i+9).padStart(2,'0')+':00'));
+      return;
+    }
+    setBusy(true);
+    getAvailabilitySlots(shopId,item.barberId,item.serviceId,date)
+      .then(values=>{if(active)setSlots(values);})
+      .catch(err=>{if(active)setError(err instanceof Error?err.message:'No se pudo consultar disponibilidad');})
+      .finally(()=>{if(active)setBusy(false);});
+    return()=>{active=false;};
+  },[shopId,date,item.serviceId,item.barberId]);
+  const available=slots.filter(time=>!choices.some(choice=>
+    choice.id!==item.id&&conflict({id:item.id,barberId:item.barberId,time,duration:service?.durationMinutes||30},choice)));
+  const field='mt-1.5 w-full min-h-11 rounded-xl border border-[#373737] bg-[#202024] px-3 text-sm text-white focus:border-[var(--gold-primary)]';
+  return <section className="rounded-2xl border border-[#3d3420] bg-[#18181c] p-4 space-y-3">
+    <div className="flex items-center justify-between gap-2">
+      <h4 className="text-sm font-bold text-white">Acompañante {index+1}</h4>
+      <button type="button" onClick={onRemove} aria-label={'Quitar acompañante '+(index+1)}
+        className="flex items-center gap-1 rounded-lg px-2 py-2 text-xs text-red-300 hover:bg-red-500/10">
+        <Trash2 className="w-4 h-4"/> Quitar
+      </button>
+    </div>
+    <label className="block text-xs text-neutral-300">Nombre
+      <input type="text" maxLength={120} placeholder="Ej. Mi hijo Juan" value={item.name}
+        onChange={e=>onChange({name:e.target.value})} className={field}/>
+    </label>
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <label className="block text-xs text-neutral-300">Servicio o corte
+        <select value={item.serviceId} onChange={e=>onChange({serviceId:e.target.value,time:''})} className={field}>
+          <option value="">Selecciona un servicio</option>
+          {services.map(option=><option key={option.id} value={option.id}>{option.name}</option>)}
+        </select>
+      </label>
+      <label className="block text-xs text-neutral-300">Barbero
+        <select value={item.barberId} onChange={e=>onChange({barberId:e.target.value,time:''})} className={field}>
+          <option value="">Selecciona un barbero</option>
+          {barbers.map(barber=><option key={barber.id} value={barber.id}>{barber.name}</option>)}
+        </select>
+      </label>
+    </div>
+    <label className="block text-xs text-neutral-300">Hora disponible
+      <select value={item.time} disabled={!item.barberId||!item.serviceId||busy}
+        onChange={e=>onChange({time:e.target.value})} className={field}>
+        <option value="">{busy?'Buscando horarios...':'Selecciona una hora'}</option>
+        {available.map(time=><option value={time} key={time}>{formatTime(time)}</option>)}
+      </select>
+    </label>
+    {error&&<p role="alert" className="text-xs text-red-300">{error}</p>}
+    {item.serviceId&&item.barberId&&!busy&&!error&&!available.length&&
+      <p className="text-xs text-amber-300">No hay horarios libres para este barbero. Prueba otro profesional.</p>}
+    {service&&<p className="text-xs text-amber-300">{service.durationMinutes} min · {formatCurrency(service.price)}</p>}
+  </section>;
 };
 
 export const ClienteReservas: React.FC = () => {
@@ -72,7 +150,15 @@ export const ClienteReservas: React.FC = () => {
   const validWhatsAppPhone=normalizeBookingWhatsAppPhone(contactPhone);
   const [submitting,setSubmitting]=useState(false);
   const [whatsappNotice,setWhatsappNotice]=useState('');
+  const [bookingError,setBookingError]=useState('');
   const [confirmedBooking,setConfirmedBooking]=useState<ConfirmedBooking|null>(null);
+  const [companions,setCompanions]=useState<CompanionDraft[]>([]);
+  const [confirmedCompanions,setConfirmedCompanions]=useState<CompanionDraft[]>([]);
+  const [confirmedTotal,setConfirmedTotal]=useState<number|null>(null);
+  const [bookingKey,setBookingKey]=useState(()=> 'g'+crypto.randomUUID().replace(/-/g,''));
+  useEffect(()=>{setCompanions([]);setBookingKey('g'+crypto.randomUUID().replace(/-/g,''));},[selectedShop?.id]);
+  useEffect(()=>{setCompanions(prev=>prev.map(item=>({...item,time:''})));},[selectedDate]);
+
   useEffect(()=>{
     if(!isLiveBackend||linksLoading)return;
     const preferred=shopsToShow.find(shop=>shop.id===selectedShop?.id)
@@ -89,12 +175,35 @@ export const ClienteReservas: React.FC = () => {
   const assignedBarberId=linkedBusinesses.find(link=>link.tenant_id===selectedShop?.id)?.barber_id;
   const availableBarbers=state.barbers.filter(b=>b.businessId===selectedShop?.id && b.status==='active'
     &&(!isLiveBackend||!assignedBarberId||b.id===assignedBarberId));
+  // The QR limits the primary appointment, not companions visiting the same shop.
+  const companionBarbers=state.barbers.filter(b=>b.businessId===selectedShop?.id && b.status==='active');
   useEffect(()=>{
     if(!isLiveBackend||!assignedBarberId)return;
     const assigned=availableBarbers.find(b=>b.id===assignedBarberId);
     if(assigned)setSelectedBarber(assigned);
   },[assignedBarberId,selectedShop?.id,state.barbers]);
   const availableServices=state.services.filter(s=>s.businessId===selectedShop?.id && s.isActive);
+  const bookingChoices:BookingChoice[]=[
+    ...(selectedBarber&&selectedService?[{id:'primary',barberId:selectedBarber.id,
+      time:selectedTime,duration:selectedService.durationMinutes}]:[]),
+    ...companions.map(item=>({
+      id:item.id,barberId:item.barberId,time:item.time,
+      duration:availableServices.find(s=>s.id===item.serviceId)?.durationMinutes||30
+    }))
+  ];
+  const companionReady=companions.every(item=>item.name.trim().length>=2&&item.serviceId&&item.barberId&&item.time);
+  const incompleteCompanionIndex=companions.findIndex(item=>item.name.trim().length<2||!item.serviceId||!item.barberId||!item.time);
+  const incompleteCompanion=incompleteCompanionIndex<0?null:companions[incompleteCompanionIndex];
+  const pendingCompanionField=!incompleteCompanion?'':incompleteCompanion.name.trim().length<2?'el nombre':
+    !incompleteCompanion.serviceId?'el servicio':!incompleteCompanion.barberId?'el barbero':'la hora';
+  const conflictingBookings=bookingChoices.some((a,i)=>bookingChoices.slice(0,i).some(b=>conflict(a,b)));
+  const totalGroupPrice=(selectedService?.price||0)+companions.reduce((sum,item)=>
+    sum+(availableServices.find(s=>s.id===item.serviceId)?.price||0),0);
+  const updateCompanion=(id:string,patch:Partial<CompanionDraft>)=>{
+    setCompanions(values=>values.map(item=>item.id===id?{...item,...patch}:item));
+    setBookingKey('g'+crypto.randomUUID().replace(/-/g,''));
+  };
+
   
 
   // Query the availability server for the selected service and barber. Offer
@@ -102,9 +211,13 @@ export const ClienteReservas: React.FC = () => {
   const [serverSlots,setServerSlots]=useState<string[]>([]);
   const [slotsBusy,setSlotsBusy]=useState(false);
   const [slotsError,setSlotsError]=useState('');
+  // Keep the chosen time during realtime/SSE agenda refreshes. Only a changed
+  // barber, service, shop or date should reset the customer's explicit choice.
+  useEffect(()=>{
+    setSelectedTime('');
+  },[selectedShop?.id,selectedService?.id,selectedBarber?.id,selectedDate]);
   useEffect(()=>{
     let alive=true;
-    setSelectedTime('');
     setSlotsError('');
     if(!selectedShop?.id||!selectedService?.id||!selectedBarber?.id||!selectedDate){
       setServerSlots([]);return;
@@ -155,7 +268,22 @@ export const ClienteReservas: React.FC = () => {
     calMonth-new Date(today+'T12:00:00').getMonth()>=11;
 
   const handleConfirmReservation = async (notifyWhatsApp:boolean) => {
-    if (!selectedService || !selectedBarber || !selectedTime || submitting) return;
+    if(submitting)return;
+    setBookingError('');
+    if(!selectedService||!selectedBarber||!selectedTime){
+      addToast('Tu cita principal necesita un barbero, servicio y hora. Revisa el paso 4.','error');
+      setStep(4);
+      return;
+    }
+    if(!companionReady||conflictingBookings){
+      const message=conflictingBookings
+        ?'El mismo barbero tiene citas cruzadas. Cambia la hora de un acompañante.'
+        :'Completa '+pendingCompanionField+' del acompañante '+(incompleteCompanionIndex+1)+'.';
+      setBookingError(message);
+      addToast(message,'error');
+      return;
+    }
+
     const details:ConfirmedBooking={
       shopName:selectedShop?.name||'Barbería',
       serviceName:selectedService.name,
@@ -168,25 +296,39 @@ export const ClienteReservas: React.FC = () => {
       const rawPhone=contactPhone.trim();
       if(!rawPhone){
         setPhoneOverride('');
+        setBookingError('Registra tu celular para confirmar la cita.');
         addToast('Registra tu celular para confirmar la cita.','error');
         return;
       }
       if(notifyWhatsApp&&!validWhatsAppPhone){
         setPhoneOverride(rawPhone);
+        setBookingError('Revisa tu celular. Para recibir WhatsApp necesitas un número válido; también puedes reservar sin WhatsApp.');
         addToast('Revisa tu celular: en Colombia son 10 dígitos y empieza por 3. No escribas +57.','error');
         return;
       }
       setWhatsappNotice('');
       setSubmitting(true);
       try{
-        await addBooking(tenantId,{barberId:selectedBarber.id,
-          serviceId:selectedService.id,date:selectedDate,startTime:selectedTime,
-          customerName:customerProfile?.full_name||currentUser?.name||currentUser?.email||'Cliente',
-          customerPhone:rawPhone,
-          notes,whatsappOptIn:notifyWhatsApp});
+        if(companions.length){
+          await addGroupBooking(tenantId,[
+            {barberId:selectedBarber.id,serviceId:selectedService.id,date:selectedDate,startTime:selectedTime,
+              customerName:customerProfile?.full_name||currentUser?.name||currentUser?.email||'Cliente',notes},
+            ...companions.map(item=>({
+              barberId:item.barberId,serviceId:item.serviceId,date:selectedDate,startTime:item.time,
+              customerName:item.name.trim(),notes:'Reserva como acompañante'
+            }))
+          ],rawPhone,notifyWhatsApp,bookingKey);
+        }else{
+          await addBooking(tenantId,{barberId:selectedBarber.id,
+            serviceId:selectedService.id,date:selectedDate,startTime:selectedTime,
+            customerName:customerProfile?.full_name||currentUser?.name||currentUser?.email||'Cliente',
+            customerPhone:rawPhone,notes,whatsappOptIn:notifyWhatsApp});
+        }
         // Refreshing the agenda invalidates the old availability slots. Preserve
         // what was actually booked before that refresh clears selectedTime.
         setConfirmedBooking(details);
+        setConfirmedCompanions([...companions]);
+        setConfirmedTotal(totalGroupPrice);
         setWhatsappNotice(notifyWhatsApp
           ? 'Reserva confirmada. Solicitamos el aviso por WhatsApp al celular de tu perfil; recibirlo depende de la entrega de Meta.'
           : 'Tu reserva quedó confirmada sin avisos por WhatsApp.');
@@ -194,11 +336,18 @@ export const ClienteReservas: React.FC = () => {
         catch{addToast('Tu cita está guardada, pero no se pudo actualizar el panel. Recárgalo para verla.','info');}
         addToast('¡Cita confirmada! Ya está registrada en la agenda del profesional.','success');
         setStep(6);
-      }catch(error){addToast(error instanceof Error?error.message:'No se pudo reservar','error');}
-      finally{setSubmitting(false);}
+      }catch(error){
+        const message=error instanceof Error?error.message:'No se pudo reservar';
+        setBookingError(message);
+        addToast(message,'error');
+      }finally{setSubmitting(false);}
       return;
     }
 
+    if(companions.length){
+      addToast('La reserva conjunta está disponible con la barbería conectada.','info');
+      return;
+    }
     const res = barberStore.createAppointment({
       businessId: selectedShop?.id,
       barberId: selectedBarber.id,
@@ -561,6 +710,39 @@ export const ClienteReservas: React.FC = () => {
             </div>
           </div>
 
+          {isLiveBackend&&<div className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-bold text-white">¿Vienes con alguien más?</h3>
+                <p className="text-xs text-neutral-400">Agrega hasta 3 personas. Cada una elige su corte, barbero y hora.</p>
+              </div>
+            </div>
+            {companions.map((item,index)=>
+              <CompanionCard key={item.id} index={index} item={item} shopId={selectedShop?.id||''} date={selectedDate}
+                barbers={companionBarbers} services={availableServices} choices={bookingChoices}
+                onChange={patch=>updateCompanion(item.id,patch)}
+                onRemove={()=>{setCompanions(values=>values.filter(v=>v.id!==item.id));
+                  setBookingKey('g'+crypto.randomUUID().replace(/-/g,''));}}/>
+            )}
+            {companions.length<3&&<button type="button"
+              onClick={()=>{setCompanions(values=>[...values,{id:crypto.randomUUID(),name:'',
+                serviceId:'',barberId:'',time:''}]);
+                setBookingKey('g'+crypto.randomUUID().replace(/-/g,''));}}
+              className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--gold-primary)]/60 bg-[#201c13] text-sm font-semibold text-[var(--gold-primary)]">
+              <Plus className="w-4 h-4"/> Agregar acompañante
+            </button>}
+            {companions.length>0&&<div className="rounded-xl bg-[#1b1b1b] border border-[#373737] p-3 flex items-center justify-between gap-3 text-sm">
+              <span className="text-neutral-300">Total por {companions.length+1} personas</span>
+              <strong className="text-emerald-400">{formatCurrency(totalGroupPrice,currency)}</strong>
+            </div>}
+            {incompleteCompanion&&<p className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-xs font-medium text-amber-200" role="status">
+              Falta {pendingCompanionField} del acompañante {incompleteCompanionIndex+1}. Completa ese dato para confirmar.
+            </p>}
+            {conflictingBookings&&<p className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-xs font-medium text-amber-200" role="alert">
+              Hay citas superpuestas para el mismo barbero. Cambia la hora de un acompañante.
+            </p>}
+          </div>}
+
           {isLiveBackend&&<div className="space-y-2 rounded-xl border border-neutral-700/70 bg-[#181818] p-3">
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
               <span className="text-neutral-400">Celular registrado en tu perfil</span>
@@ -589,13 +771,14 @@ export const ClienteReservas: React.FC = () => {
               Puedes dejar de recibirlos cuando quieras.
             </p>
           </div>}
+          {bookingError&&<p role="alert" className="rounded-xl border border-red-400/50 bg-red-500/10 px-4 py-3 text-xs font-semibold text-red-200">{bookingError}</p>}
           <div className="flex flex-col gap-3 border-t border-neutral-800 pt-4 sm:flex-row sm:items-center sm:justify-between">
             <button onClick={() => setStep(4)} className="px-2 py-2 text-neutral-400 text-xs hover:text-white flex items-center gap-1">
               <ChevronLeft className="w-4 h-4" />
               <span>Modificar Fecha</span>
             </button>
             <div className="flex flex-col items-stretch gap-2 pb-8 sm:items-end sm:pb-0">
-              <button type="button" disabled={submitting} onClick={()=>void handleConfirmReservation(true)}
+              <button type="button" disabled={submitting} aria-busy={submitting} onClick={()=>void handleConfirmReservation(true)}
                 className="min-h-12 justify-center px-4 py-3 rounded-xl bg-emerald-500 text-black font-extrabold text-xs hover:bg-emerald-400 disabled:opacity-50 flex items-center gap-1.5 shadow-lg shadow-emerald-500/10">
                 <span>{submitting?'Confirmando...':isLiveBackend?'Confirmar y recibir WhatsApp':'Confirmar mi reserva'}</span>
                 <CheckCircle2 className="w-4 h-4"/>
@@ -627,7 +810,11 @@ export const ClienteReservas: React.FC = () => {
             <div className="text-neutral-400">Barbería: <strong className="text-white">{confirmedBooking?.shopName||selectedShop?.name||'Barbería'}</strong></div>
             <div className="text-neutral-400">Servicio: <strong className="text-white">{confirmedBooking?.serviceName||selectedService?.name}</strong></div>
             <div className="text-neutral-400">Profesional: <strong className="text-[var(--gold-primary)]">{confirmedBooking?.barberName||selectedBarber?.name}</strong></div>
-            <div className="text-neutral-400">Total: <strong className="font-mono text-white">{formatCurrency(confirmedBooking?.price??selectedService?.price??0, currency)}</strong></div>
+            {confirmedCompanions.map((person,index)=><div key={person.id} className="pt-2 border-t border-neutral-700">
+              <strong className="text-white">Acompañante {index+1}: {person.name}</strong>
+              <div className="text-neutral-400">{availableServices.find(v=>v.id===person.serviceId)?.name} · {companionBarbers.find(v=>v.id===person.barberId)?.name} · {formatTime(person.time)}</div>
+            </div>)}
+            <div className="text-neutral-400">Total: <strong className="font-mono text-white">{formatCurrency(confirmedTotal??confirmedBooking?.price??selectedService?.price??0, currency)}</strong></div>
           </div>
 
           <div className="pt-4 flex justify-center gap-3">
